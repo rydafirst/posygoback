@@ -1,0 +1,12 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "buildCommand": "npm run build"
+  },
+  "deploy": {
+    "preDeployCommand": ["npx prisma migrate deploy && node dist/database/seed.js"],
+    "startCommand": "npm start",
+    "healthcheckPath": "/v1/health/ready",
+    "healthcheckTimeout": 120
+  }
+}

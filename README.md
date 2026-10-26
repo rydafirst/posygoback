@@ -101,6 +101,10 @@ CI runs the same check.
 
 Buyers send links from `/shop-for-me`; country staff price them at `/admin/shopping`. Our fee is in each market's price list under `shopping` (a percentage of the items with a minimum). Payment uses the market's `PAYMENT_ACCOUNTS` entry and the same Stripe webhook as stores (the checkout carries `orderKind: SHOPPING`), and refunds for sold-out items or cancellations go back to the buyer's card through the same account. The warehouse buys the label with the market's carrier account. Nothing else to configure.
 
+## Deploying on Railway
+
+`railway.json` builds the app, applies any new database migrations before each deploy, runs the development seed (it only adds what's missing, and refuses to run when `NODE_ENV=production`), then starts the server once `/v1/health/ready` answers. Set `SEED_SUPER_ADMIN_EMAIL` and `SEED_SUPER_ADMIN_PASSWORD` in the service variables to have the first admin created on deploy.
+
 ## Moving US data from the old system
 
 1. Create the US warehouse here (platform-run, no partner) and its storage locations, using the same location codes as before if you want stock placed on them.
@@ -145,4 +149,3 @@ With `JOBS_ENABLED=true` the API runs storage billing at 02:00 UTC, partner upke
 - Deploy separately from the web app. Serve both on the same registrable domain (for example `app.example.com` and `api.example.com`) so the refresh cookie stays first-party. Set `COOKIE_DOMAIN` only if you need it shared across subdomains.
 - Behind a proxy or CDN, set `TRUST_PROXY_HOPS`, and set `CLIENT_IP_HEADER` (for example `cf-connecting-ip`) only when that header is set by infrastructure you control. Rate limits key on this IP.
 - Run `npm run db:migrate` as a separate release step with a migration role; run the app with a role that has no DDL rights.
-# posygoback
