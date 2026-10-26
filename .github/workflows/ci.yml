@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16.6-alpine
+        env:
+          POSTGRES_USER: gfn
+          POSTGRES_PASSWORD: gfn_ci_only
+          POSTGRES_DB: gfn_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U gfn" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+    env:
+      TEST_DATABASE_URL: postgresql://gfn:gfn_ci_only@localhost:5432/gfn_test
+      TEST_REDIS_URL: redis://localhost:6379/1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Create throwaway secrets
+        run: |
+          cp .env.example .env
+          sed -i "s|^JWT_ACCESS_SECRET=.*|JWT_ACCESS_SECRET=$(openssl rand -base64 64 | tr -d '\n')|" .env
+          sed -i "s|^MFA_CHALLENGE_SECRET=.*|MFA_CHALLENGE_SECRET=$(openssl rand -base64 64 | tr -d '\n')|" .env
+          sed -i "s|^FIELD_ENCRYPTION_KEYS=.*|FIELD_ENCRYPTION_KEYS=v1:$(openssl rand -base64 32 | tr -d '\n')|" .env
+          sed -i "s|^BLIND_INDEX_KEY=.*|BLIND_INDEX_KEY=$(openssl rand -base64 32 | tr -d '\n')|" .env
+      - run: npx prisma validate
+      - name: Schema matches migrations
+        run: npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --shadow-database-url postgresql://gfn:gfn_ci_only@localhost:5432/postgres --exit-code
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run test:e2e
+      - run: npm run build
+      - run: npm run audit:prod
+
+  codeql:
+    runs-on: ubuntu-24.04
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+      - uses: github/codeql-action/analyze@v3

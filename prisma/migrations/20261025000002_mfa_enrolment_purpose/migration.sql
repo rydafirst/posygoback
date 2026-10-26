@@ -1,0 +1,1 @@
+ALTER TYPE "public"."code_purpose" ADD VALUE 'MFA_ENROLMENT';
