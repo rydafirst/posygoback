@@ -32,6 +32,7 @@ import { EmailVerificationService } from "./flows/email-verification.service";
 import { LoginService } from "./flows/login.service";
 import { PasswordResetService } from "./flows/password-reset.service";
 import { SignupService } from "./flows/signup.service";
+import { TestShortcutsService } from "./flows/test-shortcuts.service";
 import { type IssuedAuthentication, SessionIssuerService } from "./sessions/session-issuer.service";
 import { RefreshReuseDetected, SessionService } from "./sessions/session.service";
 import { clearRefreshCookie, readRefreshCookie, setRefreshCookie } from "./tokens/refresh-cookie";
@@ -49,6 +50,7 @@ export class AuthController {
     private readonly issuer: SessionIssuerService,
     private readonly sessions: SessionService,
     private readonly users: UsersRepository,
+    private readonly shortcuts: TestShortcutsService,
   ) {}
 
   @Public()
@@ -65,6 +67,21 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async verifyEmail(@Body(new ZodValidationPipe(verifyEmailSchema)) input: VerifyEmailInput, @Meta() meta: RequestMeta, @Res({ passthrough: true }) response: Response): Promise<AuthenticatedResult> {
     return this.respond(await this.verification.verify(input, meta), response);
+  }
+
+  @Public()
+  @Throttle(THROTTLE.session)
+  @Get("test-shortcuts")
+  testShortcuts() {
+    return { enabled: this.shortcuts.enabled };
+  }
+
+  @Public()
+  @Throttle(THROTTLE.auth)
+  @Post("test-shortcuts/verify-email")
+  @HttpCode(HttpStatus.OK)
+  async skipEmailCheck(@Body(new ZodValidationPipe(loginSchema)) input: LoginInput, @Meta() meta: RequestMeta, @Res({ passthrough: true }) response: Response): Promise<AuthenticatedResult> {
+    return this.respond(await this.shortcuts.skipEmailVerification(input, meta), response);
   }
 
   @Public()

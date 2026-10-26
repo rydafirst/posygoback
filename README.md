@@ -105,6 +105,10 @@ Buyers send links from `/shop-for-me`; country staff price them at `/admin/shopp
 
 `railway.json` builds the app, applies any new database migrations before each deploy, runs the development seed (it only adds what's missing, and refuses to run when `NODE_ENV=production`), then starts the server once `/v1/health/ready` answers. Set `SEED_SUPER_ADMIN_EMAIL` and `SEED_SUPER_ADMIN_PASSWORD` in the service variables to have the first admin created on deploy.
 
+## Testing without email
+
+Until a real email service is connected, codes are written to the server log. Setting `AUTH_TEST_SHORTCUTS=on` adds a "Skip for testing" option to the email code step (the password is still checked) and to authenticator set-up (for that sign-in only). Every skip is audited, and the server refuses to start with it on in production. Remove the variable once email works.
+
 ## Moving US data from the old system
 
 1. Create the US warehouse here (platform-run, no partner) and its storage locations, using the same location codes as before if you want stock placed on them.

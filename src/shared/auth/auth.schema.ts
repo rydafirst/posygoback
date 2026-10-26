@@ -31,8 +31,8 @@ export const recoveryCodeSchema = z
 export const signupSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
-  businessName: z.string().trim().min(2).max(120),
-  countryCode: z.string().regex(/^[A-Z]{2}$/),
+  businessName: z.string().trim().min(2, "Enter your business name").max(120),
+  countryCode: z.string().regex(/^[A-Z]{2}$/, "Choose where your stock will live"),
   acceptTerms: z.literal(true, { message: "Accept the terms to continue" }),
   referralCode: z.string().trim().max(40).optional(),
 });

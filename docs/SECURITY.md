@@ -266,6 +266,10 @@ A separate reviewer read the personal shopping code without seeing our reasoning
 | A refused refund could be retried with a different amount under the same key | Low | Retries keep the amount |
 | Warehouse and partner staff saw buyer notes and the shop's order numbers | Low | Hidden from the warehouse view |
 
+## Test sign-in shortcuts
+
+`AUTH_TEST_SHORTCUTS=on` lets a new account skip the emailed code (its password is still checked, rate-limited and audited) and lets staff skip authenticator set-up for one sign-in (the session is marked as passed; the account stays un-enrolled, so it's asked again next time). It's off by default, the endpoints answer 404 when off, and configuration refuses to load with it on when `NODE_ENV=production`. It must be removed before real users or data are on the system.
+
 ## US data move controls
 
 | Area | Control |

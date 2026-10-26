@@ -123,6 +123,10 @@ export const configSchema = z
     STORAGE_SECRET_ACCESS_KEY: z.string().min(1),
     EMAIL_TRANSPORT: z.enum(["log", "memory"]).default("log"),
     PASSWORD_BREACH_CHECK: z.enum(["hibp", "off"]).default("hibp"),
+    AUTH_TEST_SHORTCUTS: z
+      .enum(["on", "off"])
+      .default("off")
+      .transform((value) => value === "on"),
     PAYMENT_ACCOUNTS: paymentAccounts,
     CARRIER_ACCOUNTS: carrierAccounts,
     PARTNER_SERVICES: partnerServices,
@@ -135,6 +139,7 @@ export const configSchema = z
     message: "FIELD_ENCRYPTION_ACTIVE_KEY must name one of FIELD_ENCRYPTION_KEYS",
     path: ["FIELD_ENCRYPTION_ACTIVE_KEY"],
   })
+  .refine((config) => config.NODE_ENV !== "production" || !config.AUTH_TEST_SHORTCUTS, { message: "Sign-in shortcuts can't be turned on in production", path: ["AUTH_TEST_SHORTCUTS"] })
   .refine((config) => config.NODE_ENV !== "production" || config.EMAIL_TRANSPORT !== "log", { message: "A real email transport is required in production", path: ["EMAIL_TRANSPORT"] })
   .refine((config) => config.NODE_ENV !== "production" || config.TRUST_PROXY_HOPS > 0 || config.CLIENT_IP_HEADER !== "", {
     message: "Production runs behind a proxy: set TRUST_PROXY_HOPS or CLIENT_IP_HEADER so rate limits see real client addresses",

@@ -18,6 +18,7 @@ import { TotpService } from "./mfa/totp.service";
 import { BREACHED_PASSWORD_CHECKER, DisabledBreachChecker, PwnedPasswordsChecker } from "./password/breached-password.checker";
 import { PasswordService } from "./password/password.service";
 import { SessionIssuerService } from "./sessions/session-issuer.service";
+import { TestShortcutsService } from "./flows/test-shortcuts.service";
 import { SessionService } from "./sessions/session.service";
 import { AccessTokenService } from "./tokens/access-token.service";
 import { UsersRepository } from "./users.repository";
@@ -37,6 +38,7 @@ import { UsersRepository } from "./users.repository";
     AccessTokenService,
     SessionService,
     SessionIssuerService,
+    TestShortcutsService,
     VerificationCodeService,
     TotpService,
     RecoveryCodeService,
