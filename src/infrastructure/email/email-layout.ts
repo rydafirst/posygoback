@@ -1,8 +1,8 @@
 import { PLATFORM_NAME } from "../../common/brand/brand";
 import type { EmailMessage } from "./email.port";
 
-const INK = "#4d3927";
-const SOFT = "#6e5a47";
+const INK = "#111111";
+const SOFT = "#3d3d3d";
 const CREAM = "#fffdf2";
 const YELLOW = "#f8e87d";
 const LINE = "#e3dcc4";
