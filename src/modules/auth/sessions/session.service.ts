@@ -70,6 +70,7 @@ export class SessionService {
           refreshTokenHash: this.hasher.sha256(nextSecret),
           previousTokenHashes: [...session.previousTokenHashes, session.refreshTokenHash].slice(-MAX_PREVIOUS_HASHES),
           lastUsedAt: new Date(),
+          expiresAt: this.expiry(),
           ip: meta.ip,
           userAgent: meta.userAgent,
         },

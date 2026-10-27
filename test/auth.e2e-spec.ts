@@ -2,6 +2,7 @@ import { Pool } from "pg";
 
 import { loadConfig } from "../src/config/config.schema";
 import { codeFrom, flushRateLimits, refreshCookie, resetDatabase, signUpAndVerify, startApp, type TestApp, WEB_ORIGIN } from "./harness";
+import { query } from "./partner-helpers";
 
 describe("authentication", () => {
   let test: TestApp;
@@ -91,6 +92,15 @@ describe("authentication", () => {
 
     const after = await test.http().get("/v1/auth/me").set("Authorization", `Bearer ${accessToken}`).expect(401);
     expect(after.body.code).toBe("session_revoked");
+  });
+
+  it("keeps someone signed in for as long as they keep using the app", async () => {
+    const { cookie } = await signUpAndVerify(test, "stays@example.com");
+    await query("UPDATE sessions SET expires_at = now() + interval '1 hour' WHERE user_id = (SELECT id FROM users WHERE email = 'stays@example.com')");
+    const refreshed = await test.http().post("/v1/auth/refresh").set("Origin", WEB_ORIGIN).set("Cookie", cookie).expect(200);
+    const [session] = await query<{ expires_at: Date }>("SELECT expires_at FROM sessions WHERE user_id = (SELECT id FROM users WHERE email = 'stays@example.com')");
+    expect(session!.expires_at.getTime()).toBeGreaterThan(Date.now() + 29 * 24 * 60 * 60 * 1000);
+    expect(refreshed.headers["set-cookie"]?.toString()).toMatch(/Max-Age=2592000/);
   });
 
   it("rejects refresh from another origin", async () => {
