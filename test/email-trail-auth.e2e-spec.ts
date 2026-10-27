@@ -99,4 +99,27 @@ describe("email trail: sign-in and accounts", () => {
       .expect(200);
     await test.http().post("/v1/auth/mfa/enrolment/resend-code").set(auth).expect(409);
   });
+
+  it("keeps the email code usable when the app code is wrong, and says which code failed", async () => {
+    const staffEmail = "retry-staff@gfn.test";
+    const pool = new Pool({ connectionString: loadConfig().DATABASE_URL });
+    await pool.query("INSERT INTO users (email, password_hash, role, status, email_verified_at) VALUES ($1, $2, 'ADMIN', 'ACTIVE', now())", [staffEmail, await hash(PASSWORD, { type: argon2id })]);
+    await pool.end();
+    await flushRateLimits();
+    const login = await test.http().post("/v1/auth/login").send({ email: staffEmail, password: PASSWORD }).expect(200);
+    const auth = { Authorization: `Bearer ${login.body.accessToken as string}` };
+    const start = await test.http().post("/v1/auth/mfa/enrolment").set(auth).expect(200);
+    const emailCode = codeFrom(test.email.lastTo(staffEmail)!.text);
+    const wrongApp = await test.http().post("/v1/auth/mfa/enrolment/confirm").set(auth).send({ code: "000000", emailCode }).expect(400);
+    expect(wrongApp.body.message).toContain("The app code didn't work");
+    const wrongEmail = await test.http().post("/v1/auth/mfa/enrolment/confirm").set(auth).send({ code: "000000", emailCode: "12345678" }).expect(400);
+    expect(wrongEmail.body.message).toContain("The email code isn't right");
+    const { authenticator } = await import("otplib");
+    await test
+      .http()
+      .post("/v1/auth/mfa/enrolment/confirm")
+      .set(auth)
+      .send({ code: authenticator.generate(start.body.secret as string), emailCode })
+      .expect(200);
+  });
 });

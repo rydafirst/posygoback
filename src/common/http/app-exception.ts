@@ -22,7 +22,7 @@ export const Errors = {
   notFound: (message = "Not found.") => new AppException(HttpStatus.NOT_FOUND, ERROR_CODES.notFound, message),
   invalidCredentials: () => new AppException(HttpStatus.UNAUTHORIZED, ERROR_CODES.invalidCredentials, "Email or password is incorrect."),
   emailNotVerified: () => new AppException(HttpStatus.FORBIDDEN, ERROR_CODES.emailNotVerified, "Verify your email before signing in."),
-  invalidCode: () => new AppException(HttpStatus.BAD_REQUEST, ERROR_CODES.invalidCode, "That code is not valid."),
+  invalidCode: (message = "That code is not valid.") => new AppException(HttpStatus.BAD_REQUEST, ERROR_CODES.invalidCode, message),
   mfaEnrolmentRequired: () => new AppException(HttpStatus.FORBIDDEN, ERROR_CODES.mfaEnrolmentRequired, "Set up two-factor authentication to continue."),
   mfaAlreadyEnrolled: () => new AppException(HttpStatus.CONFLICT, ERROR_CODES.mfaAlreadyEnrolled, "Two-factor authentication is already set up."),
   rateLimited: () => new AppException(HttpStatus.TOO_MANY_REQUESTS, ERROR_CODES.rateLimited, "Too many attempts. Wait a moment and try again."),

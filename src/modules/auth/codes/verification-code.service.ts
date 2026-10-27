@@ -29,6 +29,16 @@ export class VerificationCodeService {
   }
 
   async consumeNumeric(userId: string, purpose: CodePurpose, code: string): Promise<void> {
+    if ((await this.checkNumeric(userId, purpose, code, true)) === "INVALID") {
+      throw Errors.invalidCode();
+    }
+  }
+
+  async matchesNumeric(userId: string, purpose: CodePurpose, code: string): Promise<boolean> {
+    return (await this.checkNumeric(userId, purpose, code, false)) === "MATCHED";
+  }
+
+  private async checkNumeric(userId: string, purpose: CodePurpose, code: string, consume: boolean): Promise<"INVALID" | "MATCHED"> {
     const outcome = await this.prisma.$transaction(async (tx) => {
       const [locked] = await tx.$queryRaw<Array<{ id: string }>>`
         SELECT id FROM verification_codes
@@ -42,12 +52,12 @@ export class VerificationCodeService {
         await tx.verificationCode.update({ where: { id: active.id }, data: { attempts: { increment: 1 } } });
         return "INVALID";
       }
-      await tx.verificationCode.update({ where: { id: active.id }, data: { consumedAt: new Date() } });
-      return "CONSUMED";
+      if (consume) {
+        await tx.verificationCode.update({ where: { id: active.id }, data: { consumedAt: new Date() } });
+      }
+      return "MATCHED" as const;
     });
-    if (outcome === "INVALID") {
-      throw Errors.invalidCode();
-    }
+    return outcome;
   }
 
   async consumeToken(purpose: CodePurpose, token: string, client: DatabaseClient): Promise<string | null> {

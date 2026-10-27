@@ -19,6 +19,9 @@ import { mfaSecretContext } from "./login.service";
 
 const pendingContext = (userId: string) => `user:${userId}:mfa-pending`;
 
+const WRONG_EMAIL_CODE = "The email code isn't right or has expired. Use the newest one, or send a new code.";
+const WRONG_APP_CODE = "The app code didn't work. Make sure you scanned the code on this page, then enter the newest one from your app.";
+
 @Injectable()
 export class MfaEnrolmentService {
   constructor(
@@ -73,15 +76,23 @@ export class MfaEnrolmentService {
     if (!user.mfaPendingSecretEncrypted) {
       throw Errors.invalidCode();
     }
+    const emailCode = requiresMfa(user.role) ? input.emailCode : undefined;
     if (requiresMfa(user.role)) {
-      if (!input.emailCode) {
+      if (!emailCode) {
         throw Errors.validation({ emailCode: ["Enter the 8-digit code we emailed you"] });
       }
-      await this.codes.consumeNumeric(user.id, "MFA_ENROLMENT", input.emailCode);
+      if (!(await this.codes.matchesNumeric(user.id, "MFA_ENROLMENT", emailCode))) {
+        throw Errors.invalidCode(WRONG_EMAIL_CODE);
+      }
     }
     const secret = this.encryption.decrypt(user.mfaPendingSecretEncrypted, pendingContext(user.id));
     if (!(await this.totp.verifyOnce(user.id, secret, input.code))) {
-      throw Errors.invalidCode();
+      throw Errors.invalidCode(WRONG_APP_CODE);
+    }
+    if (emailCode) {
+      await this.codes.consumeNumeric(user.id, "MFA_ENROLMENT", emailCode).catch(() => {
+        throw Errors.invalidCode(WRONG_EMAIL_CODE);
+      });
     }
     const recoveryCodes = await this.prisma.$transaction(async (tx) => {
       await this.users.update(user.id, { mfaSecretEncrypted: this.encryption.encrypt(secret, mfaSecretContext(user.id)), mfaPendingSecretEncrypted: null, mfaEnrolledAt: new Date() }, tx);
