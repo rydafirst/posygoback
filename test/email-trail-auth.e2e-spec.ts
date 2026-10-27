@@ -1,4 +1,8 @@
 import type { EmailLogView } from "../src/shared";
+import { argon2id, hash } from "argon2";
+import { Pool } from "pg";
+
+import { loadConfig } from "../src/config/config.schema";
 import { codeFrom, createStaff, flushRateLimits, resetDatabase, startApp, type TestApp } from "./harness";
 import { as } from "./partner-helpers";
 
@@ -64,5 +68,35 @@ describe("email trail: sign-in and accounts", () => {
     expect(log.map((entry) => entry.kind).reverse()).toEqual(["auth.verify_email", "auth.welcome", "auth.new_sign_in", "auth.password_reset", "auth.password_changed"]);
     expect(log.every((entry) => entry.status === "SENT")).toBe(true);
     expect(log.find((entry) => entry.kind === "auth.verify_email")!.subject).toBe("•••••• is your verification code");
+  });
+
+  it("sends a fresh two-factor set-up code on request, keeping the same app key, and the old code stops working", async () => {
+    const staffEmail = "new-staff@gfn.test";
+    const pool = new Pool({ connectionString: loadConfig().DATABASE_URL });
+    await pool.query("INSERT INTO users (email, password_hash, role, status, email_verified_at) VALUES ($1, $2, 'ADMIN', 'ACTIVE', now())", [staffEmail, await hash(PASSWORD, { type: argon2id })]);
+    await pool.end();
+    const login = await test.http().post("/v1/auth/login").send({ email: staffEmail, password: PASSWORD }).expect(200);
+    const auth = { Authorization: `Bearer ${login.body.accessToken as string}` };
+    const start = await test.http().post("/v1/auth/mfa/enrolment").set(auth).expect(200);
+    const firstCode = codeFrom(test.email.lastTo(staffEmail)!.text);
+    await test.http().post("/v1/auth/mfa/enrolment/resend-code").set(auth).expect(204);
+    const secondCode = codeFrom(test.email.lastTo(staffEmail)!.text);
+    expect(secondCode).not.toBe(firstCode);
+    expect(test.email.sent.filter((message) => message.to === staffEmail).map((message) => message.kind)).toEqual(["auth.mfa_enrolment_code", "auth.mfa_enrolment_code"]);
+    const { authenticator } = await import("otplib");
+    await test
+      .http()
+      .post("/v1/auth/mfa/enrolment/confirm")
+      .set(auth)
+      .send({ code: authenticator.generate(start.body.secret as string), emailCode: firstCode })
+      .expect(400);
+    await flushRateLimits();
+    await test
+      .http()
+      .post("/v1/auth/mfa/enrolment/confirm")
+      .set(auth)
+      .send({ code: authenticator.generate(start.body.secret as string), emailCode: secondCode })
+      .expect(200);
+    await test.http().post("/v1/auth/mfa/enrolment/resend-code").set(auth).expect(409);
   });
 });

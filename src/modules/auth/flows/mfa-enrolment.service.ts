@@ -51,6 +51,19 @@ export class MfaEnrolmentService {
     return { ...material, emailCodeRequired };
   }
 
+  async resendEmailCode(principal: AuthPrincipal): Promise<void> {
+    const user = await this.requireUser(principal.userId);
+    if (user.mfaEnrolledAt) {
+      throw Errors.mfaAlreadyEnrolled();
+    }
+    if (!user.mfaPendingSecretEncrypted || !requiresMfa(user.role)) {
+      throw Errors.invalidTransition("Start two-factor set-up first.");
+    }
+    await this.limiter.consume(ATTEMPT_POLICIES.mfaEnrolmentResend, user.id);
+    const code = await this.codes.issueNumeric(user.id, "MFA_ENROLMENT");
+    await this.email.send(AuthEmails.mfaEnrolmentCode(user.email, code));
+  }
+
   async confirm(principal: AuthPrincipal, input: MfaConfirmInput, meta: RequestMeta): Promise<MfaEnrolmentComplete> {
     await this.limiter.consume(ATTEMPT_POLICIES.mfaPerUser, principal.userId);
     const user = await this.requireUser(principal.userId);

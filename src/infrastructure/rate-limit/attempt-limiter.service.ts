@@ -20,6 +20,7 @@ export const ATTEMPT_POLICIES = {
   mfaPerUser: { name: "mfa-user", limit: 5, windowSeconds: 5 * 60 },
   mfaDailyPerUser: { name: "mfa-user-daily", limit: 30, windowSeconds: 24 * 60 * 60 },
   mfaEnrolmentStart: { name: "mfa-enrolment-start", limit: 5, windowSeconds: 60 * 60 },
+  mfaEnrolmentResend: { name: "mfa-enrolment-resend", limit: 5, windowSeconds: 60 * 60 },
   signupPerIp: { name: "signup-ip", limit: 10, windowSeconds: 60 * 60 },
   signupPerEmail: { name: "signup-email", limit: 5, windowSeconds: 60 * 60 },
 } satisfies Record<string, AttemptPolicy>;

@@ -25,6 +25,14 @@ export class MfaController {
   }
 
   @AllowPendingMfa()
+  @Throttle(THROTTLE.authStrict)
+  @Post("enrolment/resend-code")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  resendCode(@CurrentPrincipal() principal: AuthPrincipal): Promise<void> {
+    return this.enrolment.resendEmailCode(principal);
+  }
+
+  @AllowPendingMfa()
   @Throttle(THROTTLE.auth)
   @Post("enrolment/confirm")
   @HttpCode(HttpStatus.OK)
