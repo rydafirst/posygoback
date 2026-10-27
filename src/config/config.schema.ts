@@ -122,6 +122,15 @@ export const configSchema = z
     STORAGE_ACCESS_KEY_ID: z.string().min(1),
     STORAGE_SECRET_ACCESS_KEY: z.string().min(1),
     EMAIL_TRANSPORT: z.enum(["log", "memory"]).default("log"),
+    ASSISTANT_AI: z.enum(["off", "anthropic"]).default("off"),
+    ANTHROPIC_API_KEY: z.string().trim().default(""),
+    ASSISTANT_AI_MODEL: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9.-]{3,80}$/)
+      .default("claude-haiku-5-5"),
+    ASSISTANT_DAILY_ANSWERS: z.coerce.number().int().min(0).max(1_000_000).default(2000),
+    ASSISTANT_KNOWLEDGE_URL: z.union([z.literal(""), z.string().url()]).default(""),
     SUPPORT_EMAIL: z.union([z.literal(""), z.string().trim().toLowerCase().email()]).default(""),
     PASSWORD_BREACH_CHECK: z.enum(["hibp", "off"]).default("hibp"),
     AUTH_TEST_SHORTCUTS: z
@@ -141,6 +150,7 @@ export const configSchema = z
     path: ["FIELD_ENCRYPTION_ACTIVE_KEY"],
   })
   .refine((config) => config.NODE_ENV !== "production" || !config.AUTH_TEST_SHORTCUTS, { message: "Sign-in shortcuts can't be turned on in production", path: ["AUTH_TEST_SHORTCUTS"] })
+  .refine((config) => config.ASSISTANT_AI === "off" || config.ANTHROPIC_API_KEY.length >= 20, { message: "ANTHROPIC_API_KEY is required when ASSISTANT_AI is on", path: ["ANTHROPIC_API_KEY"] })
   .refine((config) => config.NODE_ENV !== "production" || config.EMAIL_TRANSPORT !== "log", { message: "A real email transport is required in production", path: ["EMAIL_TRANSPORT"] })
   .refine((config) => config.NODE_ENV !== "production" || config.TRUST_PROXY_HOPS > 0 || config.CLIENT_IP_HEADER !== "", {
     message: "Production runs behind a proxy: set TRUST_PROXY_HOPS or CLIENT_IP_HEADER so rate limits see real client addresses",

@@ -9,6 +9,8 @@ export * from "./auth/auth.schema";
 export * from "./http/api-error";
 export * from "./http/error-guide";
 export * from "./support/support.schema";
+export * from "./assistant/assistant.schema";
+export * from "./assistant/status-guide";
 export * from "./country/iso-countries";
 export * from "./onboarding/verification.schema";
 export * from "./onboarding/account.schema";

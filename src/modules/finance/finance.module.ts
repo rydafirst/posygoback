@@ -39,6 +39,16 @@ import { PublicPricesService } from "./fees/public-prices.service";
     ReconciliationService,
     FinanceJobs,
   ],
-  exports: [JobLockService, WalletLedgerService, WalletAlertsService, FeeSchedulesService, PaymentAccountsService, StorageBillingService, OrderPaymentRouter, PaymentEventsService],
+  exports: [
+    JobLockService,
+    WalletLedgerService,
+    WalletAlertsService,
+    FeeSchedulesService,
+    PaymentAccountsService,
+    StorageBillingService,
+    OrderPaymentRouter,
+    PaymentEventsService,
+    PublicPricesService,
+  ],
 })
 export class FinanceModule {}

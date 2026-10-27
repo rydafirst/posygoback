@@ -479,6 +479,7 @@ model User {
   shoppingShipped  ShoppingRequest[] @relation("ShoppingShipper")
 
   supportReports       SupportReport[]
+  assistantQuestions   AssistantQuestion[]
   supportCasesResolved SupportCase[]   @relation("SupportCaseResolver")
 
   @@index([vendorId], map: "users_vendor_idx")
@@ -2679,4 +2680,30 @@ model SupportReport {
   @@index([caseId, createdAt], map: "support_reports_case_idx")
   @@index([userId], map: "support_reports_user_idx")
   @@map("support_reports")
+}
+
+enum AssistantOutcome {
+  ANSWERED
+  UNSURE
+  LIMITED
+  FAILED
+
+  @@map("assistant_outcome")
+}
+
+model AssistantQuestion {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String?          @map("user_id") @db.Uuid
+  page         String           @db.VarChar(300)
+  question     String           @db.VarChar(500)
+  outcome      AssistantOutcome
+  inputTokens  Int              @default(0) @map("input_tokens")
+  outputTokens Int              @default(0) @map("output_tokens")
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([createdAt], map: "assistant_questions_created_idx")
+  @@index([outcome, createdAt], map: "assistant_questions_outcome_idx")
+  @@map("assistant_questions")
 }

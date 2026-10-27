@@ -82,15 +82,18 @@ export interface TestApp {
   http: () => ReturnType<typeof request>;
 }
 
-export async function startApp(shared?: { email: InMemoryEmailSender; storage: InMemoryObjectStorage }): Promise<TestApp> {
+export async function startApp(shared?: { email: InMemoryEmailSender; storage: InMemoryObjectStorage }, overrides: ReadonlyArray<[symbol, unknown]> = []): Promise<TestApp> {
   const email = shared?.email ?? new InMemoryEmailSender();
   const storage = shared?.storage ?? new InMemoryObjectStorage();
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+  let builder = Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(EMAIL_SENDER)
     .useValue(email)
     .overrideProvider(OBJECT_STORAGE)
-    .useValue(storage)
-    .compile();
+    .useValue(storage);
+  for (const [token, value] of overrides) {
+    builder = builder.overrideProvider(token).useValue(value);
+  }
+  const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication({ bodyParser: false, rawBody: true, logger: process.env.DEBUG_E2E ? ["error"] : false });
   configureApp(app, loadConfig());
   await app.init();

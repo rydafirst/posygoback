@@ -107,6 +107,8 @@ Buyers send links from `/shop-for-me`; country staff price them at `/admin/shopp
 
 ## Testing without email
 
+The helper can answer open questions with Claude. It's off until you set `ASSISTANT_AI=anthropic` and `ANTHROPIC_API_KEY`; `ASSISTANT_AI_MODEL` picks the model (default `claude-haiku-5-5`), and `ASSISTANT_DAILY_ANSWERS` caps answers across everyone per day. It reads the page notes and guides from the web app's `/assistant-knowledge.json` (override with `ASSISTANT_KNOWLEDGE_URL`). The admin console's Support cases page shows questions it couldn't answer and how many tokens it used.
+
 Set `SUPPORT_EMAIL` to the inbox that should hear about new support cases from the in-app helper; leave it empty to see them only on the admin console's Support cases page.
 
 Until a real email service is connected, codes are written to the server log. Setting `AUTH_TEST_SHORTCUTS=on` adds a "Skip for testing" option to the email code step (the password is still checked) and to authenticator set-up (for that sign-in only). Every skip is audited, and the server refuses to start with it on in production. Remove the variable once email works.
