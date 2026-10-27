@@ -37,8 +37,24 @@ export function withoutSignOff(text: string): string {
   return text.replace(new RegExp(`\\n+${PLATFORM_NAME}\\s*$`), "").trimEnd();
 }
 
+function withoutButtonLink(text: string, message: EmailMessage): string {
+  if (!message.action) {
+    return text;
+  }
+  const parts = text.split(message.action.url);
+  return parts
+    .map((part, index) => {
+      if (index === parts.length - 1) {
+        return part;
+      }
+      const next = parts[index + 1] ?? "";
+      return part.replace(/:\s*$/, /^[.,;]/.test(next) ? "" : ".").trimEnd() + (/^\s/.test(next) || /^[.,;]/.test(next) ? "" : " ");
+    })
+    .join("");
+}
+
 export function renderHtml(message: EmailMessage, siteUrl: string): string {
-  const body = paragraphs(withoutSignOff(message.text));
+  const body = paragraphs(withoutButtonLink(withoutSignOff(message.text), message));
   return `<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(message.subject)}</title></head>
 <body style="margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff"><tr><td align="center" style="padding:32px 16px">

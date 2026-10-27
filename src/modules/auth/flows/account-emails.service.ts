@@ -5,6 +5,8 @@ import { APP_CONFIG } from "../../../config/config.module";
 import type { AppConfig } from "../../../config/config.schema";
 import { PrismaService } from "../../../database/prisma.service";
 import { EMAIL_SENDER, type EmailSender } from "../../../infrastructure/email/email.port";
+import { PersonalNoticesService, securityPage } from "../../notifications/personal-notices.service";
+import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { AuthEmails } from "../auth-emails";
 import { deviceLabel } from "../sessions/device-label";
 
@@ -20,12 +22,19 @@ export class AccountEmailsService {
     private readonly prisma: PrismaService,
     @Inject(EMAIL_SENDER) private readonly email: EmailSender,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly notices: PersonalNoticesService,
+    private readonly staffAlerts: StaffAlertsService,
   ) {}
 
   async welcome(userId: string): Promise<void> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true, vendor: { select: { businessName: true } } } });
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true, vendor: { select: { businessName: true, countryCode: true } } } });
     if (user?.vendor) {
-      await this.email.send(AuthEmails.welcome(user.email, user.vendor.businessName, this.config.WEB_PUBLIC_URL));
+      await this.notices.send(AuthEmails.welcome(user.email, user.vendor.businessName, this.config.WEB_PUBLIC_URL), "/overview");
+      await this.staffAlerts.raise("vendorJoined", {
+        countryCode: user.vendor.countryCode,
+        title: `${user.vendor.businessName} joined`,
+        body: `A new vendor in ${user.vendor.countryCode} confirmed their email. Their business checks come next.`,
+      });
     }
   }
 
@@ -36,7 +45,7 @@ export class AccountEmailsService {
   async afterSignIn(user: { id: string; email: string }, meta: RequestMeta, usedRecoveryCode: boolean, startedAt: Date): Promise<void> {
     if (usedRecoveryCode) {
       const remaining = await this.prisma.recoveryCode.count({ where: { userId: user.id, usedAt: null } });
-      await this.email.send(AuthEmails.recoveryCodeUsed(user.email, remaining, this.config.WEB_PUBLIC_URL));
+      await this.notices.send(AuthEmails.recoveryCodeUsed(user.email, remaining, this.config.WEB_PUBLIC_URL), securityPage);
     }
     const earlier = await this.prisma.session.findMany({
       where: { userId: user.id, createdAt: { lt: startedAt, gte: new Date(startedAt.getTime() - REMEMBERED_DAYS * 24 * 60 * 60 * 1000) } },
@@ -48,6 +57,6 @@ export class AccountEmailsService {
     if (earlier.length === 0 || earlier.some((session) => deviceLabel(session.userAgent) === device)) {
       return;
     }
-    await this.email.send(AuthEmails.newSignIn(user.email, { device, when: formatWhen(startedAt), ip: meta.ip }, this.config.WEB_PUBLIC_URL));
+    await this.notices.send(AuthEmails.newSignIn(user.email, { device, when: formatWhen(startedAt), ip: meta.ip }, this.config.WEB_PUBLIC_URL), securityPage);
   }
 }

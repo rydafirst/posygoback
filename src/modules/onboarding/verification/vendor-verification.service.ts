@@ -12,6 +12,7 @@ import { EMAIL_SENDER, type EmailSender } from "../../../infrastructure/email/em
 import { UsersRepository } from "../../auth/users.repository";
 import { CountriesRepository } from "../../countries/countries.repository";
 import { FilesService } from "../../files/files.service";
+import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { OnboardingEmails } from "../onboarding-emails";
 import { todayIso, vendorIdOf } from "../scope";
 import { IdentityProviderRegistry } from "./identity-provider";
@@ -42,6 +43,7 @@ export class VendorVerificationService {
     private readonly users: UsersRepository,
     private readonly audit: AuditService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly staffAlerts: StaffAlertsService,
   ) {}
 
   async view(principal: AuthPrincipal): Promise<VerificationView> {
@@ -123,6 +125,12 @@ export class VendorVerificationService {
     if (owner) {
       await this.email.send(OnboardingEmails.verificationReceived(owner.email, this.config.WEB_PUBLIC_URL));
     }
+    const vendor = await this.prisma.vendor.findUnique({ where: { id: vendorId }, select: { businessName: true } });
+    await this.staffAlerts.raise("verifications", {
+      countryCode: market.countryCode,
+      title: `${vendor?.businessName ?? "A vendor"} sent their checks`,
+      body: `Their business checks for ${market.countryCode} are ready for review.`,
+    });
     return this.view(principal);
   }
 

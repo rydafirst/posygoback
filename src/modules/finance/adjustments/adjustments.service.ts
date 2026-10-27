@@ -6,6 +6,7 @@ import { lockRow, PrismaService } from "../../../database/prisma.service";
 import type { AdjustmentStatus, Prisma, WalletAdjustment } from "../../../generated/prisma/client";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
 import { type AdjustmentDecisionInput, type AdjustmentView, Money, type RequestAdjustmentInput } from "../../../shared";
+import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { FinanceEmails } from "../finance-emails";
 import { FeeSchedulesService } from "../fees/fee-schedules.service";
 import { WalletAlertsService } from "../wallets/wallet-alerts.service";
@@ -47,6 +48,7 @@ export class AdjustmentsService {
     private readonly fees: FeeSchedulesService,
     private readonly alerts: WalletAlertsService,
     private readonly audit: AuditService,
+    private readonly staffAlerts: StaffAlertsService,
   ) {}
 
   async list(status?: AdjustmentStatus, walletId?: string): Promise<AdjustmentView[]> {
@@ -97,6 +99,9 @@ export class AdjustmentsService {
       return tx.walletAdjustment.findUniqueOrThrow({ where: { id: adjustment.id }, include: VIEW_INCLUDE });
     });
     await this.followUp(posting);
+    if (created.status === "PENDING_APPROVAL") {
+      await this.askForApproval(created, wallet.vendor.countryCode);
+    }
     return toView(created);
   }
 
@@ -160,6 +165,17 @@ export class AdjustmentsService {
       tx,
     );
     return result;
+  }
+
+  private async askForApproval(adjustment: AdjustmentWithPeople, countryCode: string): Promise<void> {
+    const amount = Money.of(Number(adjustment.amountMinor), adjustment.wallet.currency).format("en-GB");
+    const kind = adjustment.direction === "CREDIT" ? "credit" : "debit";
+    await this.staffAlerts.raise("adjustments", {
+      countryCode,
+      title: `${amount} wallet adjustment for ${adjustment.wallet.vendor.businessName} to approve`,
+      body: `${adjustment.requester.email} asked for a ${kind} because: ${adjustment.reason}`,
+      exceptUserId: adjustment.requestedBy,
+    });
   }
 
   private async followUp(posting: PostingResult | null): Promise<void> {

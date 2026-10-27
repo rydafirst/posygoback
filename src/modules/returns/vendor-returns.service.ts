@@ -19,6 +19,7 @@ import { FilesService } from "../files/files.service";
 import { vendorIdOf } from "../onboarding/scope";
 import { VendorStandingService } from "../onboarding/vendor-standing.service";
 import { randomCode } from "../stock/inbound/references";
+import { ReturnAlertsService } from "./return-alerts.service";
 import { ReturnFeesService } from "./return-fees.service";
 import { addDays, VendorReturnsRepository } from "./vendor-returns.repository";
 
@@ -34,6 +35,7 @@ export class VendorReturnsService {
     private readonly charges: ReturnFeesService,
     private readonly files: FilesService,
     private readonly audit: AuditService,
+    private readonly alerts: ReturnAlertsService,
   ) {}
 
   list(principal: AuthPrincipal, status?: VendorReturnStatus): Promise<VendorReturnView[]> {
@@ -171,6 +173,7 @@ export class VendorReturnsService {
       await tx.vendorReturn.update({ where: { id: entry.id }, data: { status: "INSTRUCTED", instructedBy: principal.userId, instructedAt: new Date() } });
       await this.audit.record({ actor: this.actor(principal), action: "return.instructed", resourceType: "vendor_return", resourceId: entry.id, vendorId: entry.vendorId, after: input, meta }, tx);
     });
+    await this.alerts.readyToFinish(entry, "The vendor has said what to do with each item. Do it, then finish the return.");
     return this.detail(principal, returnId);
   }
 

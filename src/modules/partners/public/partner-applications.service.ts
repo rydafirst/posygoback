@@ -6,6 +6,7 @@ import { PrismaService } from "../../../database/prisma.service";
 import { AuditService, SYSTEM_ACTOR } from "../../../infrastructure/audit/audit.service";
 import { AttemptLimiterService } from "../../../infrastructure/rate-limit/attempt-limiter.service";
 import { PARTNER_CHECK_KINDS, type PartnerApplicationInput, partnerProfileSchema, partnerProgramme } from "../../../shared";
+import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { StaffService } from "../../staff/staff.service";
 import { randomCode } from "../../stock/inbound/references";
 
@@ -19,6 +20,7 @@ export class PartnerApplicationsService {
     private readonly staff: StaffService,
     private readonly limiter: AttemptLimiterService,
     private readonly audit: AuditService,
+    private readonly staffAlerts: StaffAlertsService,
   ) {}
 
   async apply(input: PartnerApplicationInput, meta: RequestMeta): Promise<void> {
@@ -56,6 +58,11 @@ export class PartnerApplicationsService {
       return created;
     });
     await this.staff.inviteApplicant({ email, role: "FULFILMENT_PARTNER", countryCode, partnerId: partner.id }, meta);
+    await this.staffAlerts.raise("partnerApplied", {
+      countryCode,
+      title: `New partner application from ${profile.fullName}`,
+      body: `${partner.reference} in ${countryCode}. They're setting up their account and doing their checks now. You'll hear again when it's ready for review.`,
+    });
   }
 
   private async alreadyKnown(email: string): Promise<boolean> {

@@ -175,6 +175,9 @@ describe("email trail: accounts and money", () => {
       await http().post("/v1/public/partner-applications").send(application("applicant@partner.test", "Bisi Applicant")).expect(202);
       expect(kinds("applicant@partner.test")[0]).toBe("staff.partner_application");
       expect(test.email.lastTo("applicant@partner.test")!.action!.url).toMatch(/^http:\/\/localhost:3000\/staff-invite#token=/);
+      const token = decodeURIComponent(test.email.lastTo("applicant@partner.test")!.action!.url.split("#token=")[1]!);
+      const preview = await http().post("/v1/staff-invitations/preview").send({ token }).expect(200);
+      expect(preview.body).toMatchObject({ role: "FULFILMENT_PARTNER", partnerName: "Bisi Applicant", purpose: "PARTNER_APPLICATION" });
     });
   });
 

@@ -177,11 +177,18 @@ export class StaffService {
   }
 
   async preview(token: string): Promise<StaffInvitationPreview> {
-    const invitation = await this.prisma.staffInvitation.findFirst({ where: this.usable(token), include: { partner: { select: { legalName: true } } } });
+    const invitation = await this.prisma.staffInvitation.findFirst({ where: this.usable(token), include: { partner: { select: { legalName: true, status: true } } } });
     if (!invitation) {
       throw Errors.invalidCode();
     }
-    return { email: invitation.email, role: invitation.role as InvitedRole, countryCode: invitation.countryCode, partnerName: invitation.partner?.legalName ?? null };
+    const applying = invitation.role === "FULFILMENT_PARTNER" && invitation.partner?.status === "APPLIED";
+    return {
+      email: invitation.email,
+      role: invitation.role as InvitedRole,
+      countryCode: invitation.countryCode,
+      partnerName: invitation.partner?.legalName ?? null,
+      purpose: applying ? "PARTNER_APPLICATION" : "TEAM",
+    };
   }
 
   async accept(input: AcceptInvitationInput, meta: RequestMeta): Promise<IssuedAuthentication> {

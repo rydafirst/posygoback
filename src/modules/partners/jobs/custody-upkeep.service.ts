@@ -90,12 +90,12 @@ export class CustodyUpkeepService {
       return false;
     }
     const reason = `Trust score ${trust.score} fell below ${trust.floor}`;
-    const moved = await this.prisma.$transaction(async (tx) => {
+    const opened = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.fulfilmentPartner.updateMany({ where: { id: partnerId, status: "ACTIVE" }, data: { status: "SUSPENDED", statusReason: reason } });
       if (updated.count === 0) {
-        return false;
+        return null;
       }
-      await this.alerts.raise(
+      const alerts = await this.alerts.open(
         [{ kind: "TRUST_LOW", countryCode, partnerId, warehouseId: null, subjectType: "fulfilment_partner", subjectId: partnerId, message: `${reason}. The hub has been paused.` }],
         tx,
       );
@@ -111,12 +111,13 @@ export class CustodyUpkeepService {
         },
         tx,
       );
-      return true;
+      return alerts;
     });
-    if (moved) {
+    if (opened) {
+      await this.alerts.announce(opened);
       await this.counts.requestIfStocked({ partnerId, countryCode, lines: "ALL", dueInHours: FULL_COUNT_DUE_HOURS, note: "Full count after the hub was paused", actor: SYSTEM_ACTOR, reason: "trust" });
       await this.notifier.notify(partnerId, (to, webUrl) => CustodyEmails.trustSuspended(to, trust.score, webUrl));
     }
-    return moved;
+    return opened !== null;
   }
 }

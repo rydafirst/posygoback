@@ -13,6 +13,7 @@ import { FilesService } from "../../files/files.service";
 import { CarrierAccountsService } from "../../orders/carriers/carrier-accounts.service";
 import { warehouseScope } from "../../stock/scope";
 import { DeliveryQuotesService } from "../checkout/delivery-quotes.service";
+import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { ShoppingEmails } from "./shopping-emails";
 import { actorOf, commissionShare, ShoppingPurchasesService } from "./shopping-purchases.service";
 import { SHOPPING_INCLUDE, ShoppingRepository, type ShoppingRow, type StoredParcel } from "./shopping.repository";
@@ -52,6 +53,7 @@ export class ShoppingWarehouseService {
     private readonly audit: AuditService,
     @Inject(EMAIL_SENDER) private readonly email: EmailSender,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly staffAlerts: StaffAlertsService,
   ) {}
 
   async list(principal: AuthPrincipal): Promise<ShoppingRequestView[]> {
@@ -109,6 +111,14 @@ export class ShoppingWarehouseService {
       }
       return { nothing, intent: shortMinor > 0 ? await this.refunds.reserve(tx, row.id, shortMinor + commissionShare(current, shortMinor), `shopping-short:${row.id}`, "Items didn't arrive") : null };
     });
+    if (!outcome.nothing) {
+      await this.staffAlerts.raise("shoppingAtWarehouse", {
+        countryCode: row.countryCode,
+        title: `Shopping parcel ${row.reference} arrived at ${row.warehouse?.name ?? "the warehouse"}`,
+        body: "It's booked in. Send it on to the buyer.",
+        exceptUserId: principal.userId,
+      });
+    }
     if (outcome.nothing) {
       await this.purchases.sendThenTell(outcome.intent?.id ?? null, actorOf(principal), (amount) =>
         ShoppingEmails.cancelled(row.buyerEmail, row.reference, "None of the items reached our warehouse, so we've cancelled your request.", amount, this.config.WEB_PUBLIC_URL),

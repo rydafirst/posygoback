@@ -79,6 +79,7 @@ export class ReturnUpkeepService {
       if (done) {
         restocked += 1;
         await this.owners.tellOwner(entry, (to, webUrl) => ReturnEmails.autoRestocked(to, entry.reference, webUrl));
+        await this.owners.readyToFinish(entry, "The vendor didn't answer in time, so restock everything, then finish the return.");
       }
     }
     return restocked;

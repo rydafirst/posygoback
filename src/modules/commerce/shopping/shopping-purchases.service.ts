@@ -10,6 +10,7 @@ import { lockRow, PrismaService } from "../../../database/prisma.service";
 import { type AuditActor, AuditService } from "../../../infrastructure/audit/audit.service";
 import { EMAIL_SENDER, type EmailMessage, type EmailSender } from "../../../infrastructure/email/email.port";
 import { Money, type ShoppingPurchaseInput, type ShoppingRequestView, type ShoppingStatus } from "../../../shared";
+import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { ShoppingEmails } from "./shopping-emails";
 import { ShoppingQuotesService } from "./shopping-quotes.service";
 import { ShoppingRefundsService } from "./shopping-refunds.service";
@@ -36,6 +37,7 @@ export class ShoppingPurchasesService {
     private readonly audit: AuditService,
     @Inject(EMAIL_SENDER) private readonly email: EmailSender,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly staffAlerts: StaffAlertsService,
   ) {}
 
   async purchase(principal: AuthPrincipal, requestId: string, input: ShoppingPurchaseInput, meta: RequestMeta): Promise<ShoppingRequestView> {
@@ -94,6 +96,12 @@ export class ShoppingPurchasesService {
     const webUrl = this.config.WEB_PUBLIC_URL;
     if (outcome.finished) {
       await this.email.send(ShoppingEmails.bought(row.buyerEmail, row.reference, webUrl)).catch(() => undefined);
+      await this.staffAlerts.raise("shoppingAtWarehouse", {
+        countryCode: row.countryCode,
+        title: `Shopping request ${row.reference} is bought`,
+        body: `Every item has been bought. Book the parcel in when it reaches ${row.warehouse?.name ?? "the warehouse"}.`,
+        exceptUserId: principal.userId,
+      });
     }
     if (outcome.allGone) {
       await this.sendThenTell(outcome.intent?.id ?? null, actorOf(principal), (amount) =>

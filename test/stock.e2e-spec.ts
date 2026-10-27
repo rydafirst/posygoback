@@ -75,7 +75,7 @@ describe("catalogue, inbound and inventory", () => {
       await test.http().post("/v1/admin/staff/invitations").set(as(superAdmin)).send({ email: "new-operator@gfn.test", role: "WAREHOUSE_OPERATOR", countryCode: "GB" }).expect(202);
       const token = decodeURIComponent(/#token=([^\s]+)/.exec(test.email.lastTo("new-operator@gfn.test")!.text)![1]!);
       const preview = await test.http().post("/v1/staff-invitations/preview").send({ token }).expect(200);
-      expect(preview.body).toEqual({ email: "new-operator@gfn.test", role: "WAREHOUSE_OPERATOR", countryCode: "GB", partnerName: null });
+      expect(preview.body).toEqual({ email: "new-operator@gfn.test", role: "WAREHOUSE_OPERATOR", countryCode: "GB", partnerName: null, purpose: "TEAM" });
       const accepted = await test.http().post("/v1/staff-invitations/accept").send({ token, password: "an operator's own password" }).expect(200);
       expect(accepted.body.user.mfaState).toBe("ENROLMENT_REQUIRED");
       await test.http().get("/v1/warehouse/warehouses").set(as(accepted.body.accessToken)).expect(403);

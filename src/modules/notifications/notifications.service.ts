@@ -34,6 +34,14 @@ export class NotificationsService {
     await client.notification.create({ data: { userId, title: shorten(notice.title, 160), body: shorten(notice.body, 400), href: notice.href ?? null } });
   }
 
+  async forUsers(userIds: readonly string[], notice: NoticeInput, client: DatabaseClient = this.prisma): Promise<void> {
+    if (userIds.length === 0) {
+      return;
+    }
+    const content = { title: shorten(notice.title, 160), body: shorten(notice.body, 400), href: notice.href ?? null };
+    await client.notification.createMany({ data: userIds.map((userId) => ({ userId, ...content })) });
+  }
+
   async feed(principal: AuthPrincipal): Promise<NotificationFeedView> {
     const audience = this.audience(principal);
     const [rows, unread] = await Promise.all([
@@ -62,6 +70,6 @@ export class NotificationsService {
   }
 
   private audience(principal: AuthPrincipal): Prisma.NotificationWhereInput {
-    return principal.vendorId ? { vendorId: principal.vendorId } : { userId: principal.userId };
+    return principal.vendorId ? { OR: [{ vendorId: principal.vendorId }, { userId: principal.userId }] } : { userId: principal.userId };
   }
 }

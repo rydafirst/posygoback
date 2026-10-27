@@ -3,7 +3,10 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { APP_CONFIG } from "../../config/config.module";
 import type { AppConfig } from "../../config/config.schema";
 import { PrismaService } from "../../database/prisma.service";
-import { EMAIL_SENDER, type EmailMessage, type EmailSender } from "../../infrastructure/email/email.port";
+import type { EmailMessage } from "../../infrastructure/email/email.port";
+import { PersonalNoticesService } from "../notifications/personal-notices.service";
+
+const PARTNER_HOME = "/admin/partnership";
 
 @Injectable()
 export class PartnerNotifierService {
@@ -11,11 +14,11 @@ export class PartnerNotifierService {
 
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(EMAIL_SENDER) private readonly email: EmailSender,
+    private readonly notices: PersonalNoticesService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
-  async notify(partnerId: string, build: (to: string, webUrl: string) => EmailMessage): Promise<void> {
+  async notify(partnerId: string, build: (to: string, webUrl: string) => EmailMessage, href?: string): Promise<void> {
     const partner = await this.prisma.fulfilmentPartner.findUnique({
       where: { id: partnerId },
       select: { contactEmail: true, users: { where: { role: "FULFILMENT_PARTNER", status: "ACTIVE" }, select: { email: true } } },
@@ -23,9 +26,10 @@ export class PartnerNotifierService {
     if (!partner) {
       return;
     }
-    const recipients = new Set([partner.contactEmail, ...partner.users.map((user) => user.email)]);
+    const recipients = new Set([partner.contactEmail, ...partner.users.map((user) => user.email)].map((email) => email.toLowerCase()));
     for (const to of recipients) {
-      await this.email.send(build(to, this.config.WEB_PUBLIC_URL)).catch((error: unknown) => this.logger.error(`Partner email failed: ${String(error)}`));
+      const message = build(to, this.config.WEB_PUBLIC_URL);
+      await this.notices.send(message, href ?? (message.action ? undefined : PARTNER_HOME)).catch((error: unknown) => this.logger.error(`Partner email failed: ${String(error)}`));
     }
   }
 }

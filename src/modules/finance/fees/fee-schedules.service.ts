@@ -6,6 +6,7 @@ import { type DatabaseClient, isUniqueViolation, lockRow, PrismaService } from "
 import type { FeeSchedule as FeeScheduleRow, Prisma } from "../../../generated/prisma/client";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
 import { type FeeSchedule, type FeeScheduleDecisionInput, type FeeScheduleView, type ProposeFeeScheduleInput } from "../../../shared";
+import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { reviewerCountryScope } from "../../onboarding/scope";
 
 export interface ActiveSchedule {
@@ -40,6 +41,7 @@ export class FeeSchedulesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly staffAlerts: StaffAlertsService,
   ) {}
 
   async active(countryCode: string, client: DatabaseClient = this.prisma): Promise<ActiveSchedule> {
@@ -75,6 +77,12 @@ export class FeeSchedulesService {
           tx,
         );
         return row;
+      });
+      await this.staffAlerts.raise("prices", {
+        countryCode,
+        title: `Price list for ${countryCode} waiting for approval`,
+        body: `${created.proposer?.email ?? "Someone"} proposed version ${created.version} and it needs a second person to approve it.`,
+        exceptUserId: principal.userId,
       });
       return toView(created);
     } catch (error) {

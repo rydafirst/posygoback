@@ -5,6 +5,7 @@ import { Errors } from "../../../common/http/app-exception";
 import { lockRow, PrismaService } from "../../../database/prisma.service";
 import { AuditService, SYSTEM_ACTOR } from "../../../infrastructure/audit/audit.service";
 import { Money, type PartnerPayoutView } from "../../../shared";
+import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { PartnerLedgerService } from "../ledger/partner-ledger.service";
 import { PartnerEmails } from "../partner-emails";
 import { PartnerNotifierService } from "../partner-notifier.service";
@@ -30,6 +31,7 @@ export class PartnerFinanceService {
     private readonly ledger: PartnerLedgerService,
     private readonly notifier: PartnerNotifierService,
     private readonly audit: AuditService,
+    private readonly staffAlerts: StaffAlertsService,
   ) {}
 
   async requestPayout(principal: AuthPrincipal, partnerId: string, input: { amountMinor: number; note: string }, meta: RequestMeta): Promise<PartnerPayoutView> {
@@ -65,6 +67,12 @@ export class PartnerFinanceService {
         tx,
       );
       return created;
+    });
+    await this.staffAlerts.raise("partnerPayouts", {
+      countryCode: partner.countryCode,
+      title: `${Money.of(Number(payout.amountMinor), payout.currency).format("en-GB")} payout for ${payout.partner.legalName} to approve`,
+      body: `${payout.requester.email} asked to pay this partner and it needs someone else to approve it.`,
+      exceptUserId: principal.userId,
     });
     return this.toPayoutView(payout);
   }

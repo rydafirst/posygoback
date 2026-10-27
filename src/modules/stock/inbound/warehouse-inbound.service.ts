@@ -27,6 +27,7 @@ export type OperatorAction = Exclude<InboundAction, "SUBMIT" | "CANCEL" | "PAY_H
 
 const OPERATOR_ACTIONS: readonly InboundAction[] = ["CHECK_IN", "HOLD", "RELEASE", "COMPLETE", "REJECT", "REQUEST_RETURN"];
 const PLATFORM_ONLY: readonly InboundAction[] = ["REJECT", "REQUEST_RETURN"];
+const STAFF_WAITS: readonly InboundAction[] = ["CHECK_IN", "HOLD"];
 
 const OUTCOME: Record<OperatorAction, { status: InboundStatus; needsReason: boolean }> = {
   CHECK_IN: { status: "ARRIVED", needsReason: false },
@@ -95,6 +96,7 @@ export class WarehouseInboundService {
           ...(action === "HOLD" ? { statusBeforeHold: existing.status, holdChargeMinor: chargeMinor === undefined ? null : BigInt(chargeMinor), holdPlacedAt: new Date(), holdPaidAt: null } : {}),
           ...(action === "RELEASE" ? { statusBeforeHold: null } : {}),
         },
+        include: { warehouse: { select: { name: true } } },
       });
       await this.audit.record(
         {
@@ -113,6 +115,9 @@ export class WarehouseInboundService {
       return { updated: row, chargeWaived: waived };
     });
     await this.tellOwner(updated, action, reason ?? "", chargeMinor ? await this.chargeNotice(updated.countryCode, chargeMinor) : null, chargeWaived);
+    if (STAFF_WAITS.includes(action)) {
+      await this.owners.tellStaff(updated, principal.userId);
+    }
     return this.detail(principal, inboundId);
   }
 

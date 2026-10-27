@@ -9,6 +9,7 @@ import { PrismaService } from "../../../database/prisma.service";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
 import { EMAIL_SENDER, type EmailSender } from "../../../infrastructure/email/email.port";
 import { ATTEMPT_POLICIES, AttemptLimiterService } from "../../../infrastructure/rate-limit/attempt-limiter.service";
+import { PersonalNoticesService, securityPage } from "../../notifications/personal-notices.service";
 import { AuthEmails } from "../auth-emails";
 import { VerificationCodeService } from "../codes/verification-code.service";
 import { PasswordService } from "../password/password.service";
@@ -27,6 +28,7 @@ export class PasswordResetService {
     private readonly sessions: SessionService,
     private readonly limiter: AttemptLimiterService,
     private readonly audit: AuditService,
+    private readonly notices: PersonalNoticesService,
   ) {}
 
   async request(email: string, meta: RequestMeta): Promise<void> {
@@ -67,6 +69,6 @@ export class PasswordResetService {
     if (!user) {
       throw Errors.invalidCode();
     }
-    await this.email.send(AuthEmails.passwordChanged(user.email, this.config.WEB_PUBLIC_URL));
+    await this.notices.send(AuthEmails.passwordChanged(user.email, this.config.WEB_PUBLIC_URL), securityPage);
   }
 }

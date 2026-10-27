@@ -152,7 +152,7 @@ export class OrderTrackingService {
 
   private async tellOwner(before: Order, moved: OrderStatus, description: string): Promise<void> {
     if (moved === "EXCEPTION") {
-      await this.owners.tellOwner(before, (to, webUrl) => OrderEmails.problem(to, before, description, webUrl));
+      await this.owners.carrierProblem(before, description);
     } else if (moved === "RETURNED") {
       await this.owners.tellOwner(before, (to, webUrl) => OrderEmails.returnedToHub(to, before, description, webUrl));
     } else if (before.status === "LABEL_PURCHASED") {

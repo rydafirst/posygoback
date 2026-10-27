@@ -14,6 +14,7 @@ import { AttemptLimiterService } from "../../infrastructure/rate-limit/attempt-l
 import { scrubSensitive, type SupportReport, type SupportReportResult } from "../../shared";
 import { randomCode } from "../stock/inbound/references";
 import { NotificationsService } from "../notifications/notifications.service";
+import { StaffAlertsService } from "../notifications/staff-alerts.service";
 import { SupportEmails } from "./support-emails";
 
 const PER_IP = { name: "support-report-ip", limit: 20, windowSeconds: 60 * 60 };
@@ -46,6 +47,7 @@ export class SupportCasesService {
     private readonly notifications: NotificationsService,
     @Inject(EMAIL_SENDER) private readonly email: EmailSender,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly staffAlerts: StaffAlertsService,
   ) {}
 
   async report(input: SupportReport, meta: RequestMeta, principal: AuthPrincipal | null): Promise<SupportReportResult> {
@@ -88,6 +90,12 @@ export class SupportCasesService {
     });
     if (!result.alreadyKnown) {
       await this.tellSupport(result.reference, input);
+      await this.staffAlerts.raise("support", {
+        countryCode: principal?.countryCode ?? null,
+        title: `${result.reference}: ${input.kind === "ERROR" ? "someone hit an error" : "someone needs help"}`,
+        body: `On ${input.page}. ${scrubSensitive(input.message) || "No message."}`,
+        exceptUserId: principal?.userId,
+      });
     }
     return result;
   }

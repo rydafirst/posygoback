@@ -26,6 +26,16 @@ describe("email", () => {
     expect(plainText(MESSAGE)).toContain("Choose a new password: https://posygo.com/reset-password#token=abc");
   });
 
+  it("shows the button's link only as the button, keeping it in the plain-text version", () => {
+    const url = MESSAGE.action.url;
+    const text = `Set a password to continue (the link lasts 3 days):\n${url}\n\nIf you didn't apply, ignore this email.`;
+    const html = renderHtml({ ...MESSAGE, text }, SETTINGS.siteUrl);
+    expect(html.split(url)).toHaveLength(2);
+    expect(html).toContain("Set a password to continue (the link lasts 3 days).<");
+    expect(renderHtml({ ...MESSAGE, text: `Reset it here: ${url}. It expires soon.` }, SETTINGS.siteUrl)).toContain("Reset it here. It expires soon.");
+    expect(plainText({ ...MESSAGE, text })).toContain(url);
+  });
+
   it("sends through Resend with the sender, reply address, both versions and a tag for the kind of email", async () => {
     const fetchMock = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: "re_123" }) });
     global.fetch = fetchMock;

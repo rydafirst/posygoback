@@ -27,6 +27,7 @@ import { FilesService } from "../../files/files.service";
 import { actorOf } from "../admin/admin-partners.service";
 import { PartnerEmails } from "../partner-emails";
 import { sameName } from "../partner-names";
+import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { PartnerNotifierService } from "../partner-notifier.service";
 import { PartnersRepository, type StoredProfile } from "../partners.repository";
 import { IDENTITY_VERIFIER, type IdentityOutcome, type IdentityVerifier } from "../providers/partner-services.port";
@@ -59,6 +60,7 @@ export class PartnerVerificationService {
     private readonly limiter: AttemptLimiterService,
     private readonly notifier: PartnerNotifierService,
     private readonly audit: AuditService,
+    private readonly staffAlerts: StaffAlertsService,
   ) {}
 
   async updateProfile(principal: AuthPrincipal, input: PartnerProfileInput, meta: RequestMeta): Promise<void> {
@@ -244,7 +246,7 @@ export class PartnerVerificationService {
   }
 
   async submitForReview(principal: AuthPrincipal, meta: RequestMeta): Promise<void> {
-    await this.access.mutate(principal, VERIFYING, "Your application has already been sent.", async (tx, partner) => {
+    const submitted = await this.access.mutate(principal, VERIFYING, "Your application has already been sent.", async (tx, partner) => {
       const checks = await tx.partnerCheck.findMany({ where: { partnerId: partner.id }, select: { kind: true, status: true } });
       const outstanding = checks.filter((check) => check.status === "NOT_STARTED" || check.status === "REJECTED").map((check) => check.kind);
       const [document] = await this.partners.latestAgreements(partner.countryCode, tx);
@@ -266,8 +268,14 @@ export class PartnerVerificationService {
       }
       await tx.fulfilmentPartner.update({ where: { id: partner.id }, data: { status: "UNDER_REVIEW", statusReason: null } });
       await this.record(tx, principal, partner, "partner.submitted_for_review", {}, meta);
+      return partner;
     });
     await this.notifier.notify(partnerIdOf(principal), PartnerEmails.applicationSubmitted);
+    await this.staffAlerts.raise("partners", {
+      countryCode: submitted.countryCode,
+      title: `${submitted.legalName} is ready for review`,
+      body: `Partner application ${submitted.reference} has every step done and is waiting for a decision.`,
+    });
   }
 
   private async submit(

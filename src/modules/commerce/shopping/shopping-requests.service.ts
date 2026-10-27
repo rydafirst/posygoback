@@ -14,6 +14,7 @@ import { AttemptLimiterService } from "../../../infrastructure/rate-limit/attemp
 import { type CountryConfig, type DestinationView, prefixProblems, recipientProblems, type ShipTo, type ShoppingRequestInput, type ShoppingRequestView } from "../../../shared";
 import { CountriesRepository } from "../../countries/countries.repository";
 import { randomCode } from "../../stock/inbound/references";
+import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { ShoppingEmails } from "./shopping-emails";
 import { SHOPPING_INCLUDE, ShoppingRepository } from "./shopping.repository";
 
@@ -38,6 +39,7 @@ export class ShoppingRequestsService {
     private readonly audit: AuditService,
     @Inject(EMAIL_SENDER) private readonly email: EmailSender,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly staffAlerts: StaffAlertsService,
   ) {}
 
   async create(input: ShoppingRequestInput, meta: RequestMeta): Promise<{ reference: string }> {
@@ -108,6 +110,11 @@ export class ShoppingRequestsService {
     }
     await this.audit.record({ actor: SYSTEM_ACTOR, action: "shopping.confirmed", resourceType: "shopping_request", resourceId: row.id, countryCode: row.countryCode, meta });
     await this.email.send(ShoppingEmails.received(row.buyerEmail, row.reference, this.config.WEB_PUBLIC_URL)).catch(() => undefined);
+    await this.staffAlerts.raise("shoppingToPrice", {
+      countryCode: row.countryCode,
+      title: `Shopping request ${row.reference} to price`,
+      body: "The buyer has confirmed their request. Check the items and send them a price.",
+    });
     return { reference: row.reference };
   }
 

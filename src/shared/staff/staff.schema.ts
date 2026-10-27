@@ -55,4 +55,5 @@ export interface StaffInvitationPreview {
   role: InvitableStaffRole | "FULFILMENT_PARTNER" | "PARTNER_STAFF";
   countryCode: string | null;
   partnerName: string | null;
+  purpose: "PARTNER_APPLICATION" | "TEAM";
 }

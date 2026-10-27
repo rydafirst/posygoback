@@ -4,122 +4,41 @@ import type { AuthPrincipal } from "../../common/auth/auth-principal";
 import { Errors } from "../../common/http/app-exception";
 import { PrismaService } from "../../database/prisma.service";
 import { Prisma } from "../../generated/prisma/client";
-import { type AttentionItem, type DashboardView, hasPermission, type MoneyTotal, type Permission } from "../../shared";
+import { type AttentionItem, type DashboardView, hasPermission, type MoneyTotal } from "../../shared";
+import { STAFF_TOPICS, type StaffTopicKey } from "../notifications/staff-topics";
 import { warehouseCountryScope } from "../stock/scope";
 
 const WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const CHARGES = ["ONBOARDING", "STORAGE", "FULFILMENT", "SHIPPING", "RETURN", "RECEIVING_HOLD_FEE", "STOREFRONT_FEE"];
 
-interface Check {
-  key: string;
-  label: string;
-  href: string;
-  permission: Permission;
-  count: (country: string | undefined) => Promise<number>;
-}
+type Counter = (country: string | undefined) => Promise<number>;
+
+type AttentionKey = Exclude<StaffTopicKey, "vendorJoined" | "partnerApplied" | "support">;
 
 @Injectable()
 export class DashboardService {
-  private readonly checks: Check[];
+  private readonly counts: Record<AttentionKey, Counter>;
 
   constructor(private readonly prisma: PrismaService) {
     const db = this.prisma;
-    this.checks = [
-      {
-        key: "verifications",
-        label: "Vendor checks to review",
-        href: "/admin/verifications",
-        permission: "verifications.review",
-        count: (c) => db.vendorVerification.count({ where: { status: "SUBMITTED", countryCode: c } }),
-      },
-      {
-        key: "partners",
-        label: "Partner applications to review",
-        href: "/admin/partners",
-        permission: "partners.review",
-        count: (c) => db.fulfilmentPartner.count({ where: { status: "UNDER_REVIEW", countryCode: c } }),
-      },
-      {
-        key: "prices",
-        label: "Price lists waiting for approval",
-        href: "/admin/fees",
-        permission: "fees.approve",
-        count: (c) => db.feeSchedule.count({ where: { status: "PROPOSED", countryCode: c } }),
-      },
-      {
-        key: "adjustments",
-        label: "Wallet adjustments to approve",
-        href: "/admin/finance",
-        permission: "finance.approve",
-        count: (c) => db.walletAdjustment.count({ where: { status: "PENDING_APPROVAL", wallet: { vendor: { countryCode: c } } } }),
-      },
-      {
-        key: "partnerPayouts",
-        label: "Partner payouts to approve",
-        href: "/admin/partners",
-        permission: "partners.finance",
-        count: (c) => db.partnerPayout.count({ where: { status: "PENDING_APPROVAL", partner: { countryCode: c } } }),
-      },
-      { key: "claimsToAssess", label: "Claims to assess", href: "/admin/claims", permission: "claims.assess", count: (c) => db.custodyClaim.count({ where: { status: "OPEN", countryCode: c } }) },
-      { key: "claimsToDecide", label: "Claims to decide", href: "/admin/claims", permission: "claims.decide", count: (c) => db.custodyClaim.count({ where: { status: "ASSESSED", countryCode: c } }) },
-      { key: "alerts", label: "Open custody alerts", href: "/admin/custody-alerts", permission: "claims.read", count: (c) => db.custodyAlert.count({ where: { status: "OPEN", countryCode: c } }) },
-      {
-        key: "inbound",
-        label: "Stock shipments waiting at the door",
-        href: "/admin/receiving",
-        permission: "inbound.receive",
-        count: (c) => db.inboundShipment.count({ where: { status: { in: ["ARRIVED", "ON_HOLD"] }, countryCode: c } }),
-      },
-      {
-        key: "ordersStuck",
-        label: "Orders on hold or with a carrier problem",
-        href: "/admin/orders",
-        permission: "orders.read",
-        count: (c) => db.order.count({ where: { status: { in: ["ON_HOLD", "EXCEPTION"] }, originCountryCode: c } }),
-      },
-      {
-        key: "returns",
-        label: "Returns ready to finish",
-        href: "/admin/returns",
-        permission: "inbound.receive",
-        count: (c) => db.vendorReturn.count({ where: { status: "INSTRUCTED", countryCode: c } }),
-      },
-      {
-        key: "storeReturns",
-        label: "Store returns still open",
-        href: "/admin/storefront-returns",
-        permission: "storefronts.read",
-        count: (c) => db.storefrontReturn.count({ where: { status: { in: ["REQUESTED", "APPROVED"] }, order: { countryCode: c } } }),
-      },
-      {
-        key: "storePayouts",
-        label: "Store payouts that failed",
-        href: "/admin/storefront-orders",
-        permission: "storefronts.manage",
-        count: (c) => db.storefrontOrder.count({ where: { payoutStatus: "FAILED", countryCode: c } }),
-      },
-      {
-        key: "shoppingToPrice",
-        label: "Shopping requests to price",
-        href: "/admin/shopping",
-        permission: "shopping.manage",
-        count: (c) => db.shoppingRequest.count({ where: { status: "REQUESTED", confirmedAt: { not: null }, countryCode: c } }),
-      },
-      {
-        key: "shoppingToBuy",
-        label: "Paid shopping requests to buy",
-        href: "/admin/shopping",
-        permission: "shopping.manage",
-        count: (c) => db.shoppingRequest.count({ where: { status: "PAID", countryCode: c } }),
-      },
-      {
-        key: "shoppingAtWarehouse",
-        label: "Shopping parcels to book in or send",
-        href: "/admin/shopping-desk",
-        permission: "orders.fulfil",
-        count: (c) => db.shoppingRequest.count({ where: { countryCode: c, OR: [{ status: "ARRIVED" }, { status: "BUYING", lines: { none: { status: "QUOTED" } } }] } }),
-      },
-    ];
+    this.counts = {
+      verifications: (c) => db.vendorVerification.count({ where: { status: "SUBMITTED", countryCode: c } }),
+      partners: (c) => db.fulfilmentPartner.count({ where: { status: "UNDER_REVIEW", countryCode: c } }),
+      prices: (c) => db.feeSchedule.count({ where: { status: "PROPOSED", countryCode: c } }),
+      adjustments: (c) => db.walletAdjustment.count({ where: { status: "PENDING_APPROVAL", wallet: { vendor: { countryCode: c } } } }),
+      partnerPayouts: (c) => db.partnerPayout.count({ where: { status: "PENDING_APPROVAL", partner: { countryCode: c } } }),
+      claimsToAssess: (c) => db.custodyClaim.count({ where: { status: "OPEN", countryCode: c } }),
+      claimsToDecide: (c) => db.custodyClaim.count({ where: { status: "ASSESSED", countryCode: c } }),
+      alerts: (c) => db.custodyAlert.count({ where: { status: "OPEN", countryCode: c } }),
+      inbound: (c) => db.inboundShipment.count({ where: { status: { in: ["ARRIVED", "ON_HOLD"] }, countryCode: c } }),
+      ordersStuck: (c) => db.order.count({ where: { status: { in: ["ON_HOLD", "EXCEPTION"] }, originCountryCode: c } }),
+      returns: (c) => db.vendorReturn.count({ where: { status: "INSTRUCTED", countryCode: c } }),
+      storeReturns: (c) => db.storefrontReturn.count({ where: { status: { in: ["REQUESTED", "APPROVED"] }, order: { countryCode: c } } }),
+      storePayouts: (c) => db.storefrontOrder.count({ where: { payoutStatus: "FAILED", countryCode: c } }),
+      shoppingToPrice: (c) => db.shoppingRequest.count({ where: { status: "REQUESTED", confirmedAt: { not: null }, countryCode: c } }),
+      shoppingToBuy: (c) => db.shoppingRequest.count({ where: { status: "PAID", countryCode: c } }),
+      shoppingAtWarehouse: (c) => db.shoppingRequest.count({ where: { countryCode: c, OR: [{ status: "ARRIVED" }, { status: "BUYING", lines: { none: { status: "QUOTED" } } }] } }),
+    };
   }
 
   async view(principal: AuthPrincipal, requestedCountry?: string): Promise<DashboardView> {
@@ -128,10 +47,10 @@ export class DashboardService {
     }
     const scoped = warehouseCountryScope(principal);
     const country = scoped ?? requestedCountry;
-    const permitted = this.checks.filter((check) => hasPermission(principal.role, check.permission));
-    const counts = await Promise.all(permitted.map((check) => check.count(country)));
+    const permitted = (Object.keys(this.counts) as AttentionKey[]).filter((key) => hasPermission(principal.role, STAFF_TOPICS[key].permission));
+    const counts = await Promise.all(permitted.map((key) => this.counts[key](country)));
     const attention: AttentionItem[] = permitted
-      .map((check, index) => ({ key: check.key, label: check.label, href: check.href, permission: check.permission, count: counts[index]! }))
+      .map((key, index) => ({ key, ...STAFF_TOPICS[key], count: counts[index]! }))
       .filter((item) => item.count > 0);
     const seesActivity = hasPermission(principal.role, "finance.read") || hasPermission(principal.role, "countries.read");
     return { countryCode: country ?? null, attention, activity: seesActivity ? await this.activity(country) : null };

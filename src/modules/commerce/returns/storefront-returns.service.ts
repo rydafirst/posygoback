@@ -10,6 +10,7 @@ import { type AuditActor, AuditService } from "../../../infrastructure/audit/aud
 import { EMAIL_SENDER, type EmailSender } from "../../../infrastructure/email/email.port";
 import type { ReturnDecisionInput, StoreReturnCaseView, StorefrontOrderView, StorefrontReturnStatus } from "../../../shared";
 import { WalletAlertsService } from "../../finance/wallets/wallet-alerts.service";
+import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { reviewerCountryScope, vendorIdOf } from "../../onboarding/scope";
 import { randomCode } from "../../stock/inbound/references";
 import { CommerceEmails } from "../commerce-emails";
@@ -36,6 +37,7 @@ export class StorefrontReturnsService {
     private readonly audit: AuditService,
     @Inject(EMAIL_SENDER) private readonly email: EmailSender,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly staffAlerts: StaffAlertsService,
   ) {}
 
   async request(buyerId: string, orderId: string, reason: string, meta: RequestMeta): Promise<StorefrontOrderView> {
@@ -66,6 +68,11 @@ export class StorefrontReturnsService {
       return row;
     });
     await this.owners.notifyOwner(order.vendorId, (to) => CommerceEmails.returnRequested(to, order.reference, this.config.WEB_PUBLIC_URL), "/storefront").catch(() => undefined);
+    await this.staffAlerts.raise("storeReturns", {
+      countryCode: order.countryCode,
+      title: `Return requested for order ${order.reference}`,
+      body: `The buyer wants to send it back because: ${reason}`,
+    });
     return this.orders.buyerDetail(buyerId, orderId);
   }
 

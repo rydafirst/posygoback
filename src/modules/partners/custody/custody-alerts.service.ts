@@ -5,11 +5,19 @@ import { Errors } from "../../../common/http/app-exception";
 import { type DatabaseClient, PrismaService } from "../../../database/prisma.service";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
 import { type CustodyAlertKind, type CustodyAlertView, partnerProgramme } from "../../../shared";
+import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { reviewerCountryScope } from "../../onboarding/scope";
 import { actorOf } from "../admin/admin-partners.service";
-import { ALERT_INCLUDE, toAlertView } from "./custody.repository";
+import { ALERT_INCLUDE, type AlertRow, toAlertView } from "./custody.repository";
 
 const HOUR_MS = 60 * 60 * 1000;
+
+const ALERT_TITLES: Record<CustodyAlertKind, string> = {
+  NO_CARRIER_SCAN: "Parcel not scanned by the carrier",
+  COUNT_SHORTFALL: "Stock count didn't match",
+  SHRINKAGE: "Too much stock lost",
+  TRUST_LOW: "Hub paused for a low trust score",
+};
 
 export interface NewAlert {
   kind: CustodyAlertKind;
@@ -26,14 +34,27 @@ export class CustodyAlertsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly staffAlerts: StaffAlertsService,
   ) {}
 
-  async raise(alerts: readonly NewAlert[], client: DatabaseClient = this.prisma): Promise<number> {
+  async raise(alerts: readonly NewAlert[]): Promise<number> {
+    const opened = await this.open(alerts, this.prisma);
+    await this.announce(opened);
+    return opened.length;
+  }
+
+  async open(alerts: readonly NewAlert[], client: DatabaseClient): Promise<AlertRow[]> {
     if (alerts.length === 0) {
-      return 0;
+      return [];
     }
-    const created = await client.custodyAlert.createMany({ data: alerts.map((alert) => ({ ...alert, message: alert.message.slice(0, 500) })), skipDuplicates: true });
-    return created.count;
+    return client.custodyAlert.createManyAndReturn({ data: alerts.map((alert) => ({ ...alert, message: alert.message.slice(0, 500) })), skipDuplicates: true, include: ALERT_INCLUDE });
+  }
+
+  async announce(opened: readonly AlertRow[]): Promise<void> {
+    for (const alert of opened) {
+      const hub = alert.warehouse?.name ?? alert.partner?.legalName;
+      await this.staffAlerts.raise("alerts", { countryCode: alert.countryCode, title: hub ? `${ALERT_TITLES[alert.kind]} at ${hub}` : ALERT_TITLES[alert.kind], body: alert.message });
+    }
   }
 
   async list(principal: AuthPrincipal, status: "OPEN" | "RESOLVED" = "OPEN"): Promise<CustodyAlertView[]> {

@@ -118,7 +118,7 @@ export class StockCountsService {
     if (await this.prisma.stockCount.count({ where: { videoFileId: input.videoFileId } })) {
       throw Errors.validation({ videoFileId: ["Film a new video for each count"] });
     }
-    await this.prisma.$transaction(async (tx) => {
+    const opened = await this.prisma.$transaction(async (tx) => {
       const count = await tx.stockCount.findUniqueOrThrow({
         where: { id: countId },
         include: { lines: { include: { lot: { select: { quantityAvailable: true, quantityReserved: true } } } }, partner: { select: { countryCode: true } } },
@@ -147,22 +147,23 @@ export class StockCountsService {
       if (updated.count === 0) {
         throw Errors.invalidTransition("This count has already been sent.");
       }
-      if (status === "FLAGGED") {
-        await this.alerts.raise(
-          [
-            {
-              kind: "COUNT_SHORTFALL",
-              countryCode: count.partner.countryCode,
-              partnerId: count.partnerId,
-              warehouseId: count.warehouseId,
-              subjectType: "stock_count",
-              subjectId: countId,
-              message: `A stock count at this hub didn't match on ${mismatched} ${mismatched === 1 ? "item" : "items"}. Watch the video and decide whether to open claims.`,
-            },
-          ],
-          tx,
-        );
-      }
+      const alerts =
+        status === "FLAGGED"
+          ? await this.alerts.open(
+              [
+                {
+                  kind: "COUNT_SHORTFALL",
+                  countryCode: count.partner.countryCode,
+                  partnerId: count.partnerId,
+                  warehouseId: count.warehouseId,
+                  subjectType: "stock_count",
+                  subjectId: countId,
+                  message: `A stock count at this hub didn't match on ${mismatched} ${mismatched === 1 ? "item" : "items"}. Watch the video and decide whether to open claims.`,
+                },
+              ],
+              tx,
+            )
+          : [];
       await this.audit.record(
         {
           actor: actorOf(principal),
@@ -175,7 +176,9 @@ export class StockCountsService {
         },
         tx,
       );
+      return alerts;
     });
+    await this.alerts.announce(opened);
     const row = await this.prisma.stockCount.findUniqueOrThrow({ where: { id: countId }, include: COUNT_INCLUDE });
     return toView(row, false);
   }

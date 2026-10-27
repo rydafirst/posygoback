@@ -13,6 +13,7 @@ import { Money, type ShoppingCheckoutInput, type ShoppingStartedView } from "../
 import { type OrderPaymentEvent, type OrderPaymentHandler, OrderPaymentRouter, type PaymentOutcome, type PaymentReversalEvent } from "../../finance/payments/order-payment.router";
 import { PaymentAccountsService } from "../../finance/payments/payment-accounts.service";
 import { PaymentEventsService } from "../../finance/payments/payment-events.service";
+import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { ShoppingEmails } from "./shopping-emails";
 import { ShoppingRepository } from "./shopping.repository";
 
@@ -36,6 +37,7 @@ export class ShoppingPaymentsService implements OrderPaymentHandler, OnModuleIni
     private readonly audit: AuditService,
     @Inject(EMAIL_SENDER) private readonly email: EmailSender,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly staffAlerts: StaffAlertsService,
   ) {}
 
   onModuleInit(): void {
@@ -158,7 +160,10 @@ export class ShoppingPaymentsService implements OrderPaymentHandler, OnModuleIni
       tx,
     );
     const total = Money.of(event.amountMinor, row.currency).format("en-GB");
-    return outcome("paid", [() => this.email.send(ShoppingEmails.paid(row.buyerEmail, row.reference, total, this.config.WEB_PUBLIC_URL)).then(() => undefined)]);
+    return outcome("paid", [
+      () => this.email.send(ShoppingEmails.paid(row.buyerEmail, row.reference, total, this.config.WEB_PUBLIC_URL)).then(() => undefined),
+      () => this.staffAlerts.raise("shoppingToBuy", { countryCode: row.countryCode, title: `Shopping request ${row.reference} is paid`, body: `The buyer paid ${total}. Buy the items from the shop.` }),
+    ]);
   }
 
   async paymentReversal(tx: Prisma.TransactionClient, provider: string, accountKey: string, event: PaymentReversalEvent): Promise<PaymentOutcome | null> {

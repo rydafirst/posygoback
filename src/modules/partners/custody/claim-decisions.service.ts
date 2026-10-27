@@ -7,6 +7,7 @@ import type { CustodyClaim, Prisma } from "../../../generated/prisma/client";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
 import { type AssessClaimInput, type ClaimView, type DecideClaimInput, Money } from "../../../shared";
 import { WalletAlertsService } from "../../finance/wallets/wallet-alerts.service";
+import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { actorOf } from "../admin/admin-partners.service";
 import { PartnerNotifierService } from "../partner-notifier.service";
 import { ClaimSettlementService } from "./claim-settlement.service";
@@ -24,6 +25,7 @@ export class ClaimDecisionsService {
     private readonly notifier: PartnerNotifierService,
     private readonly vendorAlerts: WalletAlertsService,
     private readonly audit: AuditService,
+    private readonly staffAlerts: StaffAlertsService,
   ) {}
 
   async assess(principal: AuthPrincipal, claimId: string, input: AssessClaimInput, meta: RequestMeta): Promise<ClaimView> {
@@ -75,6 +77,12 @@ export class ClaimDecisionsService {
     if (input.liability === "PARTNER" && claim.partnerId) {
       await this.notifier.notify(claim.partnerId, (to, webUrl) => CustodyEmails.partnerClaimAssessed(to, claim.reference, webUrl));
     }
+    await this.staffAlerts.raise("claimsToDecide", {
+      countryCode: claim.countryCode,
+      title: `Claim ${claim.reference} to decide`,
+      body: "It has been assessed. Approve or reject it.",
+      exceptUserId: principal.userId,
+    });
     return this.claims.staffDetail(principal, claimId);
   }
 

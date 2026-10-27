@@ -27,6 +27,7 @@ import { APP_CONFIG } from "../../config/config.module";
 import type { AppConfig } from "../../config/config.schema";
 import { EMAIL_SENDER, type EmailSender } from "../../infrastructure/email/email.port";
 import { THROTTLE } from "../../infrastructure/rate-limit/rate-limit.module";
+import { PersonalNoticesService, securityPage } from "../notifications/personal-notices.service";
 import { AuthEmails } from "./auth-emails";
 import { EmailVerificationService } from "./flows/email-verification.service";
 import { LoginService } from "./flows/login.service";
@@ -51,6 +52,7 @@ export class AuthController {
     private readonly sessions: SessionService,
     private readonly users: UsersRepository,
     private readonly shortcuts: TestShortcutsService,
+    private readonly notices: PersonalNoticesService,
   ) {}
 
   @Public()
@@ -179,7 +181,7 @@ export class AuthController {
   private async notifyTheft(userId: string): Promise<void> {
     const user = await this.users.findById(userId);
     if (user) {
-      await this.email.send(AuthEmails.sessionTheft(user.email, this.config.WEB_PUBLIC_URL));
+      await this.notices.send(AuthEmails.sessionTheft(user.email, this.config.WEB_PUBLIC_URL), securityPage);
     }
   }
 }

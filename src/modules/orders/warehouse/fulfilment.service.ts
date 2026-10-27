@@ -255,7 +255,7 @@ export class FulfilmentService {
       );
       return order;
     });
-    await this.owners.afterStaffStep(order, input);
+    await this.owners.afterStaffStep(order, input, principal.userId);
   }
 
   private async apply(tx: Prisma.TransactionClient, order: Order, input: Extract<StaffOrderActionInput, { action: "REPACK" | "HAND_OFF" | "HOLD" | "RELEASE" }>, actorId: string): Promise<string> {

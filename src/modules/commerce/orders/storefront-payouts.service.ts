@@ -5,6 +5,7 @@ import { Errors } from "../../../common/http/app-exception";
 import { PrismaService } from "../../../database/prisma.service";
 import { AuditService, SYSTEM_ACTOR } from "../../../infrastructure/audit/audit.service";
 import { Money } from "../../../shared";
+import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { WalletAlertsService } from "../../finance/wallets/wallet-alerts.service";
 import { PAYOUT_GATEWAY, type PayoutGateway, TransferError } from "../../partners/providers/partner-services.port";
 import { CommerceEmails } from "../commerce-emails";
@@ -24,6 +25,7 @@ export class StorefrontPayoutsService {
     private readonly prisma: PrismaService,
     private readonly owners: WalletAlertsService,
     private readonly audit: AuditService,
+    private readonly staffAlerts: StaffAlertsService,
   ) {}
 
   async releaseDue(now: Date = new Date()): Promise<number> {
@@ -80,8 +82,12 @@ export class StorefrontPayoutsService {
     const order = await this.prisma.storefrontOrder.findUniqueOrThrow({ where: { id: orderId }, include: { vendor: { include: { payoutAccount: true } } } });
     const amount = Math.max(0, Number(order.vendorShareMinor) - Number(order.refundedMinor));
     const account = order.vendor.payoutAccount;
-    if (amount === 0 || !account) {
-      await this.prisma.storefrontOrder.update({ where: { id: orderId }, data: { payoutStatus: amount === 0 ? "CANCELLED" : "FAILED" } });
+    if (amount === 0) {
+      await this.prisma.storefrontOrder.update({ where: { id: orderId }, data: { payoutStatus: "CANCELLED" } });
+      return false;
+    }
+    if (!account) {
+      await this.markFailed(order, "The vendor has no payout account set up");
       return false;
     }
     try {
@@ -101,10 +107,18 @@ export class StorefrontPayoutsService {
         .catch(() => undefined);
       return true;
     } catch (error) {
-      const definite = error instanceof TransferError && error.definite;
-      await this.prisma.storefrontOrder.update({ where: { id: orderId }, data: { payoutStatus: definite ? "FAILED" : "HELD" } });
+      if (error instanceof TransferError && error.definite) {
+        await this.markFailed(order, "The payment provider turned the transfer down");
+      } else {
+        await this.prisma.storefrontOrder.update({ where: { id: orderId }, data: { payoutStatus: "HELD" } });
+      }
       this.logger.error(`Store payout for ${order.reference} failed: ${String(error)}`);
       return false;
     }
+  }
+
+  private async markFailed(order: { id: string; reference: string; countryCode: string }, reason: string): Promise<void> {
+    await this.prisma.storefrontOrder.update({ where: { id: order.id }, data: { payoutStatus: "FAILED" } });
+    await this.staffAlerts.raise("storePayouts", { countryCode: order.countryCode, title: `Store payout failed for order ${order.reference}`, body: `${reason}, so the vendor hasn't been paid yet.` });
   }
 }

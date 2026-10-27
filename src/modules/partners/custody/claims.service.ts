@@ -12,6 +12,7 @@ import { FilesService } from "../../files/files.service";
 import { reviewerCountryScope, vendorIdOf } from "../../onboarding/scope";
 import { randomCode } from "../../stock/inbound/references";
 import { actorOf } from "../admin/admin-partners.service";
+import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { SHIPPED_ORDER_STATUSES } from "../ledger/partner-earnings.service";
 import { CustodyEmails } from "./custody-emails";
 import { CLAIM_INCLUDE, toClaimView } from "./custody.repository";
@@ -48,9 +49,18 @@ export interface ClaimFilters {
   partnerId?: string;
 }
 
+function unitsOf(quantity: number, product: string): string {
+  return `${quantity} ${quantity === 1 ? "unit" : "units"} of ${product}`;
+}
+
 function foundText(source: ClaimSource, quantity: number, product: string): string {
-  const units = `${quantity} ${quantity === 1 ? "unit" : "units"} of ${product}`;
+  const units = unitsOf(quantity, product);
   return source === "TRANSFER" ? `While we were moving your stock between hubs, ${units} didn't arrive.` : `A stock count at one of our hubs came up ${units} short of what our records show.`;
+}
+
+function staffFoundText(source: ClaimSource, quantity: number, product: string): string {
+  const units = unitsOf(quantity, product);
+  return source === "TRANSFER" ? `${units} didn't arrive in a transfer between hubs.` : `A stock count came up ${units} short.`;
 }
 
 export function claimReference(countryCode: string): string {
@@ -65,6 +75,7 @@ export class ClaimsService {
     private readonly limiter: AttemptLimiterService,
     private readonly vendorAlerts: WalletAlertsService,
     private readonly audit: AuditService,
+    private readonly staffAlerts: StaffAlertsService,
   ) {}
 
   async open(client: DatabaseClient, claim: NewClaim): Promise<string> {
@@ -86,11 +97,13 @@ export class ClaimsService {
   async announceOpened(claimIds: readonly string[]): Promise<void> {
     const claims = await this.prisma.custodyClaim.findMany({
       where: { id: { in: [...claimIds] } },
-      select: { reference: true, vendorId: true, source: true, quantity: true, lot: { select: { product: { select: { name: true } } } } },
+      select: { reference: true, vendorId: true, countryCode: true, source: true, quantity: true, lot: { select: { product: { select: { name: true } } } } },
     });
     for (const claim of claims) {
-      const found = foundText(claim.source, claim.quantity, claim.lot?.product.name ?? "an item");
+      const product = claim.lot?.product.name ?? "an item";
+      const found = foundText(claim.source, claim.quantity, product);
       await this.vendorAlerts.notifyOwner(claim.vendorId, (to, webUrl) => CustodyEmails.claimOpened(to, claim.reference, found, webUrl), "/claims").catch(() => undefined);
+      await this.tellAssessors(claim, staffFoundText(claim.source, claim.quantity, product));
     }
   }
 
@@ -187,7 +200,16 @@ export class ClaimsService {
     });
     const view = await this.detail({ id }, audience);
     await this.vendorAlerts.notifyOwner(base.vendorId, (to, webUrl) => CustodyEmails.claimReceived(to, view.reference, webUrl), "/claims");
+    await this.tellAssessors(
+      { reference: view.reference, countryCode: base.countryCode },
+      input.source === "VENDOR_REPORT" ? "A vendor reported lost or damaged stock." : "A member of staff opened this claim.",
+      principal.userId,
+    );
     return view;
+  }
+
+  private tellAssessors(claim: { reference: string; countryCode: string }, body: string, exceptUserId?: string): Promise<void> {
+    return this.staffAlerts.raise("claimsToAssess", { countryCode: claim.countryCode, title: `Claim ${claim.reference} to assess`, body, exceptUserId });
   }
 
   private async subject(input: ReportClaimInput, scope: { vendorId?: string; warehouse?: Prisma.WarehouseWhereInput }): Promise<ClaimSubject> {

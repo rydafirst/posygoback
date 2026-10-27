@@ -35,22 +35,24 @@ describe("notifications and exports", () => {
     it("puts every message we email a vendor into their feed, for them only", async () => {
       await test.app.get(WalletAlertsService).notifyOwner(vendorId, (to) => ({ to, subject: "Return RMA-1 has arrived", text: "We've received 1 item.\n\nPosygo" }), "/returns");
       const mine = await feed(owner);
-      expect(mine).toMatchObject({ unread: 1, items: [{ title: "Return RMA-1 has arrived", body: "We've received 1 item.", href: "/returns", read: false }] });
+      expect(mine.items[0]).toMatchObject({ title: "Return RMA-1 has arrived", body: "We've received 1 item.", href: "/returns", read: false });
       expect(test.email.lastTo("owner@exports.example")!.subject).toBe("Return RMA-1 has arrived");
-      expect((await feed(otherOwner)).items).toHaveLength(0);
-      expect((await feed(staff)).items).toHaveLength(0);
+      const titles = async (token: string) => (await feed(token)).items.map((item) => item.title);
+      expect(await titles(otherOwner)).not.toContain("Return RMA-1 has arrived");
+      expect(await titles(staff)).not.toContain("Return RMA-1 has arrived");
       const id = mine.items[0]!.id;
       await http().post(`/v1/notifications/${id}/read`).set(as(otherOwner)).expect(404);
-      expect((await http().post(`/v1/notifications/${id}/read`).set(as(owner)).expect(200)).body).toMatchObject({ unread: 0 });
+      expect((await http().post(`/v1/notifications/${id}/read`).set(as(owner)).expect(200)).body).toMatchObject({ unread: mine.unread - 1 });
       await http().get("/v1/notifications").expect(401);
     });
 
     it("marks everything read at once", async () => {
       const alerts = test.app.get(WalletAlertsService);
+      const before = (await feed(owner)).unread;
       for (const subject of ["First", "Second"]) {
         await alerts.notifyOwner(vendorId, (to) => ({ to, subject, text: "Body" }));
       }
-      expect((await feed(owner)).unread).toBe(2);
+      expect((await feed(owner)).unread).toBe(before + 2);
       expect((await http().post("/v1/notifications/read-all").set(as(owner)).expect(200)).body).toMatchObject({ unread: 0 });
     });
   });

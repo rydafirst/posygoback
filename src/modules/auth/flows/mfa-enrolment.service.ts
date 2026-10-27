@@ -8,6 +8,7 @@ import { AuditService } from "../../../infrastructure/audit/audit.service";
 import { FieldEncryptionService } from "../../../infrastructure/crypto/field-encryption.service";
 import { EMAIL_SENDER, type EmailSender } from "../../../infrastructure/email/email.port";
 import { ATTEMPT_POLICIES, AttemptLimiterService } from "../../../infrastructure/rate-limit/attempt-limiter.service";
+import { PersonalNoticesService, securityPage } from "../../notifications/personal-notices.service";
 import { AuthEmails } from "../auth-emails";
 import { VerificationCodeService } from "../codes/verification-code.service";
 import { RecoveryCodeService } from "../mfa/recovery-code.service";
@@ -36,6 +37,7 @@ export class MfaEnrolmentService {
     private readonly codes: VerificationCodeService,
     private readonly limiter: AttemptLimiterService,
     private readonly audit: AuditService,
+    private readonly notices: PersonalNoticesService,
   ) {}
 
   async start(principal: AuthPrincipal): Promise<MfaEnrolmentStart> {
@@ -102,7 +104,7 @@ export class MfaEnrolmentService {
       return this.recoveryCodes.regenerate(user.id, tx);
     });
     await this.limiter.reset(ATTEMPT_POLICIES.mfaPerUser, user.id);
-    await this.email.send(AuthEmails.mfaEnabled(user.email));
+    await this.notices.send(AuthEmails.mfaEnabled(user.email), securityPage);
     const authenticated = await this.issuer.authenticate(user.id, principal.sessionId, "VERIFIED");
     return { recoveryCodes, accessToken: authenticated.accessToken, user: authenticated.user };
   }
