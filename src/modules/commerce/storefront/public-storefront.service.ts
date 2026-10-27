@@ -3,12 +3,13 @@ import { Injectable } from "@nestjs/common";
 import { Errors } from "../../../common/http/app-exception";
 import { PrismaService } from "../../../database/prisma.service";
 import type { Prisma } from "../../../generated/prisma/client";
-import { type CountryConfig, type PublicProductView, type PublicStoreView, type StorefrontTone } from "../../../shared";
+import { type CountryConfig, type PublicProductView, type PublicStoreListing, type PublicStoreView, type StorefrontTone } from "../../../shared";
 import { CountriesRepository } from "../../countries/countries.repository";
 import { FilesService } from "../../files/files.service";
 
 const SHIPPING_WAREHOUSE: Prisma.WarehouseWhereInput = { active: true, OR: [{ partnerId: null }, { partner: { status: "ACTIVE" } }] };
 const MARKETPLACE_LIMIT = 120;
+const LISTING_LIMIT = 5000;
 
 type StoreRow = { vendorId: string; slug: string; displayName: string; tone: string; vendor: { countryCode: string; country: { currency: string } } };
 
@@ -19,6 +20,16 @@ export class PublicStorefrontService {
     private readonly files: FilesService,
     private readonly countries: CountriesRepository,
   ) {}
+
+  async listing(): Promise<PublicStoreListing[]> {
+    const stores = await this.prisma.storefront.findMany({
+      where: { status: "LIVE", vendor: { status: "ACTIVE" } },
+      select: { slug: true, displayName: true, updatedAt: true, vendor: { select: { countryCode: true } } },
+      orderBy: { updatedAt: "desc" },
+      take: LISTING_LIMIT,
+    });
+    return stores.map((store) => ({ slug: store.slug, displayName: store.displayName, countryCode: store.vendor.countryCode, updatedAt: store.updatedAt.toISOString() }));
+  }
 
   async store(slug: string): Promise<PublicStoreView> {
     const store = await this.prisma.storefront.findFirst({

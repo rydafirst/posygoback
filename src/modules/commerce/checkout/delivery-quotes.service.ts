@@ -6,6 +6,7 @@ import type { Product, Warehouse } from "../../../generated/prisma/client";
 import { type DeliverySpeed, type FeeSchedule, type ShipTo, shippingWithMarkup } from "../../../shared";
 import { CarrierAccountsService } from "../../orders/carriers/carrier-accounts.service";
 import type { CarrierRate, CustomsItem, ShipmentParty } from "../../orders/carriers/carrier.port";
+import { PLATFORM_NAME } from "../../../common/brand/brand";
 
 const PACKING_ALLOWANCE_GRAMS = 200;
 const FALLBACK_BOX = { lengthMm: 300, widthMm: 200, heightMm: 150 };
@@ -34,7 +35,7 @@ export interface QuoteLine {
 export function warehouseParty(warehouse: Warehouse): ShipmentParty {
   const addressLines = warehouse.addressLines as string[];
   return {
-    name: `Global Fulfilment ${warehouse.name}`.slice(0, 100),
+    name: `${PLATFORM_NAME} ${warehouse.name}`.slice(0, 100),
     line1: addressLines[0] ?? "",
     line2: addressLines[1],
     city: warehouse.city,

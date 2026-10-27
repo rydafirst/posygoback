@@ -97,6 +97,14 @@ export function vendorFeeSchedule(schedule: FeeSchedule): VendorFeeSchedule {
   return { onboarding, monthlyStorage, fulfilment, returnsHandlingMinor, shippingMarkupBps, firstShipmentWaivesStocking, storefront, referral: referralRates(schedule) };
 }
 
+export interface PublicPriceListView {
+  countryCode: string;
+  countryName: string;
+  currency: string;
+  schedule: VendorFeeSchedule;
+  shopping: ShoppingRates;
+}
+
 export interface VendorFeesView {
   currency: string;
   schedule: VendorFeeSchedule;

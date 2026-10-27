@@ -5,10 +5,11 @@ import { Errors } from "../../common/http/app-exception";
 import { type DatabaseClient, PrismaService } from "../../database/prisma.service";
 import type { Prisma } from "../../generated/prisma/client";
 import type { NotificationFeedView } from "../../shared";
+import { PLATFORM_NAME } from "../../common/brand/brand";
 
 const FEED_SIZE = 30;
 const KEEP_READ_DAYS = 90;
-const SIGN_OFF = /\n\nGlobal Fulfilment Network\s*$/;
+const SIGN_OFF = new RegExp(`\\n\\n${PLATFORM_NAME}\\s*$`);
 
 export interface NoticeInput {
   title: string;

@@ -127,6 +127,13 @@ export class PublicStorefrontController {
 
   @Public()
   @Throttle(THROTTLE.publicRead)
+  @Get("stores")
+  stores() {
+    return this.published.listing();
+  }
+
+  @Public()
+  @Throttle(THROTTLE.publicRead)
   @Get("stores/:slug")
   store(@Param("slug", slugParam) slug: string) {
     return this.published.store(slug);

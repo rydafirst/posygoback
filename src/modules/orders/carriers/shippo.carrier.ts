@@ -1,10 +1,10 @@
 import type { CarrierTrackingEvent, TrackingStatus } from "../../../shared";
 import { decimalToMinor, minorToDecimal } from "./carrier-money";
 import { type CarrierAdapter, carrierCodeFor, CarrierError, type CarrierRate, type LabelRate, type PurchasedLabel, type RateRequest, type ShipmentParty, type TrackingSnapshot } from "./carrier.port";
+import { PLATFORM_NAME } from "../../../common/brand/brand";
 
 const API = "https://api.goshippo.com";
 const TIMEOUT_MS = 20_000;
-const PLATFORM_NAME = "Global Fulfilment";
 
 interface ShippoTransaction {
   object_id: string;

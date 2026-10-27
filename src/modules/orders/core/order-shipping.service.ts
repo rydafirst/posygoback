@@ -16,10 +16,10 @@ import { LabelRecordsService } from "./label-records.service";
 import { OrderChargesService } from "./order-charges.service";
 import { OrderTimelineService } from "./order-timeline.service";
 import { OrdersRepository } from "./orders.repository";
+import { PLATFORM_NAME } from "../../../common/brand/brand";
 
 const RATE_TTL_MS = 12 * 60 * 60 * 1000;
 const LABEL_LOCK_MS = 120_000;
-const PLATFORM_NAME = "Global Fulfilment";
 
 type Outcome = "LABEL_PURCHASED" | "AWAITING_WALLET_FUNDING";
 

@@ -16,16 +16,19 @@ import { FinanceWalletsService } from "./wallets/finance-wallets.service";
 import { WalletAlertsService } from "./wallets/wallet-alerts.service";
 import { WalletLedgerService } from "./wallets/wallet-ledger.service";
 import { WalletsService } from "./wallets/wallets.service";
+import { PublicPricesController } from "./fees/public-prices.controller";
+import { PublicPricesService } from "./fees/public-prices.service";
 
 @Module({
   imports: [PartnerOperationsModule],
-  controllers: [VendorWalletController, VendorFeesController, AdminFeeSchedulesController, AdminFinanceController, PaymentWebhooksController],
+  controllers: [VendorWalletController, VendorFeesController, PublicPricesController, AdminFeeSchedulesController, AdminFinanceController, PaymentWebhooksController],
   providers: [
     WalletLedgerService,
     WalletAlertsService,
     WalletsService,
     FinanceWalletsService,
     FeeSchedulesService,
+    PublicPricesService,
     PaymentAccountsService,
     PaymentEventsService,
     OrderPaymentRouter,

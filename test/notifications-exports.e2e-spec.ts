@@ -33,7 +33,7 @@ describe("notifications and exports", () => {
 
   describe("notifications", () => {
     it("puts every message we email a vendor into their feed, for them only", async () => {
-      await test.app.get(WalletAlertsService).notifyOwner(vendorId, (to) => ({ to, subject: "Return RMA-1 has arrived", text: "We've received 1 item.\n\nGlobal Fulfilment Network" }), "/returns");
+      await test.app.get(WalletAlertsService).notifyOwner(vendorId, (to) => ({ to, subject: "Return RMA-1 has arrived", text: "We've received 1 item.\n\nPosygo" }), "/returns");
       const mine = await feed(owner);
       expect(mine).toMatchObject({ unread: 1, items: [{ title: "Return RMA-1 has arrived", body: "We've received 1 item.", href: "/returns", read: false }] });
       expect(test.email.lastTo("owner@exports.example")!.subject).toBe("Return RMA-1 has arrived");

@@ -4,8 +4,9 @@ import { authenticator } from "otplib";
 import { toDataURL } from "qrcode";
 
 import { REDIS } from "../../../infrastructure/redis/redis.module";
+import { PLATFORM_NAME } from "../../../common/brand/brand";
 
-const ISSUER = "Global Fulfilment Network";
+const ISSUER = PLATFORM_NAME;
 const STEP_SECONDS = 30;
 
 authenticator.options = { window: 1, step: STEP_SECONDS };

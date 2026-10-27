@@ -51,6 +51,13 @@ export interface PublicProductView {
   store: { slug: string; displayName: string; tone: StorefrontTone };
 }
 
+export interface PublicStoreListing {
+  slug: string;
+  displayName: string;
+  countryCode: string;
+  updatedAt: string;
+}
+
 export interface PublicStoreView {
   slug: string;
   displayName: string;

@@ -105,6 +105,7 @@ describe("vendor storefronts", () => {
       await http().put(`/v1/vendor/storefront/listings/${capId}`).set(as(otherOwner)).send({ listed: true, retailPriceMinor: 900 }).expect(404);
       const early = await http().post("/v1/vendor/storefront/go-live").set(as(owner)).expect(409);
       expect(early.body.message).toMatch(/bank account/);
+      expect((await http().get("/v1/public/stores").expect(200)).body).toEqual([]);
       expect((await http().post("/v1/vendor/storefront/payouts/setup").set(as(owner)).expect(200)).body.url).toContain("/storefront?payouts=returned");
       await http().post("/v1/vendor/storefront/payouts/refresh").set(as(owner)).expect(200);
       const before = await balance();
@@ -120,6 +121,7 @@ describe("vendor storefronts", () => {
       const store = (await http().get("/v1/public/stores/ada-hair").expect(200)).body as PublicStoreView;
       expect(store).toMatchObject({ displayName: "Ada Hair", currency: "GBP", pricesIncludeTax: true, products: [{ id: wigId, priceMinor: 6_000, inStock: true }] });
       await http().get("/v1/public/stores/nobody-here").expect(404);
+      expect((await http().get("/v1/public/stores").expect(200)).body).toEqual([{ slug: "ada-hair", displayName: "Ada Hair", countryCode: "GB", updatedAt: expect.any(String) }]);
       const market = (await http().get("/v1/public/marketplace/GB").expect(200)).body as Array<{ id: string }>;
       expect(market.map((product) => product.id)).toEqual([wigId]);
     });

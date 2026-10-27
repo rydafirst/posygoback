@@ -1,6 +1,7 @@
 import type { EmailMessage } from "../../infrastructure/email/email.port";
+import { PLATFORM_NAME } from "../../common/brand/brand";
 
-const SIGN_OFF = "\n\nIf this wasn't you, you can ignore this email.\nGlobal Fulfilment Network";
+const SIGN_OFF = `\n\nIf this wasn't you, you can ignore this email.\n${PLATFORM_NAME}`;
 
 export const AuthEmails = {
   verifyEmail: (to: string, code: string): EmailMessage => ({ to, subject: `${code} is your verification code`, text: `Your verification code is ${code}. It expires in 15 minutes.${SIGN_OFF}` }),
