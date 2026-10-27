@@ -17,6 +17,8 @@ export class S3ObjectStorage implements ObjectStorage {
       endpoint: config.STORAGE_ENDPOINT,
       region: config.STORAGE_REGION,
       forcePathStyle: true,
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
       credentials: { accessKeyId: config.STORAGE_ACCESS_KEY_ID, secretAccessKey: config.STORAGE_SECRET_ACCESS_KEY },
     });
   }
