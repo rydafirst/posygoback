@@ -48,6 +48,11 @@ export interface ClaimFilters {
   partnerId?: string;
 }
 
+function foundText(source: ClaimSource, quantity: number, product: string): string {
+  const units = `${quantity} ${quantity === 1 ? "unit" : "units"} of ${product}`;
+  return source === "TRANSFER" ? `While we were moving your stock between hubs, ${units} didn't arrive.` : `A stock count at one of our hubs came up ${units} short of what our records show.`;
+}
+
 export function claimReference(countryCode: string): string {
   return `CL-${countryCode}-${randomCode(6)}`;
 }
@@ -76,6 +81,17 @@ export class ClaimsService {
       select: { id: true },
     });
     return created.id;
+  }
+
+  async announceOpened(claimIds: readonly string[]): Promise<void> {
+    const claims = await this.prisma.custodyClaim.findMany({
+      where: { id: { in: [...claimIds] } },
+      select: { reference: true, vendorId: true, source: true, quantity: true, lot: { select: { product: { select: { name: true } } } } },
+    });
+    for (const claim of claims) {
+      const found = foundText(claim.source, claim.quantity, claim.lot?.product.name ?? "an item");
+      await this.vendorAlerts.notifyOwner(claim.vendorId, (to, webUrl) => CustodyEmails.claimOpened(to, claim.reference, found, webUrl), "/claims").catch(() => undefined);
+    }
   }
 
   async report(principal: AuthPrincipal, input: ReportClaimInput, meta: RequestMeta): Promise<ClaimView> {
@@ -170,7 +186,7 @@ export class ClaimsService {
       return claimId;
     });
     const view = await this.detail({ id }, audience);
-    await this.vendorAlerts.notifyOwner(base.vendorId, (to) => CustodyEmails.claimReceived(to, view.reference), "/claims");
+    await this.vendorAlerts.notifyOwner(base.vendorId, (to, webUrl) => CustodyEmails.claimReceived(to, view.reference, webUrl), "/claims");
     return view;
   }
 

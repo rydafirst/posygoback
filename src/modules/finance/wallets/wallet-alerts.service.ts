@@ -1,6 +1,8 @@
 import { Inject, Injectable } from "@nestjs/common";
 
-import { EMAIL_SENDER, type EmailSender } from "../../../infrastructure/email/email.port";
+import { APP_CONFIG } from "../../../config/config.module";
+import type { AppConfig } from "../../../config/config.schema";
+import { EMAIL_SENDER, type EmailMessage, type EmailSender } from "../../../infrastructure/email/email.port";
 import { Money } from "../../../shared";
 import { UsersRepository } from "../../auth/users.repository";
 import { NotificationsService } from "../../notifications/notifications.service";
@@ -13,6 +15,7 @@ export class WalletAlertsService {
     @Inject(EMAIL_SENDER) private readonly email: EmailSender,
     private readonly users: UsersRepository,
     private readonly notifications: NotificationsService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   async afterPosting(result: PostingResult): Promise<void> {
@@ -21,12 +24,12 @@ export class WalletAlertsService {
     if (result.duplicate || threshold === 0 || !(result.balanceBeforeMinor > threshold && after <= threshold)) {
       return;
     }
-    await this.notifyOwner(result.wallet.vendorId, (to) => FinanceEmails.lowBalance(to, Money.of(after, result.wallet.currency).format("en-GB")), "/wallet");
+    await this.notifyOwner(result.wallet.vendorId, (to, webUrl) => FinanceEmails.lowBalance(to, Money.of(after, result.wallet.currency).format("en-GB"), webUrl), "/wallet");
   }
 
-  async notifyOwner(vendorId: string, message: (to: string) => Parameters<EmailSender["send"]>[0], href?: string): Promise<void> {
+  async notifyOwner(vendorId: string, message: (to: string, webUrl: string) => EmailMessage, href?: string): Promise<void> {
     const owner = await this.users.findVendorOwner(vendorId);
-    const built = message(owner?.email ?? "");
+    const built = message(owner?.email ?? "", this.config.WEB_PUBLIC_URL);
     await this.notifications.forVendor(vendorId, { title: built.subject, body: built.text, href }).catch(() => undefined);
     if (owner) {
       await this.email.send(built);

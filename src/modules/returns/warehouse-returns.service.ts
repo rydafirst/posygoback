@@ -6,13 +6,17 @@ import { lockRow, PrismaService } from "../../database/prisma.service";
 import type { Prisma } from "../../generated/prisma/client";
 import { AuditService } from "../../infrastructure/audit/audit.service";
 import { RETURN_RULES, type ReceiveVendorReturnInput, type VendorReturnStatus, type VendorReturnView } from "../../shared";
-import { WalletAlertsService } from "../finance/wallets/wallet-alerts.service";
 import { FilesService } from "../files/files.service";
 import { randomCode } from "../stock/inbound/references";
 import { InventoryLedgerService } from "../stock/inventory/inventory-ledger.service";
 import { warehouseScope } from "../stock/scope";
+import { ReturnAlertsService } from "./return-alerts.service";
 import { ReturnEmails } from "./return-emails";
 import { addDays, VendorReturnsRepository } from "./vendor-returns.repository";
+
+function longDate(date: Date): string {
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(date);
+}
 
 const RETURNABLE_ORDER_STATUSES = ["HANDED_OFF", "IN_TRANSIT", "DELIVERED", "EXCEPTION"];
 
@@ -23,7 +27,7 @@ export class WarehouseReturnsService {
     private readonly repository: VendorReturnsRepository,
     private readonly inventory: InventoryLedgerService,
     private readonly files: FilesService,
-    private readonly owners: WalletAlertsService,
+    private readonly owners: ReturnAlertsService,
     private readonly audit: AuditService,
   ) {}
 
@@ -91,8 +95,10 @@ export class WarehouseReturnsService {
       return { total, now };
     });
     if (received.total > 0) {
-      const by = addDays(received.now, RETURN_RULES.instructionDays).toISOString().slice(0, 10);
-      await this.owners.notifyOwner(entry.vendorId, (to) => ReturnEmails.arrived(to, entry.reference, received.total, by), "/returns").catch(() => undefined);
+      const by = longDate(addDays(received.now, RETURN_RULES.instructionDays));
+      await this.owners.tellOwner(entry, (to, webUrl) => ReturnEmails.arrived(to, entry.reference, received.total, by, webUrl));
+    } else {
+      await this.owners.tellOwner(entry, (to, webUrl) => ReturnEmails.arrivedEmpty(to, entry.reference, webUrl));
     }
     return this.detail(principal, returnId);
   }
@@ -154,7 +160,7 @@ export class WarehouseReturnsService {
       );
       return total;
     });
-    await this.owners.notifyOwner(entry.vendorId, (to) => ReturnEmails.completed(to, entry.reference, restocked), "/returns").catch(() => undefined);
+    await this.owners.tellOwner(entry, (to, webUrl) => ReturnEmails.completed(to, entry.reference, restocked, webUrl));
     return this.detail(principal, returnId);
   }
 

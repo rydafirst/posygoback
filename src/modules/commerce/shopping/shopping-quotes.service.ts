@@ -149,7 +149,7 @@ export class ShoppingQuotesService {
       );
     });
     const total = Money.of(goodsMinor + commissionMinor + deliveryMinor, row.currency).format("en-GB");
-    await this.email.send(ShoppingEmails.quoted(row.buyerEmail, row.reference, total, `${this.config.WEB_PUBLIC_URL}/account`)).catch(() => undefined);
+    await this.email.send(ShoppingEmails.quoted(row.buyerEmail, row.reference, total, this.config.WEB_PUBLIC_URL)).catch(() => undefined);
     return this.detail(principal, row.id);
   }
 

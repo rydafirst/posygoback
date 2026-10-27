@@ -11,6 +11,8 @@ import { warehouseScope } from "../../stock/scope";
 import { actorOf, adminPartnerScope, AdminPartnersService } from "../admin/admin-partners.service";
 import { ClaimsService } from "../custody/claims.service";
 import { CustodyAlertsService } from "../custody/custody-alerts.service";
+import { PartnerEmails } from "../partner-emails";
+import { PartnerNotifierService } from "../partner-notifier.service";
 import { StockCountFactoryService } from "./stock-count-factory.service";
 
 const COUNT_INCLUDE = {
@@ -59,6 +61,7 @@ export class StockCountsService {
     private readonly factory: StockCountFactoryService,
     private readonly claims: ClaimsService,
     private readonly alerts: CustodyAlertsService,
+    private readonly notifier: PartnerNotifierService,
     private readonly audit: AuditService,
   ) {}
 
@@ -182,26 +185,28 @@ export class StockCountsService {
     if (count.status !== "FLAGGED" && count.status !== "MISSED") {
       throw Errors.invalidTransition("Only flagged or missed counts need resolving.");
     }
-    await this.prisma.$transaction(async (tx) => {
+    const claimIds = await this.prisma.$transaction(async (tx) => {
       await lockRow(tx, "stockCounts", countId);
       const resolved = await tx.stockCount.updateMany({ where: { id: countId, resolvedAt: null }, data: { resolvedBy: principal.userId, resolvedAt: new Date(), resolutionNote: input.note } });
       if (resolved.count === 0) {
         throw Errors.invalidTransition("This count has already been resolved.");
       }
-      const opened = input.openClaims && count.status === "FLAGGED" ? await this.openShortfallClaims(tx, principal, countId) : 0;
+      const opened = input.openClaims && count.status === "FLAGGED" ? await this.openShortfallClaims(tx, principal, countId) : [];
       await tx.custodyAlert.updateMany({
         where: { kind: "COUNT_SHORTFALL", subjectId: countId, status: "OPEN" },
         data: { status: "RESOLVED", resolvedBy: principal.userId, resolvedAt: new Date(), resolutionNote: input.note },
       });
       await this.audit.record(
-        { actor: actorOf(principal), action: "partner.stock_count_resolved", resourceType: "stock_count", resourceId: countId, after: { note: input.note, claims: opened }, meta },
+        { actor: actorOf(principal), action: "partner.stock_count_resolved", resourceType: "stock_count", resourceId: countId, after: { note: input.note, claims: opened.length }, meta },
         tx,
       );
+      return opened;
     });
+    await this.claims.announceOpened(claimIds);
     return this.adminView(principal, countId);
   }
 
-  private async openShortfallClaims(tx: Prisma.TransactionClient, principal: AuthPrincipal, countId: string): Promise<number> {
+  private async openShortfallClaims(tx: Prisma.TransactionClient, principal: AuthPrincipal, countId: string): Promise<string[]> {
     const count = await tx.stockCount.findUniqueOrThrow({
       where: { id: countId },
       select: {
@@ -213,13 +218,13 @@ export class StockCountsService {
         },
       },
     });
-    let opened = 0;
+    const opened: string[] = [];
     for (const line of count.lines) {
       const missing = (line.expectedQuantity ?? 0) - (line.countedQuantity ?? 0);
       if (missing <= 0) {
         continue;
       }
-      await this.claims.open(tx, {
+      const claimId = await this.claims.open(tx, {
         kind: "SHORTAGE",
         source: "STOCK_COUNT",
         vendorId: line.lot.vendorId,
@@ -235,17 +240,18 @@ export class StockCountsService {
         description: `A stock count found ${missing} fewer ${line.lot.product.name} than our records show.`,
         createdBy: principal.userId,
       });
-      opened += 1;
+      opened.push(claimId);
     }
     return opened;
   }
 
   async markMissed(now: Date = new Date()): Promise<number> {
-    const overdue = await this.prisma.stockCount.findMany({ where: { status: "REQUESTED", dueAt: { lt: now } }, select: { id: true } });
+    const overdue = await this.prisma.stockCount.findMany({ where: { status: "REQUESTED", dueAt: { lt: now } }, select: { id: true, partnerId: true, dueAt: true } });
     for (const count of overdue) {
       const missed = await this.prisma.stockCount.updateMany({ where: { id: count.id, status: "REQUESTED" }, data: { status: "MISSED" } });
       if (missed.count > 0) {
         await this.audit.record({ actor: SYSTEM_ACTOR, action: "partner.stock_count_missed", resourceType: "stock_count", resourceId: count.id });
+        await this.notifier.notify(count.partnerId, (to, webUrl) => PartnerEmails.stockCountMissed(to, count.dueAt, webUrl));
       }
     }
     return overdue.length;

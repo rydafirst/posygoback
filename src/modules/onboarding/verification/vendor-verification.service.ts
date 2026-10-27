@@ -4,6 +4,8 @@ import type { ZodError } from "zod";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
 import { Errors } from "../../../common/http/app-exception";
+import { APP_CONFIG } from "../../../config/config.module";
+import type { AppConfig } from "../../../config/config.schema";
 import { PrismaService } from "../../../database/prisma.service";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
 import { EMAIL_SENDER, type EmailSender } from "../../../infrastructure/email/email.port";
@@ -39,6 +41,7 @@ export class VendorVerificationService {
     private readonly providers: IdentityProviderRegistry,
     private readonly users: UsersRepository,
     private readonly audit: AuditService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   async view(principal: AuthPrincipal): Promise<VerificationView> {
@@ -116,9 +119,9 @@ export class VendorVerificationService {
         tx,
       );
     });
-    const owner = await this.users.findById(principal.userId);
+    const owner = await this.users.findVendorOwner(vendorId);
     if (owner) {
-      await this.email.send(OnboardingEmails.verificationReceived(owner.email));
+      await this.email.send(OnboardingEmails.verificationReceived(owner.email, this.config.WEB_PUBLIC_URL));
     }
     return this.view(principal);
   }

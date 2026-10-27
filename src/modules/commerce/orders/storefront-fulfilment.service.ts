@@ -1,6 +1,8 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 
 import { AppException } from "../../../common/http/app-exception";
+import { APP_CONFIG } from "../../../config/config.module";
+import type { AppConfig } from "../../../config/config.schema";
 import { PrismaService } from "../../../database/prisma.service";
 import { AuditService, SYSTEM_ACTOR } from "../../../infrastructure/audit/audit.service";
 import { EMAIL_SENDER, type EmailSender } from "../../../infrastructure/email/email.port";
@@ -15,6 +17,11 @@ import { StorefrontRefundsService } from "./storefront-refunds.service";
 
 const STUCK_MS = 15 * 60 * 1000;
 const SHIPPED = ["HANDED_OFF", "IN_TRANSIT", "EXCEPTION"] as const;
+const STORE_NAME = { select: { businessName: true, storefront: { select: { displayName: true } } } } as const;
+
+function storeName(vendor: { businessName: string; storefront: { displayName: string } | null }): string {
+  return vendor.storefront?.displayName ?? vendor.businessName;
+}
 
 @Injectable()
 export class StorefrontFulfilmentService {
@@ -30,6 +37,7 @@ export class StorefrontFulfilmentService {
     private readonly owners: WalletAlertsService,
     @Inject(EMAIL_SENDER) private readonly email: EmailSender,
     private readonly audit: AuditService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   async afterPayment(orderId: string): Promise<void> {
@@ -78,13 +86,17 @@ export class StorefrontFulfilmentService {
   async syncShipping(): Promise<number> {
     const leaving = await this.prisma.storefrontOrder.findMany({
       where: { status: "FULFILLING", fulfilmentOrder: { status: { in: [...SHIPPED, "DELIVERED"] } } },
-      select: { id: true, vendorId: true, countryCode: true },
+      select: { id: true, vendorId: true, countryCode: true, reference: true, buyerEmail: true, fulfilmentOrder: { select: { trackingNumber: true } }, vendor: STORE_NAME },
       take: 500,
     });
     for (const order of leaving) {
       const shippedAt = new Date();
       const window = await this.holds.from(this.prisma, order, shippedAt);
-      await this.prisma.storefrontOrder.updateMany({ where: { id: order.id, status: "FULFILLING" }, data: { status: "SHIPPED", shippedAt, ...window } });
+      const shipped = await this.prisma.storefrontOrder.updateMany({ where: { id: order.id, status: "FULFILLING" }, data: { status: "SHIPPED", shippedAt, ...window } });
+      if (shipped.count > 0) {
+        const tracking = order.fulfilmentOrder?.trackingNumber ?? null;
+        await this.email.send(CommerceEmails.orderShipped(order.buyerEmail, storeName(order.vendor), order.reference, tracking, this.config.WEB_PUBLIC_URL)).catch(() => undefined);
+      }
     }
     const delivered = await this.prisma.storefrontOrder.updateMany({ where: { status: "SHIPPED", fulfilmentOrder: { status: "DELIVERED" } }, data: { status: "DELIVERED" } });
     const cancelled = await this.prisma.storefrontOrder.findMany({ where: { status: "FULFILLING", fulfilmentOrder: { status: "CANCELLED" } }, select: { id: true, totalMinor: true } });
@@ -100,7 +112,7 @@ export class StorefrontFulfilmentService {
     const code = error instanceof AppException ? error.code : null;
     if (code === ERROR_CODES.insufficientFunds || code === ERROR_CODES.walletUnavailable) {
       await this.prisma.storefrontOrder.update({ where: { id: order.id }, data: { status: "AWAITING_VENDOR_FUNDS" } });
-      await this.owners.notifyOwner(order.vendorId, (to) => CommerceEmails.awaitingFunds(to, order.reference), "/storefront").catch(() => undefined);
+      await this.owners.notifyOwner(order.vendorId, (to) => CommerceEmails.awaitingFunds(to, order.reference, this.config.WEB_PUBLIC_URL), "/storefront").catch(() => undefined);
       return;
     }
     if (code === ERROR_CODES.insufficientStock) {
@@ -115,14 +127,11 @@ export class StorefrontFulfilmentService {
   }
 
   private async sendReceipts(orderId: string): Promise<void> {
-    const order = await this.prisma.storefrontOrder.findUniqueOrThrow({
-      where: { id: orderId },
-      include: { lines: true, vendor: { select: { businessName: true, storefront: { select: { displayName: true } } } } },
-    });
+    const order = await this.prisma.storefrontOrder.findUniqueOrThrow({ where: { id: orderId }, include: { lines: true, vendor: STORE_NAME } });
     const total = Money.of(Number(order.totalMinor), order.currency).format("en-GB");
     const items = order.lines.map((line) => `${line.quantity} × ${line.productName}`).join("\n");
-    const store = order.vendor.storefront?.displayName ?? order.vendor.businessName;
-    await this.email.send(CommerceEmails.orderConfirmed(order.buyerEmail, store, order.reference, total, items)).catch(() => undefined);
-    await this.owners.notifyOwner(order.vendorId, (to) => CommerceEmails.vendorNewOrder(to, order.reference, total), "/storefront").catch(() => undefined);
+    const webUrl = this.config.WEB_PUBLIC_URL;
+    await this.email.send(CommerceEmails.orderConfirmed(order.buyerEmail, storeName(order.vendor), order.reference, total, items, webUrl)).catch(() => undefined);
+    await this.owners.notifyOwner(order.vendorId, (to) => CommerceEmails.vendorNewOrder(to, order.reference, total, webUrl), "/storefront").catch(() => undefined);
   }
 }

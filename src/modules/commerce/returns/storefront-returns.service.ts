@@ -2,6 +2,8 @@ import { Inject, Injectable } from "@nestjs/common";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
 import { Errors } from "../../../common/http/app-exception";
+import { APP_CONFIG } from "../../../config/config.module";
+import type { AppConfig } from "../../../config/config.schema";
 import { lockRow, PrismaService } from "../../../database/prisma.service";
 import type { Prisma } from "../../../generated/prisma/client";
 import { type AuditActor, AuditService } from "../../../infrastructure/audit/audit.service";
@@ -33,6 +35,7 @@ export class StorefrontReturnsService {
     private readonly owners: WalletAlertsService,
     private readonly audit: AuditService,
     @Inject(EMAIL_SENDER) private readonly email: EmailSender,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   async request(buyerId: string, orderId: string, reason: string, meta: RequestMeta): Promise<StorefrontOrderView> {
@@ -62,7 +65,7 @@ export class StorefrontReturnsService {
       );
       return row;
     });
-    await this.owners.notifyOwner(order.vendorId, (to) => CommerceEmails.returnRequested(to, order.reference), "/storefront").catch(() => undefined);
+    await this.owners.notifyOwner(order.vendorId, (to) => CommerceEmails.returnRequested(to, order.reference, this.config.WEB_PUBLIC_URL), "/storefront").catch(() => undefined);
     return this.orders.buyerDetail(buyerId, orderId);
   }
 
@@ -109,7 +112,7 @@ export class StorefrontReturnsService {
       return current;
     });
     const store = decision.order.vendor.storefront?.displayName ?? decision.order.vendor.businessName;
-    await this.email.send(CommerceEmails.returnDecided(decision.order.buyerEmail, store, decision.order.reference, input.accept, input.note)).catch(() => undefined);
+    await this.email.send(CommerceEmails.returnDecided(decision.order.buyerEmail, store, decision.order.reference, input.accept, input.note, this.config.WEB_PUBLIC_URL)).catch(() => undefined);
     if (input.accept) {
       await this.settle(returnId, this.actor(principal));
     }

@@ -32,7 +32,7 @@ export class StockCountFactoryService {
 
   async request(request: CountRequest): Promise<string> {
     const count = await this.prisma.$transaction((tx) => this.create(tx, request));
-    await this.notifier.notify(request.partnerId, (to) => PartnerEmails.stockCountRequested(to, count.dueAt));
+    await this.notifier.notify(request.partnerId, (to, webUrl) => PartnerEmails.stockCountRequested(to, count.dueAt, webUrl));
     return count.id;
   }
 

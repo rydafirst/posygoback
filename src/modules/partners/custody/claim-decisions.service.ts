@@ -73,7 +73,7 @@ export class ClaimDecisionsService {
       return current;
     });
     if (input.liability === "PARTNER" && claim.partnerId) {
-      await this.notifier.notify(claim.partnerId, (to) => CustodyEmails.partnerClaimAssessed(to, claim.reference));
+      await this.notifier.notify(claim.partnerId, (to, webUrl) => CustodyEmails.partnerClaimAssessed(to, claim.reference, webUrl));
     }
     return this.claims.staffDetail(principal, claimId);
   }
@@ -141,15 +141,19 @@ export class ClaimDecisionsService {
 
   private async announce(claim: CustodyClaim, split: Awaited<ReturnType<ClaimSettlementService["settle"]>> | null): Promise<void> {
     const compensation = Number(claim.compensationMinor);
+    const partnerId = claim.status === "ASSESSED" && claim.liability === "PARTNER" ? claim.partnerId : null;
     if (!split) {
-      await this.vendorAlerts.notifyOwner(claim.vendorId, (to) => CustodyEmails.claimRejected(to, claim.reference), "/claims");
+      await this.vendorAlerts.notifyOwner(claim.vendorId, (to, webUrl) => CustodyEmails.claimRejected(to, claim.reference, webUrl), "/claims");
+      if (partnerId) {
+        await this.notifier.notify(partnerId, (to, webUrl) => CustodyEmails.partnerClaimDecided(to, claim.reference, null, webUrl));
+      }
       return;
     }
-    const paid = claim.liability !== "VENDOR" && compensation > 0 ? format(compensation, claim.currency) : null;
-    await this.vendorAlerts.notifyOwner(claim.vendorId, (to) => CustodyEmails.claimSettled(to, claim.reference, paid), "/claims");
-    if (claim.liability === "PARTNER" && claim.partnerId) {
+    const credit = claim.liability !== "VENDOR" && compensation > 0 ? format(compensation, claim.currency) : null;
+    await this.vendorAlerts.notifyOwner(claim.vendorId, (to, webUrl) => CustodyEmails.claimSettled(to, claim.reference, credit, webUrl), "/claims");
+    if (partnerId) {
       const recovered = split.recoveredLedgerMinor + split.recoveredDepositMinor;
-      await this.notifier.notify(claim.partnerId, (to) => CustodyEmails.partnerClaimSettled(to, claim.reference, recovered > 0 ? format(recovered, claim.currency) : null));
+      await this.notifier.notify(partnerId, (to, webUrl) => CustodyEmails.partnerClaimDecided(to, claim.reference, recovered > 0 ? format(recovered, claim.currency) : null, webUrl));
     }
   }
 }

@@ -9,7 +9,9 @@ import type { DispatchTransferInput, ReceiveTransferInput, TransferView } from "
 import { FilesService } from "../../files/files.service";
 import { InventoryLedgerService } from "../../stock/inventory/inventory-ledger.service";
 import { actorOf } from "../admin/admin-partners.service";
+import { PartnerNotifierService } from "../partner-notifier.service";
 import { ClaimsService } from "./claims.service";
+import { CustodyEmails } from "./custody-emails";
 import type { TransferRow } from "./custody.repository";
 import { TransfersService } from "./transfers.service";
 
@@ -21,12 +23,13 @@ export class TransferMovementsService {
     private readonly inventory: InventoryLedgerService,
     private readonly claims: ClaimsService,
     private readonly files: FilesService,
+    private readonly notifier: PartnerNotifierService,
     private readonly audit: AuditService,
   ) {}
 
   async dispatch(principal: AuthPrincipal, transferId: string, input: DispatchTransferInput, meta: RequestMeta): Promise<TransferView> {
     await this.assertPhotos(principal.userId, input.photoFileIds);
-    await this.prisma.$transaction(async (tx) => {
+    const transfer = await this.prisma.$transaction(async (tx) => {
       const transfer = await this.transfers.lockedRow(tx, principal, transferId);
       if (!(await this.transfers.hubDetail(principal, transferId)).actions.includes("DISPATCH") || transfer.status !== "REQUESTED") {
         throw Errors.invalidTransition("This transfer isn't waiting to be sent from your hub.");
@@ -81,12 +84,14 @@ export class TransferMovementsService {
         },
         tx,
       );
+      return transfer;
     });
+    await this.announceDispatch(transfer, input);
     return this.transfers.hubDetail(principal, transferId);
   }
 
   async receive(principal: AuthPrincipal, transferId: string, input: ReceiveTransferInput, meta: RequestMeta): Promise<TransferView> {
-    await this.prisma.$transaction(async (tx) => {
+    const claimIds = await this.prisma.$transaction(async (tx) => {
       const transfer = await this.transfers.lockedRow(tx, principal, transferId);
       if (!(await this.transfers.hubDetail(principal, transferId)).actions.includes("RECEIVE") || transfer.status !== "DISPATCHED") {
         throw Errors.invalidTransition("This transfer isn't waiting to be received by you.");
@@ -99,8 +104,12 @@ export class TransferMovementsService {
         throw Errors.validation({ lines: ["You've counted more than we sent for one item. Count it again, or report the extra stock to us."] });
       }
       const fromPartner = await tx.warehouse.findUniqueOrThrow({ where: { id: transfer.fromWarehouseId }, select: { partnerId: true } });
+      const opened: string[] = [];
       for (const line of transfer.lines) {
-        await this.receiveLine(tx, principal, transfer, line, counted.get(line.id)!, fromPartner.partnerId);
+        const claimId = await this.receiveLine(tx, principal, transfer, line, counted.get(line.id)!, fromPartner.partnerId);
+        if (claimId) {
+          opened.push(claimId);
+        }
       }
       await this.moveBoxes(tx, transfer);
       await tx.stockTransfer.update({ where: { id: transferId }, data: { status: "RECEIVED", receivedBy: principal.userId, receivedAt: new Date() } });
@@ -109,7 +118,9 @@ export class TransferMovementsService {
         { actor: actorOf(principal), action: "custody.transfer_received", resourceType: "stock_transfer", resourceId: transferId, countryCode: transfer.countryCode, after: { short }, meta },
         tx,
       );
+      return opened;
     });
+    await this.claims.announceOpened(claimIds);
     return this.transfers.hubDetail(principal, transferId);
   }
 
@@ -120,7 +131,7 @@ export class TransferMovementsService {
     line: TransferRow["lines"][number],
     received: number,
     fromPartnerId: string | null,
-  ): Promise<void> {
+  ): Promise<string | null> {
     await lockRow(tx, "stockLots", line.lotId);
     await tx.stockTransferLine.update({ where: { id: line.id }, data: { quantityReceived: received } });
     const lot = await tx.stockLot.update({
@@ -138,23 +149,34 @@ export class TransferMovementsService {
       );
     }
     const missing = line.quantitySent - received;
-    if (missing > 0) {
-      await this.claims.open(tx, {
-        kind: "SHORTAGE",
-        source: "TRANSFER",
-        vendorId: lot.vendorId,
-        warehouseId: transfer.fromWarehouseId,
-        partnerId: fromPartnerId,
-        countryCode: transfer.countryCode,
-        lotId: lot.id,
-        orderId: null,
-        transferId: transfer.id,
-        quantity: missing,
-        unitValueMinor: lot.product.declaredValueMinor,
-        currency: lot.product.currency,
-        description: `${missing} of ${line.quantitySent} ${line.quantitySent === 1 ? "unit" : "units"} of ${line.lot.product.name} didn't arrive with transfer ${transfer.reference} (seal ${transfer.sealNumber ?? "not recorded"}).`,
-        createdBy: null,
-      });
+    if (missing <= 0) {
+      return null;
+    }
+    return this.claims.open(tx, {
+      kind: "SHORTAGE",
+      source: "TRANSFER",
+      vendorId: lot.vendorId,
+      warehouseId: transfer.fromWarehouseId,
+      partnerId: fromPartnerId,
+      countryCode: transfer.countryCode,
+      lotId: lot.id,
+      orderId: null,
+      transferId: transfer.id,
+      quantity: missing,
+      unitValueMinor: lot.product.declaredValueMinor,
+      currency: lot.product.currency,
+      description: `${missing} of ${line.quantitySent} ${line.quantitySent === 1 ? "unit" : "units"} of ${line.lot.product.name} didn't arrive with transfer ${transfer.reference} (seal ${transfer.sealNumber ?? "not recorded"}).`,
+      createdBy: null,
+    });
+  }
+
+  private async announceDispatch(transfer: TransferRow, input: DispatchTransferInput): Promise<void> {
+    const [from, to] = await Promise.all([
+      this.prisma.warehouse.findUniqueOrThrow({ where: { id: transfer.fromWarehouseId }, select: { name: true } }),
+      this.prisma.warehouse.findUniqueOrThrow({ where: { id: transfer.toWarehouseId }, select: { partnerId: true } }),
+    ]);
+    if (to.partnerId) {
+      await this.notifier.notify(to.partnerId, (recipient, webUrl) => CustodyEmails.transferIncoming(recipient, transfer.reference, from.name, input.carrier, input.trackingNumber, webUrl));
     }
   }
 

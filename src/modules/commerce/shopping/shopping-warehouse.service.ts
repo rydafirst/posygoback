@@ -2,6 +2,8 @@ import { Inject, Injectable } from "@nestjs/common";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
 import { AppException, Errors } from "../../../common/http/app-exception";
+import { APP_CONFIG } from "../../../config/config.module";
+import type { AppConfig } from "../../../config/config.schema";
 import { lockRow, PrismaService } from "../../../database/prisma.service";
 import type { Prisma, ShoppingLine } from "../../../generated/prisma/client";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
@@ -49,6 +51,7 @@ export class ShoppingWarehouseService {
     private readonly files: FilesService,
     private readonly audit: AuditService,
     @Inject(EMAIL_SENDER) private readonly email: EmailSender,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   async list(principal: AuthPrincipal): Promise<ShoppingRequestView[]> {
@@ -108,10 +111,12 @@ export class ShoppingWarehouseService {
     });
     if (outcome.nothing) {
       await this.purchases.sendThenTell(outcome.intent?.id ?? null, actorOf(principal), (amount) =>
-        ShoppingEmails.cancelled(row.buyerEmail, row.reference, "None of the items reached our warehouse, so we've cancelled your request.", amount),
+        ShoppingEmails.cancelled(row.buyerEmail, row.reference, "None of the items reached our warehouse, so we've cancelled your request.", amount, this.config.WEB_PUBLIC_URL),
       );
     } else if (outcome.intent) {
-      await this.purchases.sendThenTell(outcome.intent.id, actorOf(principal), (amount) => (amount ? ShoppingEmails.partlyRefunded(row.buyerEmail, row.reference, amount) : null));
+      await this.purchases.sendThenTell(outcome.intent.id, actorOf(principal), (amount) =>
+        amount ? ShoppingEmails.partlyRefunded(row.buyerEmail, row.reference, amount, this.config.WEB_PUBLIC_URL) : null,
+      );
     }
     return this.repository.view(await this.scoped(principal, row.id, ["BUYING", "ARRIVED", "CANCELLED"]), "WAREHOUSE");
   }
@@ -165,7 +170,7 @@ export class ShoppingWarehouseService {
         tx,
       );
     });
-    await this.email.send(ShoppingEmails.shipped(row.buyerEmail, row.reference, label.carrier, label.trackingNumber)).catch(() => undefined);
+    await this.email.send(ShoppingEmails.shipped(row.buyerEmail, row.reference, label.carrier, label.trackingNumber, label.trackingUrl ?? null, this.config.WEB_PUBLIC_URL)).catch(() => undefined);
     return this.repository.view(await this.scoped(principal, row.id), "WAREHOUSE");
   }
 
@@ -176,6 +181,7 @@ export class ShoppingWarehouseService {
       throw Errors.invalidTransition("Only sent items can be marked as delivered.");
     }
     await this.audit.record({ actor: actorOf(principal), action: "shopping.delivered", resourceType: "shopping_request", resourceId: row.id, countryCode: row.countryCode, meta });
+    await this.email.send(ShoppingEmails.delivered(row.buyerEmail, row.reference, this.config.WEB_PUBLIC_URL)).catch(() => undefined);
     return this.repository.view(await this.scoped(principal, row.id, ["DELIVERED"]), "WAREHOUSE");
   }
 

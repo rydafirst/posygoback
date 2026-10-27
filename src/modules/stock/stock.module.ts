@@ -7,6 +7,7 @@ import { OnboardingModule } from "../onboarding/onboarding.module";
 import { CatalogueController } from "./catalogue/catalogue.controller";
 import { CatalogueService } from "./catalogue/catalogue.service";
 import { VendorInboundController, WarehouseInboundController } from "./inbound/inbound.controllers";
+import { InboundAlertsService } from "./inbound/inbound-alerts.service";
 import { InboundChargesService } from "./inbound/inbound-charges.service";
 import { InboundRepository } from "./inbound/inbound.repository";
 import { ReceivingService } from "./inbound/receiving.service";
@@ -28,6 +29,7 @@ import { WarehousesService } from "./warehouses/warehouses.service";
     CatalogueService,
     InboundRepository,
     InboundChargesService,
+    InboundAlertsService,
     VendorInboundService,
     WarehouseInboundService,
     ReceivingService,

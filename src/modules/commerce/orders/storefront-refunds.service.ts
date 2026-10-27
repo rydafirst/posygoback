@@ -1,6 +1,8 @@
 import { Inject, Injectable } from "@nestjs/common";
 
 import { Errors } from "../../../common/http/app-exception";
+import { APP_CONFIG } from "../../../config/config.module";
+import type { AppConfig } from "../../../config/config.schema";
 import { lockRow, PrismaService } from "../../../database/prisma.service";
 import type { Prisma, StorefrontRefund } from "../../../generated/prisma/client";
 import { type AuditActor, AuditService } from "../../../infrastructure/audit/audit.service";
@@ -28,6 +30,7 @@ export class StorefrontRefundsService {
     private readonly payments: PaymentAccountsService,
     @Inject(EMAIL_SENDER) private readonly email: EmailSender,
     private readonly audit: AuditService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   async refund(orderId: string, amountMinor: number, intentKey: string, actor: AuditActor, reason: string): Promise<RefundResult> {
@@ -50,7 +53,9 @@ export class StorefrontRefundsService {
     }
     const refundedMinor = await this.prisma.$transaction((tx) => this.settle(tx, intent, refundId, actor));
     const store = order.vendor.storefront?.displayName ?? order.vendor.businessName;
-    await this.email.send(CommerceEmails.orderRefunded(order.buyerEmail, store, order.reference, Money.of(Number(intent.amountMinor), order.currency).format("en-GB"))).catch(() => undefined);
+    await this.email
+      .send(CommerceEmails.orderRefunded(order.buyerEmail, store, order.reference, Money.of(Number(intent.amountMinor), order.currency).format("en-GB"), this.config.WEB_PUBLIC_URL))
+      .catch(() => undefined);
     return { refundId, refundedMinor };
   }
 

@@ -25,7 +25,9 @@ import {
 } from "../../../shared";
 import { FilesService } from "../../files/files.service";
 import { actorOf } from "../admin/admin-partners.service";
+import { PartnerEmails } from "../partner-emails";
 import { sameName } from "../partner-names";
+import { PartnerNotifierService } from "../partner-notifier.service";
 import { PartnersRepository, type StoredProfile } from "../partners.repository";
 import { IDENTITY_VERIFIER, type IdentityOutcome, type IdentityVerifier } from "../providers/partner-services.port";
 import { OPEN_PARTNER_STATUSES, PartnerAccessService, partnerIdOf } from "./partner-access.service";
@@ -55,6 +57,7 @@ export class PartnerVerificationService {
     private readonly files: FilesService,
     private readonly encryption: FieldEncryptionService,
     private readonly limiter: AttemptLimiterService,
+    private readonly notifier: PartnerNotifierService,
     private readonly audit: AuditService,
   ) {}
 
@@ -264,6 +267,7 @@ export class PartnerVerificationService {
       await tx.fulfilmentPartner.update({ where: { id: partner.id }, data: { status: "UNDER_REVIEW", statusReason: null } });
       await this.record(tx, principal, partner, "partner.submitted_for_review", {}, meta);
     });
+    await this.notifier.notify(partnerIdOf(principal), PartnerEmails.applicationSubmitted);
   }
 
   private async submit(

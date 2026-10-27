@@ -9,6 +9,7 @@ import { PrismaService } from "../../../database/prisma.service";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
 import { ATTEMPT_POLICIES, AttemptLimiterService } from "../../../infrastructure/rate-limit/attempt-limiter.service";
 import { PasswordService } from "../password/password.service";
+import { AccountEmailsService } from "./account-emails.service";
 import { type IssuedAuthentication, SessionIssuerService } from "../sessions/session-issuer.service";
 import { SessionService } from "../sessions/session.service";
 import { UsersRepository } from "../users.repository";
@@ -21,6 +22,7 @@ export class TestShortcutsService {
     private readonly users: UsersRepository,
     private readonly passwords: PasswordService,
     private readonly issuer: SessionIssuerService,
+    private readonly accountEmails: AccountEmailsService,
     private readonly sessions: SessionService,
     private readonly limiter: AttemptLimiterService,
     private readonly audit: AuditService,
@@ -48,7 +50,9 @@ export class TestShortcutsService {
         tx,
       );
     });
-    return this.issuer.start(user.id, "NOT_REQUIRED", meta);
+    const issued = await this.issuer.start(user.id, "NOT_REQUIRED", meta);
+    await this.accountEmails.welcome(user.id);
+    return issued;
   }
 
   async skipMfaEnrolment(principal: AuthPrincipal, meta: RequestMeta): Promise<AuthenticatedResult> {

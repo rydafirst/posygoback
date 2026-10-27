@@ -11,6 +11,7 @@ import type { PostingResult } from "../../finance/wallets/wallet-ledger.service"
 import { CarrierAccountsService } from "../carriers/carrier-accounts.service";
 import { CarrierError, type CustomsItem, type PurchasedLabel, type ShipmentParty } from "../carriers/carrier.port";
 import { OrderEmails } from "../order-emails";
+import { OrderAlertsService } from "./order-alerts.service";
 import type { OrderActor } from "./order-creation.service";
 import { LabelRecordsService } from "./label-records.service";
 import { OrderChargesService } from "./order-charges.service";
@@ -39,6 +40,7 @@ export class OrderShippingService {
     private readonly alerts: WalletAlertsService,
     private readonly audit: AuditService,
     private readonly labels: LabelRecordsService,
+    private readonly owners: OrderAlertsService,
   ) {}
 
   async fetchRates(actor: OrderActor, orderId: string, scope: Prisma.OrderWhereInput): Promise<void> {
@@ -275,7 +277,7 @@ export class OrderShippingService {
   private async askForFunds(orderId: string): Promise<void> {
     const order = await this.prisma.order.findUniqueOrThrow({ where: { id: orderId }, include: { selectedRate: true } });
     const amount = Money.of(Number(order.selectedRate?.chargeMinor ?? 0), order.currency).format("en-GB");
-    await this.alerts.notifyOwner(order.vendorId, (to) => OrderEmails.awaitingFunds(to, order.reference, amount), "/orders").catch(() => undefined);
+    await this.owners.tellOwner(order, (to, webUrl) => OrderEmails.awaitingFunds(to, order, amount, webUrl));
   }
 
   private async inScope(orderId: string, scope: Prisma.OrderWhereInput): Promise<Order> {

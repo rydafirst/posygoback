@@ -91,6 +91,7 @@ export class TeamService {
 
   async removeMember(principal: AuthPrincipal, userId: string, meta: RequestMeta): Promise<void> {
     const vendorId = vendorIdOf(principal);
+    const member = await this.prisma.user.findFirst({ where: { id: userId, vendorId, role: "VENDOR_MEMBER" }, select: { email: true, status: true, vendor: { select: { businessName: true } } } });
     const removed = await this.prisma.$transaction(async (tx) => {
       const rows = await tx.user.updateMany({ where: { id: userId, vendorId, role: "VENDOR_MEMBER" }, data: { status: "SUSPENDED" } });
       if (rows.count > 0) {
@@ -101,6 +102,9 @@ export class TeamService {
     });
     if (!removed) {
       throw Errors.notFound();
+    }
+    if (member?.vendor && member.status !== "SUSPENDED") {
+      await this.email.send(OnboardingEmails.teamMemberRemoved(member.email, member.vendor.businessName));
     }
   }
 }

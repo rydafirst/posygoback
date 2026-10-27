@@ -121,7 +121,14 @@ export const configSchema = z
     STORAGE_BUCKET: z.string().min(3),
     STORAGE_ACCESS_KEY_ID: z.string().min(1),
     STORAGE_SECRET_ACCESS_KEY: z.string().min(1),
-    EMAIL_TRANSPORT: z.enum(["log", "memory"]).default("log"),
+    EMAIL_TRANSPORT: z.enum(["log", "memory", "resend"]).default("log"),
+    RESEND_API_KEY: z.string().trim().default(""),
+    EMAIL_FROM: z
+      .string()
+      .trim()
+      .regex(/^[^<>]{1,60} <[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+>$|^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/, "Use an address like Posygo <hello@posygo.com>")
+      .default("Posygo <hello@posygo.com>"),
+    EMAIL_REPLY_TO: z.union([z.literal(""), z.string().trim().email()]).default(""),
     ASSISTANT_AI: z.enum(["off", "anthropic"]).default("off"),
     ANTHROPIC_API_KEY: z.string().trim().default(""),
     ASSISTANT_AI_MODEL: z
@@ -150,6 +157,10 @@ export const configSchema = z
     path: ["FIELD_ENCRYPTION_ACTIVE_KEY"],
   })
   .refine((config) => config.NODE_ENV !== "production" || !config.AUTH_TEST_SHORTCUTS, { message: "Sign-in shortcuts can't be turned on in production", path: ["AUTH_TEST_SHORTCUTS"] })
+  .refine((config) => config.EMAIL_TRANSPORT !== "resend" || config.RESEND_API_KEY.startsWith("re_"), {
+    message: "RESEND_API_KEY is required when EMAIL_TRANSPORT is resend",
+    path: ["RESEND_API_KEY"],
+  })
   .refine((config) => config.ASSISTANT_AI === "off" || config.ANTHROPIC_API_KEY.length >= 20, { message: "ANTHROPIC_API_KEY is required when ASSISTANT_AI is on", path: ["ANTHROPIC_API_KEY"] })
   .refine((config) => config.NODE_ENV !== "production" || config.EMAIL_TRANSPORT !== "log", { message: "A real email transport is required in production", path: ["EMAIL_TRANSPORT"] })
   .refine((config) => config.NODE_ENV !== "production" || config.TRUST_PROXY_HOPS > 0 || config.CLIENT_IP_HEADER !== "", {

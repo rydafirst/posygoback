@@ -6,9 +6,9 @@ import { isUniqueViolation, lockRow, PrismaService } from "../../../database/pri
 import type { OrderEventSource, OrderStatus, Prisma } from "../../../generated/prisma/client";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
 import { type CancellationReason, ORDER_STATUSES, orderActionAllowed, VENDOR_CANCELLABLE } from "../../../shared";
-import { WalletAlertsService } from "../../finance/wallets/wallet-alerts.service";
 import { CarrierAccountsService } from "../carriers/carrier-accounts.service";
 import { OrderEmails } from "../order-emails";
+import { OrderAlertsService } from "./order-alerts.service";
 import type { OrderActor } from "./order-creation.service";
 import { OrderChargesService } from "./order-charges.service";
 import { OrderTimelineService } from "./order-timeline.service";
@@ -40,7 +40,7 @@ export class OrderCancellationService {
     private readonly charges: OrderChargesService,
     private readonly timeline: OrderTimelineService,
     private readonly carriers: CarrierAccountsService,
-    private readonly alerts: WalletAlertsService,
+    private readonly owners: OrderAlertsService,
     private readonly audit: AuditService,
   ) {}
 
@@ -86,7 +86,7 @@ export class OrderCancellationService {
       await this.cancel(actor, orderId, scope, { reason: request.reason, note: request.note ?? undefined, source: "STAFF", allowed: this.staffCancellable(), decisionNote: note }, meta);
       return;
     }
-    const vendorId = await this.prisma.$transaction(async (tx) => {
+    const decided = await this.prisma.$transaction(async (tx) => {
       await lockRow(tx, "orders", orderId);
       const updated = await tx.orderCancellationRequest.updateMany({
         where: { id: request.id, status: "PENDING" },
@@ -101,10 +101,9 @@ export class OrderCancellationService {
         { actor: { userId: actor.userId, role: actor.role }, action: "order.cancellation_rejected", resourceType: "order", resourceId: orderId, vendorId: order.vendorId, after: { note }, meta },
         tx,
       );
-      return order.vendorId;
+      return order;
     });
-    const reference = (await this.prisma.order.findUniqueOrThrow({ where: { id: orderId }, select: { reference: true } })).reference;
-    await this.alerts.notifyOwner(vendorId, (to) => OrderEmails.cancellationRejected(to, reference, note), "/orders").catch(() => undefined);
+    await this.owners.tellOwner(decided, (to, webUrl) => OrderEmails.cancellationRejected(to, decided, note, webUrl));
   }
 
   private async cancel(actor: OrderActor, orderId: string, scope: Prisma.OrderWhereInput, request: CancelRequest, meta: RequestMeta): Promise<void> {
@@ -160,9 +159,8 @@ export class OrderCancellationService {
       await this.voidLabel(cancelled.id, cancelled.originCountryCode, cancelled.labelTransactionId);
     }
     if (request.source === "STAFF") {
-      await this.alerts
-        .notifyOwner(cancelled.vendorId, (to) => OrderEmails.cancelled(to, cancelled.reference, request.decisionNote ?? request.note ?? REASON_TEXT[request.reason]), "/orders")
-        .catch(() => undefined);
+      const reason = request.decisionNote ?? request.note ?? REASON_TEXT[request.reason];
+      await this.owners.tellOwner(cancelled, (to, webUrl) => OrderEmails.cancelled(to, cancelled, reason, webUrl));
     }
   }
 

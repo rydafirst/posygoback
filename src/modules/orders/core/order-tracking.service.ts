@@ -1,17 +1,17 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 
 import { Errors } from "../../../common/http/app-exception";
 import { isUniqueViolation, lockRow, PrismaService } from "../../../database/prisma.service";
 import type { Order } from "../../../generated/prisma/client";
 import { PartnerEarningsService } from "../../partners/ledger/partner-earnings.service";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
-import { type CarrierTrackingEvent, canMoveOrder, type PublicTrackingView, publicTrackingStatus, statusForTracking } from "../../../shared";
-import { WalletAlertsService } from "../../finance/wallets/wallet-alerts.service";
+import { type CarrierTrackingEvent, canMoveOrder, type OrderStatus, type PublicTrackingView, publicTrackingStatus, statusForTracking } from "../../../shared";
 import { CarrierAccountsService } from "../carriers/carrier-accounts.service";
 import { type CarrierAdapter, CarrierError } from "../carriers/carrier.port";
 import { OrderEmails } from "../order-emails";
+import { OrderAlertsService } from "./order-alerts.service";
 import { OrderTimelineService } from "./order-timeline.service";
 import { StockAllocationService } from "./stock-allocation.service";
 
@@ -25,14 +25,12 @@ function sameSecret(given: string, expected: string): boolean {
 
 @Injectable()
 export class OrderTrackingService {
-  private readonly logger = new Logger(OrderTrackingService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly carriers: CarrierAccountsService,
     private readonly allocation: StockAllocationService,
     private readonly timeline: OrderTimelineService,
-    private readonly alerts: WalletAlertsService,
+    private readonly owners: OrderAlertsService,
     private readonly earnings: PartnerEarningsService,
     private readonly audit: AuditService,
   ) {}
@@ -126,8 +124,8 @@ export class OrderTrackingService {
       );
       return { order, moved: target, added };
     });
-    if (result.moved === "EXCEPTION") {
-      await this.notifyProblem(result.order, ordered.at(-1)!.description);
+    if (result.moved) {
+      await this.tellOwner(result.order, result.moved, ordered.at(-1)!.description);
     }
     return result.moved ? `moved to ${result.moved}` : `${result.added} new events`;
   }
@@ -152,7 +150,13 @@ export class OrderTrackingService {
     };
   }
 
-  private async notifyProblem(order: Order, description: string): Promise<void> {
-    await this.alerts.notifyOwner(order.vendorId, (to) => OrderEmails.problem(to, order.reference, description), "/orders").catch((error: unknown) => this.logger.error(String(error)));
+  private async tellOwner(before: Order, moved: OrderStatus, description: string): Promise<void> {
+    if (moved === "EXCEPTION") {
+      await this.owners.tellOwner(before, (to, webUrl) => OrderEmails.problem(to, before, description, webUrl));
+    } else if (moved === "RETURNED") {
+      await this.owners.tellOwner(before, (to, webUrl) => OrderEmails.returnedToHub(to, before, description, webUrl));
+    } else if (before.status === "LABEL_PURCHASED") {
+      await this.owners.shipped(before);
+    }
   }
 }

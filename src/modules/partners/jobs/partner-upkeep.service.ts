@@ -81,7 +81,7 @@ export class PartnerUpkeepService {
           before: { tierLevel: partner.tierLevel },
           after: { tierLevel: next.level },
         });
-        await this.notifier.notify(partner.id, (to) => PartnerEmails.tierRaised(to, next.name));
+        await this.notifier.notify(partner.id, (to, webUrl) => PartnerEmails.tierRaised(to, next.name, webUrl));
       }
     }
     return raised;
@@ -176,7 +176,7 @@ export class PartnerUpkeepService {
         }
         const claimed = await this.prisma.partnerInsurancePolicy.updateMany({ where: { id: policy.id, [field]: null }, data: { [field]: new Date() } });
         if (claimed.count > 0) {
-          await this.notifier.notify(policy.partnerId, (to) => PartnerEmails.insuranceExpiring(to, days, isoDate(policy.expiresOn)));
+          await this.notifier.notify(policy.partnerId, (to, webUrl) => PartnerEmails.insuranceExpiring(to, days, isoDate(policy.expiresOn), webUrl));
           summary.remindersSent += 1;
         }
       }

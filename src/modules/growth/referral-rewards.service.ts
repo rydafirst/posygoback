@@ -16,6 +16,11 @@ interface Credit {
   amountMinor: number;
 }
 
+interface PaidCredit extends Credit {
+  currency: string;
+  welcome: boolean;
+}
+
 function startOfMonth(now: Date): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
@@ -41,15 +46,20 @@ export class ReferralRewardsService {
       const credits = await this.prisma.$transaction((tx) => this.reward(tx, id, now));
       for (const credit of credits) {
         rewarded += 1;
+        const amount = Money.of(credit.amountMinor, credit.currency).format("en-GB");
         await this.owners
-          .notifyOwner(credit.vendorId, (to) => ReferralEmails.rewarded(to, Money.of(credit.amountMinor, credit.currency).format("en-GB")), "/settings/referrals")
+          .notifyOwner(
+            credit.vendorId,
+            (to, webUrl) => (credit.welcome ? ReferralEmails.welcomeCredit(to, amount, webUrl) : ReferralEmails.rewarded(to, amount, webUrl)),
+            credit.welcome ? "/wallet" : "/settings/referrals",
+          )
           .catch(() => undefined);
       }
     }
     return rewarded;
   }
 
-  private async reward(tx: Prisma.TransactionClient, referralId: string, now: Date): Promise<Array<Credit & { currency: string }>> {
+  private async reward(tx: Prisma.TransactionClient, referralId: string, now: Date): Promise<PaidCredit[]> {
     const claimed = await tx.referral.updateMany({ where: { id: referralId, status: "REGISTERED" }, data: { status: "REWARDED", rewardedAt: now } });
     if (claimed.count === 0) {
       return [];
@@ -61,7 +71,7 @@ export class ReferralRewardsService {
     } else if (referral.referrerVendorId) {
       await tx.referral.update({ where: { id: referralId }, data: { referrerCreditMinor: 0n } });
     }
-    const paid: Array<Credit & { currency: string }> = [];
+    const paid: PaidCredit[] = [];
     for (const credit of credits.filter((entry) => entry.amountMinor > 0)) {
       const wallet = await this.ledger.walletFor(tx, credit.vendorId, referral.country.currency);
       await this.ledger.post(tx, wallet.id, {
@@ -71,9 +81,13 @@ export class ReferralRewardsService {
         idempotencyKey: `referral:${referralId}:${credit.vendorId}`,
         reference: { type: "referral", id: referralId },
       });
-      paid.push({ ...credit, currency: referral.country.currency });
+      paid.push({ ...credit, currency: referral.country.currency, welcome: credit.vendorId === referral.referredVendorId });
     }
-    await this.audit.record({ actor: SYSTEM_ACTOR, action: "referral.rewarded", resourceType: "referral", resourceId: referralId, countryCode: referral.countryCode, after: { credits: paid } }, tx);
+    const credited = paid.map(({ vendorId, amountMinor, currency }) => ({ vendorId, amountMinor, currency }));
+    await this.audit.record(
+      { actor: SYSTEM_ACTOR, action: "referral.rewarded", resourceType: "referral", resourceId: referralId, countryCode: referral.countryCode, after: { credits: credited } },
+      tx,
+    );
     return paid;
   }
 

@@ -4,7 +4,9 @@ import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-princ
 import { Errors } from "../../../common/http/app-exception";
 import { lockRow, PrismaService } from "../../../database/prisma.service";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
-import type { PartnerDetailView, PartnerStatus, RecordSecurityInput } from "../../../shared";
+import { Money, type PartnerDetailView, type PartnerStatus, type RecordSecurityInput } from "../../../shared";
+import { PartnerEmails } from "../partner-emails";
+import { PartnerNotifierService } from "../partner-notifier.service";
 import { actorOf, AdminPartnersService } from "./admin-partners.service";
 
 const SECURITY_LOCKED: readonly PartnerStatus[] = ["ACTIVE", "SUSPENDED", "OFFBOARDING"];
@@ -14,6 +16,7 @@ export class PartnerSecuritiesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly admin: AdminPartnersService,
+    private readonly notifier: PartnerNotifierService,
     private readonly audit: AuditService,
   ) {}
 
@@ -53,12 +56,12 @@ export class PartnerSecuritiesService {
 
   async confirmSecurity(principal: AuthPrincipal, partnerId: string, securityId: string, meta: RequestMeta): Promise<PartnerDetailView> {
     const partner = await this.admin.scoped(principal, partnerId);
-    await this.prisma.$transaction(async (tx) => {
-      const security = await tx.partnerSecurity.findFirst({ where: { id: securityId, partnerId, releasedAt: null } });
-      if (!security) {
+    const security = await this.prisma.$transaction(async (tx) => {
+      const current = await tx.partnerSecurity.findFirst({ where: { id: securityId, partnerId, releasedAt: null } });
+      if (!current) {
         throw Errors.notFound();
       }
-      if (security.recordedBy === principal.userId) {
+      if (current.recordedBy === principal.userId) {
         throw Errors.forbidden("Someone else must confirm a deposit you recorded.");
       }
       const confirmed = await tx.partnerSecurity.updateMany({ where: { id: securityId, confirmedAt: null }, data: { confirmedBy: principal.userId, confirmedAt: new Date() } });
@@ -69,19 +72,22 @@ export class PartnerSecuritiesService {
         { actor: actorOf(principal), action: "partner.security_confirmed", resourceType: "partner_security", resourceId: securityId, countryCode: partner.countryCode, meta },
         tx,
       );
+      return current;
     });
+    const amount = Money.of(Number(security.amountMinor), security.currency).format("en-GB");
+    await this.notifier.notify(partnerId, (to, webUrl) => PartnerEmails.securityConfirmed(to, security.kind, amount, webUrl));
     return this.admin.detail(principal, partnerId);
   }
 
   async releaseSecurity(principal: AuthPrincipal, partnerId: string, securityId: string, note: string, meta: RequestMeta): Promise<PartnerDetailView> {
     const partner = await this.admin.scoped(principal, partnerId);
-    await this.prisma.$transaction(async (tx) => {
+    const security = await this.prisma.$transaction(async (tx) => {
       await lockRow(tx, "fulfilmentPartners", partnerId);
       const current = await tx.fulfilmentPartner.findUniqueOrThrow({ where: { id: partnerId }, select: { status: true } });
       if (SECURITY_LOCKED.includes(current.status)) {
         throw Errors.invalidTransition("Deposits and bonds stay held while the partner is operating or offboarding.");
       }
-      const security = await tx.partnerSecurity.findFirst({ where: { id: securityId, partnerId, releasedAt: null } });
+      const security = await tx.partnerSecurity.findFirst({ where: { id: securityId, partnerId, releasedAt: null }, include: { draws: { select: { amountMinor: true } } } });
       if (!security) {
         throw Errors.notFound();
       }
@@ -93,7 +99,11 @@ export class PartnerSecuritiesService {
         { actor: actorOf(principal), action: "partner.security_released", resourceType: "partner_security", resourceId: securityId, countryCode: partner.countryCode, after: { note }, meta },
         tx,
       );
+      return security;
     });
+    const format = (minor: number) => Money.of(minor, security.currency).format("en-GB");
+    const drawn = security.draws.reduce((total, draw) => total + Number(draw.amountMinor), 0);
+    await this.notifier.notify(partnerId, (to) => PartnerEmails.securityReleased(to, security.kind, format(Number(security.amountMinor)), drawn > 0 ? format(drawn) : null));
     return this.admin.detail(principal, partnerId);
   }
 }

@@ -179,7 +179,7 @@ export class AuthController {
   private async notifyTheft(userId: string): Promise<void> {
     const user = await this.users.findById(userId);
     if (user) {
-      await this.email.send(AuthEmails.sessionTheft(user.email));
+      await this.email.send(AuthEmails.sessionTheft(user.email, this.config.WEB_PUBLIC_URL));
     }
   }
 }

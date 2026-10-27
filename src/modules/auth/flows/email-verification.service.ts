@@ -10,6 +10,7 @@ import { ATTEMPT_POLICIES, AttemptLimiterService } from "../../../infrastructure
 import { AuthEmails } from "../auth-emails";
 import { VerificationCodeService } from "../codes/verification-code.service";
 import { PasswordService } from "../password/password.service";
+import { AccountEmailsService } from "./account-emails.service";
 import { type IssuedAuthentication, SessionIssuerService } from "../sessions/session-issuer.service";
 import { UsersRepository } from "../users.repository";
 
@@ -22,6 +23,7 @@ export class EmailVerificationService {
     private readonly codes: VerificationCodeService,
     private readonly passwords: PasswordService,
     private readonly issuer: SessionIssuerService,
+    private readonly accountEmails: AccountEmailsService,
     private readonly limiter: AttemptLimiterService,
     private readonly audit: AuditService,
   ) {}
@@ -44,7 +46,9 @@ export class EmailVerificationService {
         tx,
       );
     });
-    return this.issuer.start(user.id, "NOT_REQUIRED", meta);
+    const issued = await this.issuer.start(user.id, "NOT_REQUIRED", meta);
+    await this.accountEmails.welcome(user.id);
+    return issued;
   }
 
   async resend(email: string, meta: RequestMeta): Promise<void> {

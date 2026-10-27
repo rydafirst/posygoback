@@ -67,6 +67,6 @@ export class PasswordResetService {
     if (!user) {
       throw Errors.invalidCode();
     }
-    await this.email.send(AuthEmails.passwordChanged(user.email));
+    await this.email.send(AuthEmails.passwordChanged(user.email, this.config.WEB_PUBLIC_URL));
   }
 }

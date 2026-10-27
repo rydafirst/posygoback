@@ -15,6 +15,7 @@ import {
   type InboundDetailView,
   type InboundInput,
   type InboundSummaryView,
+  Money,
   VENDOR_INBOUND_ACTIONS,
 } from "../../../shared";
 import { FilesService } from "../../files/files.service";
@@ -24,12 +25,18 @@ import type { PostingResult } from "../../finance/wallets/wallet-ledger.service"
 import { vendorIdOf } from "../../onboarding/scope";
 import { VendorStandingService } from "../../onboarding/vendor-standing.service";
 import { fromDateOnly, toDateOnly, todayIso, uniqueViolationModel } from "../scope";
+import { StockEmails } from "../stock-emails";
 import { WarehouseAccessService } from "../warehouses/warehouse-access.service";
+import { InboundAlertsService } from "./inbound-alerts.service";
 import { InboundChargesService } from "./inbound-charges.service";
 import { InboundRepository, type InboundRow } from "./inbound.repository";
 import { inboundReference } from "./references";
 
 const REFERENCE_ATTEMPTS = 5;
+
+function longDate(date: Date): string {
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(date);
+}
 
 @Injectable()
 export class VendorInboundService {
@@ -43,6 +50,7 @@ export class VendorInboundService {
     private readonly capacity: PartnerCapacityService,
     private readonly alerts: WalletAlertsService,
     private readonly audit: AuditService,
+    private readonly owners: InboundAlertsService,
   ) {}
 
   list(principal: AuthPrincipal): Promise<InboundSummaryView[]> {
@@ -147,7 +155,21 @@ export class VendorInboundService {
     for (const posting of postings) {
       await this.alerts.afterPosting(posting);
     }
+    if (action === "SUBMIT") {
+      await this.confirmSubmission(inboundId);
+    }
     return this.detail(principal, inboundId);
+  }
+
+  private async confirmSubmission(inboundId: string): Promise<void> {
+    const inbound = await this.prisma.inboundShipment.findUniqueOrThrow({ where: { id: inboundId }, include: { warehouse: true, country: { select: { currency: true } } } });
+    const fee = Number(inbound.onboardingFeeMinor ?? 0n);
+    const details = {
+      hub: { name: inbound.warehouse.name, addressLines: inbound.warehouse.addressLines as string[], city: inbound.warehouse.city, postalCode: inbound.warehouse.postalCode },
+      arrival: longDate(inbound.expectedArrivalDate),
+      charge: fee > 0 ? Money.of(fee, inbound.country.currency).format("en-GB") : null,
+    };
+    await this.owners.tellOwner(inbound, (to, webUrl) => StockEmails.submitted(to, inbound, details, webUrl));
   }
 
   private async effects(tx: Prisma.TransactionClient, principal: AuthPrincipal, existing: InboundRow, action: InboundAction, postings: PostingResult[]): Promise<Prisma.InboundShipmentUpdateInput> {

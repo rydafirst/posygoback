@@ -115,7 +115,7 @@ export class CustodyUpkeepService {
     });
     if (moved) {
       await this.counts.requestIfStocked({ partnerId, countryCode, lines: "ALL", dueInHours: FULL_COUNT_DUE_HOURS, note: "Full count after the hub was paused", actor: SYSTEM_ACTOR, reason: "trust" });
-      await this.notifier.notify(partnerId, (to) => CustodyEmails.trustSuspended(to, trust.score));
+      await this.notifier.notify(partnerId, (to, webUrl) => CustodyEmails.trustSuspended(to, trust.score, webUrl));
     }
     return moved;
   }

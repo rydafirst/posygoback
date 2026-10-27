@@ -1,17 +1,16 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { type LoginInput, type MfaChallengeInput, type MfaRequiredResult, requiresMfa } from "../../../shared";
 
 import type { RequestMeta } from "../../../common/auth/auth-principal";
 import { Errors } from "../../../common/http/app-exception";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
 import { FieldEncryptionService } from "../../../infrastructure/crypto/field-encryption.service";
-import { EMAIL_SENDER, type EmailSender } from "../../../infrastructure/email/email.port";
 import { ATTEMPT_POLICIES, AttemptLimiterService } from "../../../infrastructure/rate-limit/attempt-limiter.service";
-import { AuthEmails } from "../auth-emails";
 import { MfaChallengeService } from "../mfa/mfa-challenge.service";
 import { RecoveryCodeService } from "../mfa/recovery-code.service";
 import { TotpService } from "../mfa/totp.service";
 import { PasswordService } from "../password/password.service";
+import { AccountEmailsService } from "./account-emails.service";
 import { type IssuedAuthentication, SessionIssuerService } from "../sessions/session-issuer.service";
 import { type UserRecord, UsersRepository } from "../users.repository";
 import { isLocked, lockMinutesAfter } from "./lockout.policy";
@@ -23,7 +22,7 @@ export const mfaSecretContext = (userId: string) => `user:${userId}:mfa`;
 @Injectable()
 export class LoginService {
   constructor(
-    @Inject(EMAIL_SENDER) private readonly email: EmailSender,
+    private readonly accountEmails: AccountEmailsService,
     private readonly users: UsersRepository,
     private readonly passwords: PasswordService,
     private readonly issuer: SessionIssuerService,
@@ -52,8 +51,10 @@ export class LoginService {
     }
     const mfaState = requiresMfa(user.role) ? "ENROLMENT_REQUIRED" : "NOT_REQUIRED";
     await this.users.resetFailures(user.id);
+    const startedAt = new Date();
     const issued = await this.issuer.start(user.id, mfaState, meta);
     await this.recordSuccess(user, "auth.signed_in", meta);
+    await this.accountEmails.afterSignIn(user, meta, false, startedAt);
     return { kind: "authenticated", issued };
   }
 
@@ -76,8 +77,10 @@ export class LoginService {
     }
     await this.limiter.reset(ATTEMPT_POLICIES.mfaPerUser, user.id);
     await this.users.resetFailures(user.id);
+    const startedAt = new Date();
     const issued = await this.issuer.start(user.id, "VERIFIED", meta);
     await this.recordSuccess(user, input.recoveryCode ? "auth.signed_in_recovery_code" : "auth.signed_in_mfa", meta);
+    await this.accountEmails.afterSignIn(user, meta, !input.code, startedAt);
     return issued;
   }
 
@@ -106,7 +109,7 @@ export class LoginService {
       meta,
     });
     if (lockMinutes) {
-      await this.email.send(AuthEmails.accountLocked(user.email, lockMinutes));
+      await this.accountEmails.locked(user.email, lockMinutes);
     }
   }
 

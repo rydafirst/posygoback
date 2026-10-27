@@ -4,7 +4,7 @@ import { isUniqueViolation, lockRow, PrismaService } from "../../../database/pri
 import type { Prisma, TopUp } from "../../../generated/prisma/client";
 import { AuditService, SYSTEM_ACTOR } from "../../../infrastructure/audit/audit.service";
 import { Money } from "../../../shared";
-import { FinanceEmails } from "../finance-emails";
+import { FinanceEmails, type ReversalCause } from "../finance-emails";
 import { WalletAlertsService } from "../wallets/wallet-alerts.service";
 import { WalletLedgerService } from "../wallets/wallet-ledger.service";
 import { OrderPaymentRouter, type PaymentOutcome } from "./order-payment.router";
@@ -73,7 +73,7 @@ export class PaymentEventsService {
       case "TOP_UP_CLOSED":
         return this.closed(tx, provider, accountKey, event);
       case "PAYMENT_REFUNDED":
-        return this.reversed(tx, provider, accountKey, event.paymentId, event.currency, () => event.refundedTotalMinor, `refund:${event.refundedTotalMinor}`, "Card payment refunded");
+        return this.reversed(tx, provider, accountKey, event.paymentId, event.currency, () => event.refundedTotalMinor, `refund:${event.refundedTotalMinor}`, "Card payment refunded", "refunded");
       case "PAYMENT_DISPUTED":
         return this.disputed(tx, provider, accountKey, event, event.stage);
       default:
@@ -123,7 +123,7 @@ export class PaymentEventsService {
       tx,
     );
     const amount = Money.of(Number(topUp.netMinor), topUp.currency).format("en-GB");
-    return { outcome: "credited", followUps: [() => this.alerts.notifyOwner(topUp.vendorId, (to) => FinanceEmails.topUpReceived(to, amount), "/wallet")] };
+    return { outcome: "credited", followUps: [() => this.alerts.notifyOwner(topUp.vendorId, (to, webUrl) => FinanceEmails.topUpReceived(to, amount, webUrl), "/wallet")] };
   }
 
   private async closed(tx: Prisma.TransactionClient, provider: string, accountKey: string, event: Extract<PaymentEvent, { kind: "TOP_UP_CLOSED" }>): Promise<Outcome> {
@@ -146,6 +146,7 @@ export class PaymentEventsService {
     reversedTotal: (previousMinor: number) => number,
     keySuffix: string,
     description: string,
+    cause: ReversalCause,
   ): Promise<Outcome> {
     const topUp = await this.matchedPayment(tx, provider, accountKey, paymentId);
     if (topUp.currency !== currency) {
@@ -174,13 +175,26 @@ export class PaymentEventsService {
     if (shortfall > 0) {
       await this.freeze(tx, wallet.id, topUp, { reason: description, shortfallMinor: shortfall });
       followUps.push(() => this.alerts.notifyOwner(topUp.vendorId, FinanceEmails.walletFrozen, "/wallet"));
+    } else if (recoverable > 0) {
+      const amount = Money.of(recoverable, topUp.currency).format("en-GB");
+      followUps.push(() => this.alerts.notifyOwner(topUp.vendorId, (to, webUrl) => FinanceEmails.paymentReversed(to, amount, cause, webUrl), "/wallet"));
     }
     return { outcome: shortfall > 0 ? `reversed ${recoverable}, short ${shortfall}` : `reversed ${recoverable}`, followUps };
   }
 
   private async disputed(tx: Prisma.TransactionClient, provider: string, accountKey: string, event: Extract<PaymentEvent, { kind: "PAYMENT_DISPUTED" }>, stage: DisputeStage): Promise<Outcome> {
     if (stage === "LOST") {
-      return this.reversed(tx, provider, accountKey, event.paymentId, event.currency, (previous) => previous + event.amountMinor, `dispute:${event.eventId}`, "Card payment disputed and lost");
+      return this.reversed(
+        tx,
+        provider,
+        accountKey,
+        event.paymentId,
+        event.currency,
+        (previous) => previous + event.amountMinor,
+        `dispute:${event.eventId}`,
+        "Card payment disputed and lost",
+        "disputed",
+      );
     }
     const topUp = await this.matchedPayment(tx, provider, accountKey, event.paymentId);
     if (stage === "WON") {

@@ -2707,3 +2707,25 @@ model AssistantQuestion {
   @@index([outcome, createdAt], map: "assistant_questions_outcome_idx")
   @@map("assistant_questions")
 }
+
+enum EmailStatus {
+  SENT
+  FAILED
+
+  @@map("email_status")
+}
+
+model EmailLogEntry {
+  id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  toAddress  String      @map("to_address") @db.VarChar(254)
+  kind       String      @db.VarChar(60)
+  subject    String      @db.VarChar(200)
+  status     EmailStatus
+  providerId String?     @map("provider_id") @db.VarChar(100)
+  error      String?     @db.VarChar(300)
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([toAddress, createdAt], map: "email_log_to_idx")
+  @@index([createdAt], map: "email_log_created_idx")
+  @@map("email_log")
+}

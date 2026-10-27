@@ -3,6 +3,8 @@ import { type DocumentSlot, type VerificationDecisionInput, type VerificationSta
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
 import { Errors } from "../../../common/http/app-exception";
+import { APP_CONFIG } from "../../../config/config.module";
+import type { AppConfig } from "../../../config/config.schema";
 import { PrismaService } from "../../../database/prisma.service";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
 import { EMAIL_SENDER, type EmailSender } from "../../../infrastructure/email/email.port";
@@ -27,6 +29,7 @@ export class VerificationReviewService {
     private readonly users: UsersRepository,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   async queue(principal: AuthPrincipal, status?: VerificationStatus) {
@@ -112,7 +115,7 @@ export class VerificationReviewService {
       );
       return this.activation.refresh(vendorId, countryCode, tx);
     });
-    await this.notifyOwner(vendorId, input);
+    await this.notifyOwner(vendorId, input, vendorActive);
     return { status, vendorActive };
   }
 
@@ -126,16 +129,17 @@ export class VerificationReviewService {
     return { record, businessName: vendor.businessName, countryCode: record.countryCode };
   }
 
-  private async notifyOwner(vendorId: string, input: VerificationDecisionInput): Promise<void> {
+  private async notifyOwner(vendorId: string, input: VerificationDecisionInput, readyToTrade: boolean): Promise<void> {
     const owner = await this.users.findVendorOwner(vendorId);
     const reason = input.reason ?? "";
     const to = owner?.email ?? "";
+    const webUrl = this.config.WEB_PUBLIC_URL;
     const message =
       input.decision === "APPROVE"
-        ? OnboardingEmails.verificationApproved(to)
+        ? OnboardingEmails.verificationApproved(to, readyToTrade, webUrl)
         : input.decision === "REJECT"
           ? OnboardingEmails.verificationRejected(to, reason)
-          : OnboardingEmails.verificationNeedsChanges(to, reason);
+          : OnboardingEmails.verificationNeedsChanges(to, reason, webUrl);
     await this.notifications.forVendor(vendorId, { title: message.subject, body: message.text, href: "/verification" }).catch(() => undefined);
     if (owner) {
       await this.email.send(message);

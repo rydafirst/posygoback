@@ -158,7 +158,7 @@ export class ShoppingPaymentsService implements OrderPaymentHandler, OnModuleIni
       tx,
     );
     const total = Money.of(event.amountMinor, row.currency).format("en-GB");
-    return outcome("paid", [() => this.email.send(ShoppingEmails.paid(row.buyerEmail, row.reference, total)).then(() => undefined)]);
+    return outcome("paid", [() => this.email.send(ShoppingEmails.paid(row.buyerEmail, row.reference, total, this.config.WEB_PUBLIC_URL)).then(() => undefined)]);
   }
 
   async paymentReversal(tx: Prisma.TransactionClient, provider: string, accountKey: string, event: PaymentReversalEvent): Promise<PaymentOutcome | null> {

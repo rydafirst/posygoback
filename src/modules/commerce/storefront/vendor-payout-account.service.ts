@@ -71,7 +71,7 @@ export class VendorPayoutAccountService implements OnModuleInit {
         vendorId: account.vendorId,
         after: { bankSummary: snapshot.bankSummary },
       });
-      await this.owners.notifyOwner(account.vendorId, (to) => CommerceEmails.payoutBankChanged(to, snapshot.bankSummary ?? "a new account"), "/storefront");
+      await this.owners.notifyOwner(account.vendorId, (to) => CommerceEmails.payoutBankChanged(to, snapshot.bankSummary ?? "a new account", this.config.WEB_PUBLIC_URL), "/storefront");
     }
   }
 }

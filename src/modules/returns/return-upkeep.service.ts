@@ -7,7 +7,7 @@ import { lockRow, PrismaService } from "../../database/prisma.service";
 import { AuditService, SYSTEM_ACTOR } from "../../infrastructure/audit/audit.service";
 import { RETURN_RULES } from "../../shared";
 import { JobLockService } from "../finance/jobs/job-lock.service";
-import { WalletAlertsService } from "../finance/wallets/wallet-alerts.service";
+import { ReturnAlertsService } from "./return-alerts.service";
 import { ReturnEmails } from "./return-emails";
 import { ReturnFeesService } from "./return-fees.service";
 import { addDays } from "./vendor-returns.repository";
@@ -24,7 +24,7 @@ export class ReturnUpkeepService {
     private readonly prisma: PrismaService,
     private readonly locks: JobLockService,
     private readonly fees: ReturnFeesService,
-    private readonly owners: WalletAlertsService,
+    private readonly owners: ReturnAlertsService,
     private readonly audit: AuditService,
   ) {}
 
@@ -54,7 +54,7 @@ export class ReturnUpkeepService {
       });
       if (closed) {
         expired += 1;
-        await this.owners.notifyOwner(entry.vendorId, (to) => ReturnEmails.expired(to, entry.reference), "/returns").catch(() => undefined);
+        await this.owners.tellOwner(entry, (to, webUrl) => ReturnEmails.expired(to, entry.reference, webUrl));
       }
     }
     return expired;
@@ -78,7 +78,7 @@ export class ReturnUpkeepService {
       });
       if (done) {
         restocked += 1;
-        await this.owners.notifyOwner(entry.vendorId, (to) => ReturnEmails.autoRestocked(to, entry.reference), "/returns").catch(() => undefined);
+        await this.owners.tellOwner(entry, (to, webUrl) => ReturnEmails.autoRestocked(to, entry.reference, webUrl));
       }
     }
     return restocked;

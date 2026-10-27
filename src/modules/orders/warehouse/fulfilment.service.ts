@@ -19,6 +19,7 @@ import {
   staffOrderActions,
 } from "../../../shared";
 import { warehouseScope } from "../../stock/scope";
+import { OrderAlertsService } from "../core/order-alerts.service";
 import { OrderCancellationService } from "../core/order-cancellation.service";
 import type { OrderActor } from "../core/order-creation.service";
 import { OrderShippingService } from "../core/order-shipping.service";
@@ -50,6 +51,7 @@ export class FulfilmentService {
     private readonly timeline: OrderTimelineService,
     private readonly evidence: DispatchEvidenceService,
     private readonly audit: AuditService,
+    private readonly owners: OrderAlertsService,
   ) {}
 
   async queue(principal: AuthPrincipal, filters: StaffQueueFilters): Promise<OrderSummaryView[]> {
@@ -231,7 +233,7 @@ export class FulfilmentService {
       }
       await this.evidence.assertOwn(principal, input.photoFileIds);
     }
-    await this.prisma.$transaction(async (tx) => {
+    const order = await this.prisma.$transaction(async (tx) => {
       const order = await this.locked(tx, orderId);
       if (!orderActionAllowed(input.action, order.status)) {
         throw Errors.invalidTransition("That step isn't available for this order right now.");
@@ -251,7 +253,9 @@ export class FulfilmentService {
         },
         tx,
       );
+      return order;
     });
+    await this.owners.afterStaffStep(order, input);
   }
 
   private async apply(tx: Prisma.TransactionClient, order: Order, input: Extract<StaffOrderActionInput, { action: "REPACK" | "HAND_OFF" | "HOLD" | "RELEASE" }>, actorId: string): Promise<string> {

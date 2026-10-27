@@ -274,7 +274,7 @@ A separate reviewer read the personal shopping code without seeing our reasoning
 
 - The helper never reads what people type into forms. It records field labels only ("Went to Tracking number"), the page path, and the error type, status and log reference from failed requests.
 - Messages people type to the helper, and every step in the trail, are scrubbed of card-like digit runs in the browser and again on the server. Reports are validated against a strict shape: page paths only (no full URLs or query strings), at most 20 steps, 1,000 characters of message.
-- Reporting is rate limited per address (20 an hour) and per signed-in user (30 a day), on top of the route throttle. The anonymous route stores a contact email but never sends mail to it, so it can't be used to send email to strangers.
+- Reporting is rate limited per address (20 an hour) and per signed-in user (30 a day), on top of the route throttle. The anonymous route stores a contact email and sends nothing to it when a report is made, so it can't be used to send email to strangers; the only email that address ever gets is a single note when staff resolve the case.
 - The same failure (error type, status, endpoint and page, with ids removed) is grouped into one open case under a database lock, so a widespread outage produces one case and one email to support, not thousands.
 - Only staff with `support.read` see cases; resolving needs `support.manage`, is audited, and notifies the people who reported it.
 
@@ -285,6 +285,13 @@ A separate reviewer read the personal shopping code without seeing our reasoning
 - The model is told to answer only from that information, to reply UNSURE otherwise, and to treat the person's words as questions rather than instructions. An UNSURE reply, an error or a timeout is never shown; the person is offered the team instead.
 - Every question is logged with its outcome and token counts (question text scrubbed). Limits: 30 an hour per address, 60 a day per user, and `ASSISTANT_DAILY_ANSWERS` across everyone (default 2,000), after which questions go straight to the team.
 - Before switching it on: name the AI provider as a processor in the privacy policy for each market, and check the provider's data retention terms.
+
+## Email
+
+- Delivery goes through Resend (`EMAIL_TRANSPORT=resend`) from an address on our verified domain. The API key lives only on the server. Temporary failures (network, 429, 5xx) are retried twice; a refused email is not retried. A failed email never breaks the action that sent it.
+- Every email is recorded in `email_log`: recipient, kind, status, provider id, error. The subject is stored with any 4–8 digit run hidden, so codes never sit in the log; bodies are never stored. Staff with `support.read` can search it.
+- Email HTML is generated from plain text with everything escaped; links are only ones we build from `WEB_PUBLIC_URL` or carrier tracking URLs.
+- Sign-in emails: welcome, verification and enrolment codes, new browser alert (compared with the last 180 days of sessions), recovery code used (with codes left), password reset and changed, account locked, and sign-out everywhere after token reuse.
 
 ## US data move controls
 

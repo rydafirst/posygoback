@@ -4,6 +4,8 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
 import { Errors } from "../../../common/http/app-exception";
+import { APP_CONFIG } from "../../../config/config.module";
+import type { AppConfig } from "../../../config/config.schema";
 import { lockRow, PrismaService } from "../../../database/prisma.service";
 import { type AuditActor, AuditService } from "../../../infrastructure/audit/audit.service";
 import { EMAIL_SENDER, type EmailMessage, type EmailSender } from "../../../infrastructure/email/email.port";
@@ -33,6 +35,7 @@ export class ShoppingPurchasesService {
     private readonly refunds: ShoppingRefundsService,
     private readonly audit: AuditService,
     @Inject(EMAIL_SENDER) private readonly email: EmailSender,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   async purchase(principal: AuthPrincipal, requestId: string, input: ShoppingPurchaseInput, meta: RequestMeta): Promise<ShoppingRequestView> {
@@ -58,6 +61,7 @@ export class ShoppingPurchasesService {
       const stillOpen = open.size - input.lines.length;
       const allGone = stillOpen === 0 && missing.length === input.lines.length && !current.lines.some((line) => line.status === "BOUGHT");
       await tx.shoppingRequest.update({ where: { id: row.id }, data: allGone ? { status: "CANCELLED", cancelReason: "None of the items could be bought." } : { status: "BUYING" } });
+      const finished = !allGone && stillOpen === 0;
       await this.audit.record(
         {
           actor: actorOf(principal),
@@ -71,10 +75,10 @@ export class ShoppingPurchasesService {
         tx,
       );
       if (allGone) {
-        return { allGone, intent: await this.refunds.reserve(tx, row.id, Number(current.totalMinor), `shopping-cancel:${row.id}`, "None of the items could be bought") };
+        return { allGone, finished, intent: await this.refunds.reserve(tx, row.id, Number(current.totalMinor), `shopping-cancel:${row.id}`, "None of the items could be bought") };
       }
       if (missingMinor === 0) {
-        return { allGone, intent: null };
+        return { allGone, finished, intent: null };
       }
       const key = createHash("sha256")
         .update(
@@ -85,14 +89,18 @@ export class ShoppingPurchasesService {
         )
         .digest("hex")
         .slice(0, 40);
-      return { allGone, intent: await this.refunds.reserve(tx, row.id, missingMinor + commissionShare(current, missingMinor), `shopping-oos:${key}`, "Items out of stock") };
+      return { allGone, finished, intent: await this.refunds.reserve(tx, row.id, missingMinor + commissionShare(current, missingMinor), `shopping-oos:${key}`, "Items out of stock") };
     });
+    const webUrl = this.config.WEB_PUBLIC_URL;
+    if (outcome.finished) {
+      await this.email.send(ShoppingEmails.bought(row.buyerEmail, row.reference, webUrl)).catch(() => undefined);
+    }
     if (outcome.allGone) {
       await this.sendThenTell(outcome.intent?.id ?? null, actorOf(principal), (amount) =>
-        ShoppingEmails.cancelled(row.buyerEmail, row.reference, "None of the items could be bought, so we've cancelled your request.", amount),
+        ShoppingEmails.cancelled(row.buyerEmail, row.reference, "None of the items could be bought, so we've cancelled your request.", amount, webUrl),
       );
     } else if (outcome.intent) {
-      await this.sendThenTell(outcome.intent.id, actorOf(principal), (amount) => (amount ? ShoppingEmails.partlyRefunded(row.buyerEmail, row.reference, amount) : null));
+      await this.sendThenTell(outcome.intent.id, actorOf(principal), (amount) => (amount ? ShoppingEmails.partlyRefunded(row.buyerEmail, row.reference, amount, webUrl) : null));
     }
     return this.quotes.detail(principal, row.id);
   }
@@ -112,7 +120,7 @@ export class ShoppingPurchasesService {
       const current = await tx.shoppingRequest.findUniqueOrThrow({ where: { id: row.id } });
       return this.refunds.reserve(tx, row.id, Number(current.totalMinor), `shopping-cancel:${row.id}`, reason);
     });
-    await this.sendThenTell(intent?.id ?? null, actorOf(principal), (amount) => ShoppingEmails.cancelled(row.buyerEmail, row.reference, reason, amount));
+    await this.sendThenTell(intent?.id ?? null, actorOf(principal), (amount) => ShoppingEmails.cancelled(row.buyerEmail, row.reference, reason, amount, this.config.WEB_PUBLIC_URL));
     return this.quotes.detail(principal, row.id);
   }
 

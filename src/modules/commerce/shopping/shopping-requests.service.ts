@@ -107,7 +107,7 @@ export class ShoppingRequestsService {
       throw Errors.notFound();
     }
     await this.audit.record({ actor: SYSTEM_ACTOR, action: "shopping.confirmed", resourceType: "shopping_request", resourceId: row.id, countryCode: row.countryCode, meta });
-    await this.email.send(ShoppingEmails.received(row.buyerEmail, row.reference, `${this.config.WEB_PUBLIC_URL}/account?tab=shopping`)).catch(() => undefined);
+    await this.email.send(ShoppingEmails.received(row.buyerEmail, row.reference, this.config.WEB_PUBLIC_URL)).catch(() => undefined);
     return { reference: row.reference };
   }
 

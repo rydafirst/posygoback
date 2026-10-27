@@ -54,7 +54,7 @@ export class PartnerReviewsService {
         tx,
       );
     });
-    await this.notifier.notify(partnerId, (to) => PartnerEmails.checkReviewed(to, kind, input.accept));
+    await this.notifier.notify(partnerId, (to, webUrl) => PartnerEmails.checkReviewed(to, kind, input.accept, webUrl));
     return this.admin.detail(principal, partnerId);
   }
 
@@ -71,7 +71,7 @@ export class PartnerReviewsService {
         tx,
       );
     });
-    await this.notifier.notify(partnerId, (to) => PartnerEmails.callScheduled(to, when));
+    await this.notifier.notify(partnerId, (to, webUrl) => PartnerEmails.callScheduled(to, when, webUrl));
     return this.admin.detail(principal, partnerId);
   }
 
@@ -122,6 +122,7 @@ export class PartnerReviewsService {
         tx,
       );
     });
+    await this.notifier.notify(partnerId, (to, webUrl) => PartnerEmails.insuranceReviewed(to, input.accept, input.note, webUrl));
     return this.admin.detail(principal, partnerId);
   }
 

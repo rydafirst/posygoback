@@ -200,7 +200,7 @@ export class AdminPartnersService {
       );
       return current;
     });
-    await this.notifier.notify(partnerId, (to) => PartnerEmails.statusChanged(to, partner.legalName, target, reason));
+    await this.notifier.notify(partnerId, (to, webUrl) => PartnerEmails.decided(to, partner.legalName, decision, reason, webUrl));
     if (target === "SUSPENDED" || target === "OFFBOARDING") {
       await this.counts.requestIfStocked({
         partnerId,

@@ -170,6 +170,10 @@ export class StaffService {
       );
       await this.sessions.revokeAllForUser(userId, "suspended", tx);
     });
+    if (target.status !== "SUSPENDED") {
+      const partner = partnerId ? await this.prisma.fulfilmentPartner.findUnique({ where: { id: partnerId }, select: { legalName: true } }) : null;
+      await this.email.send(StaffEmails.suspended(target.email, partner?.legalName));
+    }
   }
 
   async preview(token: string): Promise<StaffInvitationPreview> {

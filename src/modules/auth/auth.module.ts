@@ -7,6 +7,7 @@ import { CountriesModule } from "../countries/countries.module";
 import { AuthController } from "./auth.controller";
 import { VerificationCodeService } from "./codes/verification-code.service";
 import { EmailVerificationService } from "./flows/email-verification.service";
+import { AccountEmailsService } from "./flows/account-emails.service";
 import { LoginService } from "./flows/login.service";
 import { MfaEnrolmentService } from "./flows/mfa-enrolment.service";
 import { PasswordResetService } from "./flows/password-reset.service";
@@ -46,6 +47,7 @@ import { UsersRepository } from "./users.repository";
     SignupService,
     EmailVerificationService,
     LoginService,
+    AccountEmailsService,
     MfaEnrolmentService,
     PasswordResetService,
   ],

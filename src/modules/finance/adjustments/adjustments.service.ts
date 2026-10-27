@@ -5,7 +5,8 @@ import { Errors } from "../../../common/http/app-exception";
 import { lockRow, PrismaService } from "../../../database/prisma.service";
 import type { AdjustmentStatus, Prisma, WalletAdjustment } from "../../../generated/prisma/client";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
-import type { AdjustmentDecisionInput, AdjustmentView, RequestAdjustmentInput } from "../../../shared";
+import { type AdjustmentDecisionInput, type AdjustmentView, Money, type RequestAdjustmentInput } from "../../../shared";
+import { FinanceEmails } from "../finance-emails";
 import { FeeSchedulesService } from "../fees/fee-schedules.service";
 import { WalletAlertsService } from "../wallets/wallet-alerts.service";
 import { type PostingResult, WalletLedgerService } from "../wallets/wallet-ledger.service";
@@ -162,8 +163,14 @@ export class AdjustmentsService {
   }
 
   private async followUp(posting: PostingResult | null): Promise<void> {
-    if (posting) {
-      await this.alerts.afterPosting(posting);
+    if (!posting || posting.duplicate) {
+      return;
     }
+    const { entry, wallet } = posting;
+    const amount = Money.of(Math.abs(Number(entry.amountMinor)), wallet.currency).format("en-GB");
+    const balance = Money.of(Number(wallet.balanceMinor), wallet.currency).format("en-GB");
+    const email = entry.type === "MANUAL_CREDIT" ? FinanceEmails.walletCredited : FinanceEmails.walletDebited;
+    await this.alerts.notifyOwner(wallet.vendorId, (to, webUrl) => email(to, amount, entry.description, balance, webUrl), "/wallet");
+    await this.alerts.afterPosting(posting);
   }
 }

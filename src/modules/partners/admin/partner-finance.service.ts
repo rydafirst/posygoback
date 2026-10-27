@@ -161,7 +161,7 @@ export class PartnerFinanceService {
       if (paid.count > 0) {
         await this.audit.record({ actor: SYSTEM_ACTOR, action: "partner.payout_paid", resourceType: "partner_payout", resourceId: payoutId, after: { transferId } });
         const amount = Money.of(Number(payout.amountMinor), payout.currency).format("en-GB");
-        await this.notifier.notify(payout.partnerId, (to) => PartnerEmails.payoutPaid(to, amount));
+        await this.notifier.notify(payout.partnerId, (to, webUrl) => PartnerEmails.payoutPaid(to, amount, webUrl));
       }
     } catch (error) {
       if (!(error instanceof TransferError) || !error.definite) {
@@ -172,12 +172,12 @@ export class PartnerFinanceService {
     }
   }
 
-  private async fail(payout: { id: string; partnerId: string; amountMinor: bigint }, reason: string): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+  private async fail(payout: { id: string; partnerId: string; amountMinor: bigint; currency: string }, reason: string): Promise<void> {
+    const failed = await this.prisma.$transaction(async (tx) => {
       await lockRow(tx, "partnerPayouts", payout.id);
-      const failed = await tx.partnerPayout.updateMany({ where: { id: payout.id, status: "PROCESSING" }, data: { status: "FAILED", failureReason: reason.slice(0, 300) } });
-      if (failed.count === 0) {
-        return;
+      const updated = await tx.partnerPayout.updateMany({ where: { id: payout.id, status: "PROCESSING" }, data: { status: "FAILED", failureReason: reason.slice(0, 300) } });
+      if (updated.count === 0) {
+        return false;
       }
       await this.ledger.post(tx, payout.partnerId, {
         type: "PAYOUT",
@@ -188,7 +188,12 @@ export class PartnerFinanceService {
         reference: { type: "partner_payout", id: payout.id },
       });
       await this.audit.record({ actor: SYSTEM_ACTOR, action: "partner.payout_failed", resourceType: "partner_payout", resourceId: payout.id, after: { reason } }, tx);
+      return true;
     });
+    if (failed) {
+      const amount = Money.of(Number(payout.amountMinor), payout.currency).format("en-GB");
+      await this.notifier.notify(payout.partnerId, (to, webUrl) => PartnerEmails.payoutFailed(to, amount, webUrl));
+    }
   }
 
   async payouts(principal: AuthPrincipal, status?: PartnerPayoutView["status"]): Promise<PartnerPayoutView[]> {

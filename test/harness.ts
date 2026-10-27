@@ -14,7 +14,7 @@ import { AppModule } from "../src/app.module";
 import { configureApp } from "../src/bootstrap";
 import { loadConfig } from "../src/config/config.schema";
 import { InMemoryEmailSender } from "../src/infrastructure/email/email.adapters";
-import { EMAIL_SENDER } from "../src/infrastructure/email/email.port";
+import { EMAIL_TRANSPORT } from "../src/infrastructure/email/email.port";
 import { InMemoryObjectStorage } from "../src/modules/files/storage/in-memory-object-storage";
 import { OBJECT_STORAGE } from "../src/modules/files/storage/object-storage.port";
 
@@ -86,7 +86,7 @@ export async function startApp(shared?: { email: InMemoryEmailSender; storage: I
   const email = shared?.email ?? new InMemoryEmailSender();
   const storage = shared?.storage ?? new InMemoryObjectStorage();
   let builder = Test.createTestingModule({ imports: [AppModule] })
-    .overrideProvider(EMAIL_SENDER)
+    .overrideProvider(EMAIL_TRANSPORT)
     .useValue(email)
     .overrideProvider(OBJECT_STORAGE)
     .useValue(storage);

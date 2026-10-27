@@ -88,3 +88,13 @@ export interface SupportReportView {
 export interface SupportCaseDetailView extends SupportCaseView {
   reportDetails: SupportReportView[];
 }
+
+export interface EmailLogView {
+  id: string;
+  to: string;
+  kind: string;
+  subject: string;
+  status: "SENT" | "FAILED";
+  error: string | null;
+  sentAt: string;
+}

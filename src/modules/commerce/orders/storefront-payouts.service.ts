@@ -96,7 +96,9 @@ export class StorefrontPayoutsService {
         countryCode: order.countryCode,
         after: { amountMinor: amount, transferId },
       });
-      await this.owners.notifyOwner(order.vendorId, (to) => CommerceEmails.payoutSent(to, order.reference, Money.of(amount, order.currency).format("en-GB")), "/storefront").catch(() => undefined);
+      await this.owners
+        .notifyOwner(order.vendorId, (to, webUrl) => CommerceEmails.payoutSent(to, order.reference, Money.of(amount, order.currency).format("en-GB"), webUrl), "/storefront")
+        .catch(() => undefined);
       return true;
     } catch (error) {
       const definite = error instanceof TransferError && error.definite;

@@ -6,6 +6,7 @@ import { FinanceModule } from "../finance/finance.module";
 import { OnboardingModule } from "../onboarding/onboarding.module";
 import { InventoryLedgerService } from "../stock/inventory/inventory-ledger.service";
 import { CarrierAccountsService } from "./carriers/carrier-accounts.service";
+import { OrderAlertsService } from "./core/order-alerts.service";
 import { OrderCancellationService } from "./core/order-cancellation.service";
 import { OrderChargesService } from "./core/order-charges.service";
 import { OrderCreationService } from "./core/order-creation.service";
@@ -34,6 +35,7 @@ import { FulfilmentService } from "./warehouse/fulfilment.service";
     CarrierAccountsService,
     OrdersRepository,
     OrderTimelineService,
+    OrderAlertsService,
     StockAllocationService,
     OrderChargesService,
     OrderCreationService,

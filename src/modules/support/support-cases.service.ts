@@ -3,7 +3,6 @@ import { createHash } from "node:crypto";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 
 import type { AuthPrincipal, RequestMeta } from "../../common/auth/auth-principal";
-import { PLATFORM_NAME } from "../../common/brand/brand";
 import { Errors } from "../../common/http/app-exception";
 import { APP_CONFIG } from "../../config/config.module";
 import type { AppConfig } from "../../config/config.schema";
@@ -15,6 +14,7 @@ import { AttemptLimiterService } from "../../infrastructure/rate-limit/attempt-l
 import { scrubSensitive, type SupportReport, type SupportReportResult } from "../../shared";
 import { randomCode } from "../stock/inbound/references";
 import { NotificationsService } from "../notifications/notifications.service";
+import { SupportEmails } from "./support-emails";
 
 const PER_IP = { name: "support-report-ip", limit: 20, windowSeconds: 60 * 60 };
 const PER_USER = { name: "support-report-user", limit: 30, windowSeconds: 24 * 60 * 60 };
@@ -103,10 +103,12 @@ export class SupportCasesService {
       }
       const supportCase = await tx.supportCase.findUniqueOrThrow({
         where: { id: caseId },
-        include: { reports: { where: { userId: { not: null } }, select: { user: { select: { id: true, vendorId: true } } }, distinct: ["userId"] } },
+        include: { reports: { select: { contactEmail: true, user: { select: { id: true, vendorId: true, email: true } } } } },
       });
       await this.audit.record({ actor, action: "support.case_resolved", resourceType: "support_case", resourceId: caseId, after: { note }, meta }, tx);
-      return { reference: supportCase.reference, people: supportCase.reports.flatMap((report) => (report.user ? [report.user] : [])) };
+      const people = [...new Map(supportCase.reports.flatMap((report) => (report.user ? [[report.user.id, report.user] as const] : []))).values()];
+      const emails = new Set(supportCase.reports.map((report) => report.user?.email ?? report.contactEmail).filter((email): email is string => Boolean(email)));
+      return { reference: supportCase.reference, page: supportCase.page, people, emails };
     });
     const notice = { title: "The problem you reported is sorted", body: `${reporters.reference}: ${note}` };
     const vendorIds = new Set(reporters.people.flatMap((person) => (person.vendorId ? [person.vendorId] : [])));
@@ -116,6 +118,11 @@ export class SupportCasesService {
     for (const person of reporters.people.filter((entry) => !entry.vendorId)) {
       await this.notifications.forUser(person.id, notice);
     }
+    for (const to of reporters.emails) {
+      await this.email
+        .send(SupportEmails.caseResolved(to, reporters.reference, note, reporters.page, this.config.WEB_PUBLIC_URL))
+        .catch((error: unknown) => this.logger.warn(`Couldn't email ${reporters.reference} reporter: ${error instanceof Error ? error.message : String(error)}`));
+    }
   }
 
   private async tellSupport(reference: string, input: SupportReport): Promise<void> {
@@ -124,11 +131,7 @@ export class SupportCasesService {
     }
     const what = input.error ? `Error ${input.error.code} (${input.error.status}) on ${input.error.endpoint}` : "A question from a user";
     try {
-      await this.email.send({
-        to: this.config.SUPPORT_EMAIL,
-        subject: `${reference}: ${input.kind === "ERROR" ? "a user hit an error" : "a user needs help"}`,
-        text: `${what}\nPage: ${input.page}\n\n${scrubSensitive(input.message) || "No message."}\n\nOpen the support cases page in the admin console to see the steps that led here.\n\n${PLATFORM_NAME}`,
-      });
+      await this.email.send(SupportEmails.newCase(this.config.SUPPORT_EMAIL, reference, input.kind === "ERROR", what, input.page, scrubSensitive(input.message), this.config.WEB_PUBLIC_URL));
     } catch (error) {
       this.logger.warn(`Couldn't email support about ${reference}: ${error instanceof Error ? error.message : String(error)}`);
     }

@@ -6,6 +6,8 @@ import { PrismaService } from "../../../database/prisma.service";
 import type { WalletStatus } from "../../../generated/prisma/client";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
 import type { ReconciliationReportView, WalletView } from "../../../shared";
+import { FinanceEmails } from "../finance-emails";
+import { WalletAlertsService } from "./wallet-alerts.service";
 import { toWalletView, WalletsService } from "./wallets.service";
 
 const WALLET_INCLUDE = { vendor: { select: { businessName: true, countryCode: true } } } as const;
@@ -16,6 +18,7 @@ export class FinanceWalletsService {
     private readonly prisma: PrismaService,
     private readonly wallets: WalletsService,
     private readonly audit: AuditService,
+    private readonly alerts: WalletAlertsService,
   ) {}
 
   async list(filters: { countryCode?: string; status?: WalletStatus }): Promise<WalletView[]> {
@@ -58,6 +61,11 @@ export class FinanceWalletsService {
       );
       return row;
     });
+    if (frozen && wallet.status !== "FROZEN") {
+      await this.alerts.notifyOwner(wallet.vendorId, FinanceEmails.walletPausedManually, "/wallet");
+    } else if (!frozen && wallet.status === "FROZEN") {
+      await this.alerts.notifyOwner(wallet.vendorId, FinanceEmails.walletUnpaused, "/wallet");
+    }
     return toWalletView(updated);
   }
 

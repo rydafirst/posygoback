@@ -106,6 +106,6 @@ export class StorageBillingService {
     }
     await this.audit.record({ actor: SYSTEM_ACTOR, action: "wallet.storage_overdue", resourceType: "wallet", resourceId: walletId, vendorId, after: { amountMinor } });
     const due = Money.of(amountMinor, currency).format("en-GB");
-    await this.alerts.notifyOwner(vendorId, (to) => FinanceEmails.storageOverdue(to, due), "/wallet");
+    await this.alerts.notifyOwner(vendorId, (to, webUrl) => FinanceEmails.storageOverdue(to, due, webUrl), "/wallet");
   }
 }

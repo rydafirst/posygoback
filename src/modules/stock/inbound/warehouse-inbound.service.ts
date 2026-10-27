@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import {
   canApplyInboundAction,
   hasPermission,
@@ -15,41 +15,37 @@ import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-princ
 import { Errors } from "../../../common/http/app-exception";
 import { lockRow, PrismaService } from "../../../database/prisma.service";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
-import { EMAIL_SENDER, type EmailMessage, type EmailSender } from "../../../infrastructure/email/email.port";
-import { UsersRepository } from "../../auth/users.repository";
 import { FilesService } from "../../files/files.service";
 import { warehouseScope } from "../scope";
 import { StockEmails } from "../stock-emails";
 import { WarehouseAccessService } from "../warehouses/warehouse-access.service";
 import { InboundRepository, type InboundRow } from "./inbound.repository";
+import { InboundAlertsService } from "./inbound-alerts.service";
 import { ReceivingService } from "./receiving.service";
-import { NotificationsService } from "../../notifications/notifications.service";
 
 export type OperatorAction = Exclude<InboundAction, "SUBMIT" | "CANCEL" | "PAY_HOLD" | "COMPLETE">;
 
 const OPERATOR_ACTIONS: readonly InboundAction[] = ["CHECK_IN", "HOLD", "RELEASE", "COMPLETE", "REJECT", "REQUEST_RETURN"];
 const PLATFORM_ONLY: readonly InboundAction[] = ["REJECT", "REQUEST_RETURN"];
 
-const OUTCOME: Record<OperatorAction, { status: InboundStatus; headline: string | null; needsReason: boolean }> = {
-  CHECK_IN: { status: "ARRIVED", headline: null, needsReason: false },
-  HOLD: { status: "ON_HOLD", headline: "Shipment on hold", needsReason: true },
-  RELEASE: { status: "ARRIVED", headline: null, needsReason: false },
-  REJECT: { status: "REJECTED", headline: "Shipment refused", needsReason: true },
-  REQUEST_RETURN: { status: "RETURN_REQUESTED", headline: "Shipment being returned", needsReason: true },
+const OUTCOME: Record<OperatorAction, { status: InboundStatus; needsReason: boolean }> = {
+  CHECK_IN: { status: "ARRIVED", needsReason: false },
+  HOLD: { status: "ON_HOLD", needsReason: true },
+  RELEASE: { status: "ARRIVED", needsReason: false },
+  REJECT: { status: "REJECTED", needsReason: true },
+  REQUEST_RETURN: { status: "RETURN_REQUESTED", needsReason: true },
 };
 
 @Injectable()
 export class WarehouseInboundService {
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(EMAIL_SENDER) private readonly email: EmailSender,
     private readonly inbound: InboundRepository,
     private readonly warehouses: WarehouseAccessService,
     private readonly receiving: ReceivingService,
     private readonly files: FilesService,
-    private readonly users: UsersRepository,
     private readonly audit: AuditService,
-    private readonly notifications: NotificationsService,
+    private readonly owners: InboundAlertsService,
   ) {}
 
   queue(principal: AuthPrincipal, status?: InboundStatus): Promise<InboundSummaryView[]> {
@@ -79,7 +75,7 @@ export class WarehouseInboundService {
     if (principal.partnerId && (chargeMinor !== undefined || PLATFORM_ONLY.includes(action))) {
       throw Errors.forbidden("Put the shipment on hold and explain why. Our operations team decides on charges, refusals and returns.");
     }
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const { updated, chargeWaived } = await this.prisma.$transaction(async (tx) => {
       const existing = (await lockRow(tx, "inboundShipments", inboundId)) ? await tx.inboundShipment.findUnique({ where: { id: inboundId } }) : null;
       if (!existing) {
         throw Errors.notFound();
@@ -89,6 +85,7 @@ export class WarehouseInboundService {
         throw Errors.invalidTransition("This shipment can't be changed that way right now.");
       }
       const status = action === "RELEASE" ? (existing.statusBeforeHold ?? "ARRIVED") : outcome.status;
+      const waived = action === "RELEASE" && existing.holdChargeMinor !== null && !existing.holdPaidAt;
       const row = await tx.inboundShipment.update({
         where: { id: existing.id },
         data: {
@@ -108,23 +105,20 @@ export class WarehouseInboundService {
           vendorId: existing.vendorId,
           countryCode: existing.countryCode,
           before: { status: existing.status },
-          after: { status, reason: reason ?? null, chargeMinor: chargeMinor ?? null, waived: action === "RELEASE" && existing.holdChargeMinor !== null && !existing.holdPaidAt },
+          after: { status, reason: reason ?? null, chargeMinor: chargeMinor ?? null, waived },
           meta,
         },
         tx,
       );
-      return row;
+      return { updated: row, chargeWaived: waived };
     });
-    if (outcome.headline) {
-      const details = chargeMinor ? `${reason ?? ""}\n\n${await this.chargeNotice(updated.countryCode, chargeMinor)}` : (reason ?? "");
-      await this.notifyOwner(updated, (to) => StockEmails.statusChanged(to, updated.reference, outcome.headline!, details));
-    }
+    await this.tellOwner(updated, action, reason ?? "", chargeMinor ? await this.chargeNotice(updated.countryCode, chargeMinor) : null, chargeWaived);
     return this.detail(principal, inboundId);
   }
 
   async receive(principal: AuthPrincipal, inboundId: string, input: ReceiveInboundInput, meta: RequestMeta): Promise<InboundDetailView> {
     const { inbound, matched } = await this.receiving.receive(principal, inboundId, input, meta);
-    await this.notifyOwner(inbound, (to) => (matched ? StockEmails.received(to, inbound.reference) : StockEmails.discrepancy(to, inbound.reference)));
+    await this.owners.tellOwner(inbound, (to, webUrl) => (matched ? StockEmails.received(to, inbound, webUrl) : StockEmails.discrepancy(to, inbound, webUrl)));
     return this.detail(principal, inboundId);
   }
 
@@ -145,7 +139,7 @@ export class WarehouseInboundService {
         tx,
       );
     });
-    await this.notifyOwner(existing, (to) => StockEmails.newMessage(to, existing.reference));
+    await this.owners.tellOwner(existing, (to, webUrl) => StockEmails.newMessage(to, existing, webUrl));
     return this.detail(principal, inboundId);
   }
 
@@ -171,12 +165,18 @@ export class WarehouseInboundService {
     return `A charge of ${Money.of(chargeMinor, country.currency).format("en-GB")} is due before we can continue. Pay it from the shipment page.`;
   }
 
-  private async notifyOwner(inbound: InboundRow, message: (to: string) => EmailMessage): Promise<void> {
-    const owner = await this.users.findVendorOwner(inbound.vendorId);
-    const built = message(owner?.email ?? "");
-    await this.notifications.forVendor(inbound.vendorId, { title: built.subject, body: built.text, href: `/inbound/${inbound.id}` }).catch(() => undefined);
-    if (owner) {
-      await this.email.send(built);
+  private tellOwner(inbound: InboundRow, action: OperatorAction, reason: string, chargeNotice: string | null, chargeWaived: boolean): Promise<void> {
+    switch (action) {
+      case "CHECK_IN":
+        return this.owners.tellOwner(inbound, (to, webUrl) => StockEmails.arrived(to, inbound, webUrl));
+      case "HOLD":
+        return this.owners.tellOwner(inbound, (to, webUrl) => StockEmails.onHold(to, inbound, reason, chargeNotice, webUrl));
+      case "RELEASE":
+        return this.owners.tellOwner(inbound, (to, webUrl) => StockEmails.released(to, inbound, chargeWaived, webUrl));
+      case "REJECT":
+        return this.owners.tellOwner(inbound, (to, webUrl) => StockEmails.refused(to, inbound, reason, webUrl));
+      case "REQUEST_RETURN":
+        return this.owners.tellOwner(inbound, (to, webUrl) => StockEmails.returnRequested(to, inbound, reason, webUrl));
     }
   }
 }

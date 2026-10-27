@@ -82,7 +82,7 @@ export class PartnerPayoutAccountService {
       return bankChanged ? { partnerId: account.partnerId, bankSummary: snapshot.bankSummary ?? "a new account" } : null;
     });
     if (changed) {
-      await this.notifier.notify(changed.partnerId, (to) => PartnerEmails.payoutAccountChanged(to, changed.bankSummary));
+      await this.notifier.notify(changed.partnerId, (to, webUrl) => PartnerEmails.payoutAccountChanged(to, changed.bankSummary, webUrl));
     }
   }
 }

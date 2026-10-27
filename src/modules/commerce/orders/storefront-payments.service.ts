@@ -5,6 +5,8 @@ import type { Prisma, StorefrontOrder } from "../../../generated/prisma/client";
 import { AuditService, SYSTEM_ACTOR } from "../../../infrastructure/audit/audit.service";
 import { PaymentAccountsService } from "../../finance/payments/payment-accounts.service";
 import { type OrderPaymentEvent, type OrderPaymentHandler, OrderPaymentRouter, type PaymentOutcome, type PaymentReversalEvent } from "../../finance/payments/order-payment.router";
+import { WalletAlertsService } from "../../finance/wallets/wallet-alerts.service";
+import { CommerceEmails } from "../commerce-emails";
 import { DiscountsService } from "../checkout/discounts.service";
 import { StorefrontFulfilmentService } from "./storefront-fulfilment.service";
 
@@ -20,6 +22,7 @@ export class StorefrontPaymentsService implements OrderPaymentHandler, OnModuleI
     private readonly discounts: DiscountsService,
     private readonly payments: PaymentAccountsService,
     private readonly fulfilment: StorefrontFulfilmentService,
+    private readonly owners: WalletAlertsService,
     private readonly audit: AuditService,
   ) {}
 
@@ -98,7 +101,18 @@ export class StorefrontPaymentsService implements OrderPaymentHandler, OnModuleI
       },
       tx,
     );
-    return outcome(`dispute ${event.stage.toLowerCase()}`);
+    return outcome(`dispute ${event.stage.toLowerCase()}`, [() => this.tellVendorAboutDispute(order, event.stage === "OPENED" ? null : event.stage === "WON")]);
+  }
+
+  private async tellVendorAboutDispute(order: StorefrontOrder, won: boolean | null): Promise<void> {
+    const held = order.payoutStatus !== "PAID";
+    await this.owners
+      .notifyOwner(
+        order.vendorId,
+        (to, webUrl) => (won === null ? CommerceEmails.paymentDisputed(to, order.reference, held, webUrl) : CommerceEmails.disputeClosed(to, order.reference, won, webUrl)),
+        "/storefront",
+      )
+      .catch(() => undefined);
   }
 
   private async refunded(tx: Prisma.TransactionClient, order: StorefrontOrder, refundedTotal: number): Promise<PaymentOutcome> {

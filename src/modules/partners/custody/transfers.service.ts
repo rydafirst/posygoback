@@ -88,7 +88,7 @@ export class TransfersService {
     });
     if (from.partnerId) {
       const view = await this.adminDetail(principal, id);
-      await this.notifier.notify(from.partnerId, (recipient) => CustodyEmails.transferRequested(recipient, view.reference, to.name));
+      await this.notifier.notify(from.partnerId, (recipient, webUrl) => CustodyEmails.transferRequested(recipient, view.reference, to.name, webUrl));
     }
     return this.adminDetail(principal, id);
   }
@@ -100,6 +100,10 @@ export class TransfersService {
       throw Errors.invalidTransition("Only transfers that haven't left can be cancelled.");
     }
     await this.audit.record({ actor: actorOf(principal), action: "custody.transfer_cancelled", resourceType: "stock_transfer", resourceId: transferId, countryCode: transfer.countryCode, meta });
+    const from = await this.prisma.stockTransfer.findUniqueOrThrow({ where: { id: transferId }, select: { fromWarehouse: { select: { partnerId: true } } } });
+    if (from.fromWarehouse.partnerId) {
+      await this.notifier.notify(from.fromWarehouse.partnerId, (to, webUrl) => CustodyEmails.transferCancelled(to, transfer.reference, webUrl));
+    }
     return this.adminDetail(principal, transferId);
   }
 
