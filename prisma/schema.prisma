@@ -478,6 +478,9 @@ model User {
   shoppingReceived ShoppingRequest[] @relation("ShoppingReceiver")
   shoppingShipped  ShoppingRequest[] @relation("ShoppingShipper")
 
+  supportReports       SupportReport[]
+  supportCasesResolved SupportCase[]   @relation("SupportCaseResolver")
+
   @@index([vendorId], map: "users_vendor_idx")
   @@index([partnerId], map: "users_partner_idx")
   @@index([role, status], map: "users_role_status_idx")
@@ -2618,4 +2621,62 @@ model MigrationLink {
   @@id([sourceTable, sourceId])
   @@index([targetId], map: "migration_links_target_idx")
   @@map("migration_links")
+}
+
+enum SupportCaseKind {
+  ERROR
+  QUESTION
+
+  @@map("support_case_kind")
+}
+
+enum SupportCaseStatus {
+  OPEN
+  RESOLVED
+
+  @@map("support_case_status")
+}
+
+model SupportCase {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reference      String            @unique @db.VarChar(20)
+  kind           SupportCaseKind
+  status         SupportCaseStatus @default(OPEN)
+  fingerprint    String?           @db.Char(64)
+  page           String            @db.VarChar(300)
+  errorCode      String?           @map("error_code") @db.VarChar(60)
+  errorStatus    Int?              @map("error_status")
+  endpoint       String?           @db.VarChar(200)
+  reportCount    Int               @default(1) @map("report_count")
+  firstSeenAt    DateTime          @default(now()) @map("first_seen_at") @db.Timestamptz(6)
+  lastSeenAt     DateTime          @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  resolvedAt     DateTime?         @map("resolved_at") @db.Timestamptz(6)
+  resolvedBy     String?           @map("resolved_by") @db.Uuid
+  resolutionNote String?           @map("resolution_note") @db.VarChar(500)
+
+  resolver User?           @relation("SupportCaseResolver", fields: [resolvedBy], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  reports  SupportReport[]
+
+  @@index([status, lastSeenAt], map: "support_cases_status_idx")
+  @@index([fingerprint, status], map: "support_cases_fingerprint_idx")
+  @@map("support_cases")
+}
+
+model SupportReport {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caseId        String   @map("case_id") @db.Uuid
+  userId        String?  @map("user_id") @db.Uuid
+  contactEmail  String?  @map("contact_email") @db.VarChar(254)
+  message       String   @db.VarChar(1000)
+  correlationId String?  @map("correlation_id") @db.Uuid
+  trail         Json     @default("[]")
+  userAgent     String?  @map("user_agent") @db.VarChar(512)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  supportCase SupportCase @relation(fields: [caseId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user        User?       @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([caseId, createdAt], map: "support_reports_case_idx")
+  @@index([userId], map: "support_reports_user_idx")
+  @@map("support_reports")
 }

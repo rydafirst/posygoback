@@ -7,6 +7,8 @@ export * from "./access/roles";
 export * from "./access/permissions";
 export * from "./auth/auth.schema";
 export * from "./http/api-error";
+export * from "./http/error-guide";
+export * from "./support/support.schema";
 export * from "./country/iso-countries";
 export * from "./onboarding/verification.schema";
 export * from "./onboarding/account.schema";

@@ -270,6 +270,14 @@ A separate reviewer read the personal shopping code without seeing our reasoning
 
 `AUTH_TEST_SHORTCUTS=on` lets a new account skip the emailed code (its password is still checked, rate-limited and audited) and lets staff skip authenticator set-up for one sign-in (the session is marked as passed; the account stays un-enrolled, so it's asked again next time). It's off by default, the endpoints answer 404 when off, and configuration refuses to load with it on when `NODE_ENV=production`. It must be removed before real users or data are on the system.
 
+## In-app helper and support cases
+
+- The helper never reads what people type into forms. It records field labels only ("Went to Tracking number"), the page path, and the error type, status and log reference from failed requests.
+- Messages people type to the helper, and every step in the trail, are scrubbed of card-like digit runs in the browser and again on the server. Reports are validated against a strict shape: page paths only (no full URLs or query strings), at most 20 steps, 1,000 characters of message.
+- Reporting is rate limited per address (20 an hour) and per signed-in user (30 a day), on top of the route throttle. The anonymous route stores a contact email but never sends mail to it, so it can't be used to send email to strangers.
+- The same failure (error type, status, endpoint and page, with ids removed) is grouped into one open case under a database lock, so a widespread outage produces one case and one email to support, not thousands.
+- Only staff with `support.read` see cases; resolving needs `support.manage`, is audited, and notifies the people who reported it.
+
 ## US data move controls
 
 | Area | Control |

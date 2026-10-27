@@ -122,6 +122,7 @@ export const configSchema = z
     STORAGE_ACCESS_KEY_ID: z.string().min(1),
     STORAGE_SECRET_ACCESS_KEY: z.string().min(1),
     EMAIL_TRANSPORT: z.enum(["log", "memory"]).default("log"),
+    SUPPORT_EMAIL: z.union([z.literal(""), z.string().trim().toLowerCase().email()]).default(""),
     PASSWORD_BREACH_CHECK: z.enum(["hibp", "off"]).default("hibp"),
     AUTH_TEST_SHORTCUTS: z
       .enum(["on", "off"])

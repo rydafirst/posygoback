@@ -107,6 +107,8 @@ Buyers send links from `/shop-for-me`; country staff price them at `/admin/shopp
 
 ## Testing without email
 
+Set `SUPPORT_EMAIL` to the inbox that should hear about new support cases from the in-app helper; leave it empty to see them only on the admin console's Support cases page.
+
 Until a real email service is connected, codes are written to the server log. Setting `AUTH_TEST_SHORTCUTS=on` adds a "Skip for testing" option to the email code step (the password is still checked) and to authenticator set-up (for that sign-in only). Every skip is audited, and the server refuses to start with it on in production. Remove the variable once email works.
 
 ## Moving US data from the old system

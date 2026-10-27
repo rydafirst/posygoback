@@ -28,6 +28,7 @@ Object.assign(process.env, parseEnv(readFileSync(join(__dirname, "../.env"), "ut
   DATABASE_URL: process.env.TEST_DATABASE_URL ?? "postgresql://gfn:gfn_local_only@localhost:5432/gfn_test",
   REDIS_URL: process.env.TEST_REDIS_URL ?? "redis://:gfn_local_only@localhost:6379/1",
   EMAIL_TRANSPORT: "memory",
+  SUPPORT_EMAIL: "help@gfn.test",
   CLIENT_IP_HEADER: "x-test-client-ip",
   PASSWORD_BREACH_CHECK: "off",
   WEB_PUBLIC_URL: WEB_ORIGIN,

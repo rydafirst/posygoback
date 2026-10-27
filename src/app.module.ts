@@ -32,6 +32,7 @@ import { StaffModule } from "./modules/staff/staff.module";
 import { OrdersModule } from "./modules/orders/orders.module";
 import { PartnersModule } from "./modules/partners/partners.module";
 import { StockModule } from "./modules/stock/stock.module";
+import { SupportModule } from "./modules/support/support.module";
 
 const REDACT = [
   "req.headers.authorization",
@@ -93,6 +94,7 @@ function maskSecrets(url: string | undefined): string | undefined {
     AuthModule,
     AuditAnchorModule,
     CommerceModule,
+    SupportModule,
     ReturnsModule,
     NotificationsModule,
     ExportsModule,

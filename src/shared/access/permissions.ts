@@ -59,6 +59,8 @@ export const PERMISSIONS = [
   "referrals.manage",
   "shopping.read",
   "shopping.manage",
+  "support.read",
+  "support.manage",
 ] as const;
 
 export const PARTNER_OPERATIONS: readonly Permission[] = [
@@ -112,6 +114,8 @@ const GRANTS: Record<Role, readonly Permission[]> = {
     "referrals.read",
     "shopping.read",
     "shopping.manage",
+    "support.read",
+    "support.manage",
   ],
   FINANCE_ADMIN: [
     "countries.read",
@@ -167,6 +171,8 @@ const GRANTS: Record<Role, readonly Permission[]> = {
     "referrals.read",
     "shopping.read",
     "shopping.manage",
+    "support.read",
+    "support.manage",
   ],
   SUPER_ADMIN: [
     "countries.read",
@@ -210,6 +216,8 @@ const GRANTS: Record<Role, readonly Permission[]> = {
     "referrals.manage",
     "shopping.read",
     "shopping.manage",
+    "support.read",
+    "support.manage",
   ],
 };
 
