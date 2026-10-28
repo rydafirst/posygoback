@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
 import { CurrentPrincipal, Meta, RequirePermission } from "../../../common/auth/decorators";
+import { type SellerCountry, SelectedCountry } from "../../../common/auth/selected-country";
 import { ZodValidationPipe } from "../../../common/http/zod-validation.pipe";
 import { InventoryService } from "./inventory.service";
 
@@ -18,14 +19,14 @@ export class VendorInventoryController {
 
   @RequirePermission("vendor.stock.read")
   @Get("lots")
-  lots(@CurrentPrincipal() principal: AuthPrincipal, @Query("productId", optionalUuid) productId?: string) {
-    return this.inventory.vendorLots(principal, productId);
+  lots(@SelectedCountry() country: SellerCountry, @Query("productId", optionalUuid) productId?: string) {
+    return this.inventory.vendorLots(country, productId);
   }
 
   @RequirePermission("vendor.stock.read")
   @Get("movements")
-  movements(@CurrentPrincipal() principal: AuthPrincipal) {
-    return this.inventory.vendorMovements(principal);
+  movements(@SelectedCountry() country: SellerCountry) {
+    return this.inventory.vendorMovements(country);
   }
 
   @RequirePermission("vendor.stock.read")

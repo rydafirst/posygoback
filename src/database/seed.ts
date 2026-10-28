@@ -10,13 +10,6 @@ const PLACEHOLDER_BODY =
   "DEVELOPMENT PLACEHOLDER. This text must be replaced with the version drafted by counsel for this market before any vendor signs it. " +
   "It exists only so the acceptance flow can be exercised locally.";
 
-const LANES = [
-  { originCountryCode: "GB", destinationCountryCode: "GB", enabled: true, customsRequired: false },
-  { originCountryCode: "US", destinationCountryCode: "US", enabled: true, customsRequired: false },
-  { originCountryCode: "GB", destinationCountryCode: "US", enabled: true, customsRequired: true },
-  { originCountryCode: "US", destinationCountryCode: "GB", enabled: true, customsRequired: true },
-];
-
 const LEGAL_KINDS = [
   ["VENDOR_AGREEMENT", "Vendor agreement"],
   ["TERMS", "Terms of service"],
@@ -40,7 +33,6 @@ async function seed(prisma: PrismaClient): Promise<void> {
   for (const country of SEED_COUNTRIES) {
     await prisma.country.upsert({ where: { code: country.code }, update: {}, create: { ...country, status: "LIVE", statusChangedAt: new Date(), statusReason: "Development seed" } });
   }
-  await prisma.shippingLane.createMany({ data: LANES, skipDuplicates: true });
   await prisma.legalDocument.createMany({
     data: SEED_COUNTRIES.flatMap((country) => LEGAL_KINDS.map(([kind, title]) => ({ countryCode: country.code, kind, version: "dev-1", title: `${title} (${country.name})`, body: PLACEHOLDER_BODY }))),
     skipDuplicates: true,

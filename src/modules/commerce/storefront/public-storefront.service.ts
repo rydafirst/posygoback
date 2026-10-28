@@ -50,7 +50,7 @@ export class PublicStorefrontService {
       pricesIncludeTax: config.tax.pricesIncludeTax,
       returnsAllowed: store.returnsAllowed,
       returnWindowDays: store.returnWindowDays,
-      destinations: await this.countries.enabledDestinations(store.vendor.countryCode),
+      destinations: await this.countries.domesticDestinations(store.vendor.countryCode),
       products: await this.products([store]),
     };
   }

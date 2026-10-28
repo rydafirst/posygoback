@@ -19,6 +19,8 @@ export const ORDER_CSV_COLUMNS = [
 ] as const;
 export type OrderCsvColumn = (typeof ORDER_CSV_COLUMNS)[number];
 
+export const OPTIONAL_ORDER_CSV_COLUMNS: readonly OrderCsvColumn[] = ["country"];
+
 export const ORDER_CSV_LIMITS = { maxBytes: 250_000, maxRows: 1000, maxOrders: 300, maxCellLength: 300, dailyOrdersPerVendor: 2000 } as const;
 
 const RECIPIENT_COLUMNS: readonly OrderCsvColumn[] = ["recipient_name", "company", "phone", "email", "address_line1", "address_line2", "city", "region", "postal_code", "country"];
@@ -99,10 +101,12 @@ export interface CsvRowError {
 
 const quantitySchema = z.coerce.number().int().min(1).max(1000);
 
+const BLANK_ROW = Object.fromEntries(ORDER_CSV_COLUMNS.map((column) => [column, ""])) as Record<OrderCsvColumn, string>;
+
 export function groupOrderRows(table: string[][]): { orders: CsvOrder[]; errors: CsvRowError[] } {
   const [header, ...body] = table;
   const columns = (header ?? []).map((name) => name.trim().toLowerCase());
-  const missing = ORDER_CSV_COLUMNS.filter((column) => !columns.includes(column));
+  const missing = ORDER_CSV_COLUMNS.filter((column) => !columns.includes(column) && !OPTIONAL_ORDER_CSV_COLUMNS.includes(column));
   const unknown = columns.filter((column) => !(ORDER_CSV_COLUMNS as readonly string[]).includes(column));
   if (missing.length > 0 || unknown.length > 0) {
     const parts = [missing.length ? `missing ${missing.join(", ")}` : "", unknown.length ? `unknown ${unknown.join(", ")}` : ""].filter(Boolean);
@@ -116,7 +120,7 @@ export function groupOrderRows(table: string[][]): { orders: CsvOrder[]; errors:
       errors.push({ row, message: `Expected ${columns.length} columns, found ${cells.length}` });
       return;
     }
-    const value = Object.fromEntries(columns.map((column, index) => [column, (cells[index] ?? "").trim()])) as Record<OrderCsvColumn, string>;
+    const value = { ...BLANK_ROW, ...Object.fromEntries(columns.map((column, index) => [column, (cells[index] ?? "").trim()])) } as Record<OrderCsvColumn, string>;
     if (Object.values(value).some((cell) => cell.length > ORDER_CSV_LIMITS.maxCellLength)) {
       errors.push({ row, message: `Keep each value under ${ORDER_CSV_LIMITS.maxCellLength} characters` });
       return;
@@ -148,7 +152,7 @@ export function groupOrderRows(table: string[][]): { orders: CsvOrder[]; errors:
   return { orders: [...byReference.values()], errors };
 }
 
-export function csvRecipient(recipient: Record<string, string>) {
+export function csvRecipient(recipient: Record<string, string>, countryCode: string) {
   const optional = (value: string | undefined) => (value ? value : undefined);
   return {
     name: recipient.recipient_name ?? "",
@@ -160,7 +164,7 @@ export function csvRecipient(recipient: Record<string, string>) {
     city: recipient.city ?? "",
     region: optional(recipient.region),
     postalCode: recipient.postal_code ?? "",
-    countryCode: (recipient.country ?? "").toUpperCase(),
+    countryCode: recipient.country ? recipient.country.toUpperCase() : countryCode,
   };
 }
 

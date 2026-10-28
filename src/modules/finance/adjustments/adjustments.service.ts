@@ -11,6 +11,7 @@ import { FinanceEmails } from "../finance-emails";
 import { FeeSchedulesService } from "../fees/fee-schedules.service";
 import { WalletAlertsService } from "../wallets/wallet-alerts.service";
 import { type PostingResult, WalletLedgerService } from "../wallets/wallet-ledger.service";
+import { WALLET_INCLUDE, walletCountryCode } from "../wallets/wallets.service";
 
 const VIEW_INCLUDE = {
   wallet: { select: { currency: true, vendor: { select: { businessName: true } } } },
@@ -62,11 +63,12 @@ export class AdjustmentsService {
   }
 
   async request(principal: AuthPrincipal, walletId: string, input: RequestAdjustmentInput, meta: RequestMeta): Promise<AdjustmentView> {
-    const wallet = await this.prisma.wallet.findUnique({ where: { id: walletId }, include: { vendor: { select: { countryCode: true } } } });
+    const wallet = await this.prisma.wallet.findUnique({ where: { id: walletId }, include: WALLET_INCLUDE });
     if (!wallet) {
       throw Errors.notFound();
     }
-    const { schedule } = await this.fees.active(wallet.vendor.countryCode);
+    const countryCode = walletCountryCode(wallet);
+    const { schedule } = await this.fees.active(countryCode);
     let posting: PostingResult | null = null;
     const created = await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`adjustments:${principal.userId}`}))`;
@@ -87,7 +89,7 @@ export class AdjustmentsService {
           resourceType: "wallet_adjustment",
           resourceId: adjustment.id,
           vendorId: wallet.vendorId,
-          countryCode: wallet.vendor.countryCode,
+          countryCode,
           after: input,
           meta,
         },
@@ -100,7 +102,7 @@ export class AdjustmentsService {
     });
     await this.followUp(posting);
     if (created.status === "PENDING_APPROVAL") {
-      await this.askForApproval(created, wallet.vendor.countryCode);
+      await this.askForApproval(created, countryCode);
     }
     return toView(created);
   }

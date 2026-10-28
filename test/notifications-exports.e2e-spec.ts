@@ -87,7 +87,7 @@ describe("notifications and exports", () => {
       ).body as Array<{ reference: string }>;
       const csv = await http().get(`/v1/vendor/exports/orders.csv?from=${today}&to=${today}`).set(as(owner)).expect(200);
       expect(csv.headers["content-type"]).toMatch(/text\/csv/);
-      expect(csv.headers["content-disposition"]).toBe(`attachment; filename="orders-${today}-to-${today}.csv"`);
+      expect(csv.headers["content-disposition"]).toBe(`attachment; filename="orders-gb-${today}-to-${today}.csv"`);
       expect(csv.text).toContain(order!.reference);
       expect(csv.text).toContain("'=HYPERLINK(evil)");
       expect(csv.text).not.toMatch(/,=HYPERLINK/);

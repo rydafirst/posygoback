@@ -204,25 +204,6 @@ describe("vendor onboarding", () => {
     await test.http().post("/v1/auth/refresh").set("Origin", WEB_ORIGIN).set("Cookie", refreshCookie(accepted.headers["set-cookie"])).expect(401);
   });
 
-  it("only allows preferred destinations that the market has opened", async () => {
-    const set = await test
-      .http()
-      .put("/v1/vendor/markets")
-      .set(as(vendor.accessToken))
-      .send({ countryCodes: ["US"] })
-      .expect(200);
-    expect(set.body).toMatchObject([
-      { code: "GB", name: "United Kingdom", customsRequired: false, preferred: false, address: { postalCodeLabel: "Postcode" } },
-      { code: "US", name: "United States", customsRequired: true, preferred: true, address: { postalCodeLabel: "ZIP code", regionRequired: true } },
-    ]);
-    await test
-      .http()
-      .put("/v1/vendor/markets")
-      .set(as(vendor.accessToken))
-      .send({ countryCodes: ["DE"] })
-      .expect(400);
-  });
-
   it("re-checks the team size when an invitation is accepted", async () => {
     await test.http().post("/v1/vendor/team/invitations").set(as(vendor.accessToken)).send({ email: "late@adaeze.example" }).expect(202);
     const token = decodeURIComponent(/#token=([^\s]+)/.exec(test.email.lastTo("late@adaeze.example")!.text)![1]!);

@@ -4,6 +4,7 @@ import type { Response } from "express";
 
 import type { AuthPrincipal, RequestMeta } from "../../common/auth/auth-principal";
 import { CurrentPrincipal, Meta, RequirePermission } from "../../common/auth/decorators";
+import { type SellerCountry, SelectedCountry } from "../../common/auth/selected-country";
 import { ZodValidationPipe } from "../../common/http/zod-validation.pipe";
 import { type ExportRange, exportRangeSchema } from "../../shared";
 import type { CsvFile } from "./vendor-exports.service";
@@ -25,21 +26,33 @@ export class VendorExportsController {
   @RequirePermission("vendor.orders.read")
   @Get("orders.csv")
   @Header("Content-Type", "text/csv; charset=utf-8")
-  async orders(@CurrentPrincipal() principal: AuthPrincipal, @Query(range) input: ExportRange, @Meta() meta: RequestMeta, @Res({ passthrough: true }) response: Response) {
-    return send(response, await this.exports.orders(principal, input, meta));
+  async orders(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @SelectedCountry() country: SellerCountry,
+    @Query(range) input: ExportRange,
+    @Meta() meta: RequestMeta,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return send(response, await this.exports.orders(principal, country, input, meta));
   }
 
   @RequirePermission("vendor.wallet.read")
   @Get("ledger.csv")
   @Header("Content-Type", "text/csv; charset=utf-8")
-  async ledger(@CurrentPrincipal() principal: AuthPrincipal, @Query(range) input: ExportRange, @Meta() meta: RequestMeta, @Res({ passthrough: true }) response: Response) {
-    return send(response, await this.exports.ledger(principal, input, meta));
+  async ledger(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @SelectedCountry() country: SellerCountry,
+    @Query(range) input: ExportRange,
+    @Meta() meta: RequestMeta,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return send(response, await this.exports.ledger(principal, country, input, meta));
   }
 
   @RequirePermission("vendor.stock.read")
   @Get("inventory.csv")
   @Header("Content-Type", "text/csv; charset=utf-8")
-  async inventory(@CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta, @Res({ passthrough: true }) response: Response) {
-    return send(response, await this.exports.inventory(principal, meta));
+  async inventory(@CurrentPrincipal() principal: AuthPrincipal, @SelectedCountry() country: SellerCountry, @Meta() meta: RequestMeta, @Res({ passthrough: true }) response: Response) {
+    return send(response, await this.exports.inventory(principal, country, meta));
   }
 }

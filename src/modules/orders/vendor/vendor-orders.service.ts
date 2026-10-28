@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
+import type { SellerCountry } from "../../../common/auth/selected-country";
 import { PrismaService } from "../../../database/prisma.service";
 import type { Prisma } from "../../../generated/prisma/client";
 import {
@@ -44,10 +45,11 @@ export class VendorOrdersService {
     private readonly ledger: WalletLedgerService,
   ) {}
 
-  list(principal: AuthPrincipal, filters: VendorOrderFilters): Promise<OrderSummaryView[]> {
+  list(country: SellerCountry, filters: VendorOrderFilters): Promise<OrderSummaryView[]> {
     const search = filters.q?.trim();
     return this.orders.list({
-      vendorId: vendorIdOf(principal),
+      vendorId: country.vendorId,
+      originCountryCode: country.countryCode,
       ...(filters.status ? { status: filters.status } : {}),
       ...(search
         ? {
@@ -68,17 +70,15 @@ export class VendorOrdersService {
     return this.orders.detail(row, "VENDOR", vendorOrderActions(row.status, pending), row.source !== "STOREFRONT");
   }
 
-  async create(principal: AuthPrincipal, input: CreateOrdersInput): Promise<OrderSummaryView[]> {
+  async create(principal: AuthPrincipal, country: SellerCountry, input: CreateOrdersInput): Promise<OrderSummaryView[]> {
     const vendor = await this.standing.assertCanTrade(principal);
-    const ids = await this.creation.create(vendor, actorOf(principal), "PORTAL", input.deliveries, input.warehouseId);
+    const ids = await this.creation.create(vendor, country.countryCode, actorOf(principal), "PORTAL", input.deliveries, input.warehouseId);
     return this.orders.list({ id: { in: ids } });
   }
 
-  async estimate(principal: AuthPrincipal, units: number): Promise<OrderEstimateView> {
-    const vendorId = vendorIdOf(principal);
-    const country = principal.countryCode ?? "";
-    const active = await this.fees.active(country);
-    const wallet = await this.ledger.walletFor(this.prisma, vendorId, active.currency);
+  async estimate(country: SellerCountry, units: number): Promise<OrderEstimateView> {
+    const active = await this.fees.active(country.countryCode);
+    const wallet = await this.ledger.walletFor(this.prisma, country.vendorId, active.currency);
     return { currency: active.currency, fulfilmentFeeMinor: fulfilmentFee(active.schedule, units), balanceMinor: Number(wallet.balanceMinor) };
   }
 

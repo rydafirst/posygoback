@@ -108,7 +108,7 @@ describe("personal shopping", () => {
 
   it("takes a request from anyone, but only for real links and places we deliver to", async () => {
     const destinations = (await http().get("/v1/public/shopping/destinations/GB").expect(200)).body as Array<{ code: string }>;
-    expect(destinations.map((entry) => entry.code).sort()).toEqual(["GB", "US"]);
+    expect(destinations.map((entry) => entry.code)).toEqual(["GB"]);
     await http().get("/v1/public/shopping/destinations/ZZ").expect(404);
     await http().get("/v1/public/shopping/destinations/gb").expect(400);
     expect((await ask(BUYER, { lines: [{ ...ITEMS[0], url: "http://shop.example/x" }] }).expect(400)).body.fieldErrors["lines.0.url"]).toBeDefined();

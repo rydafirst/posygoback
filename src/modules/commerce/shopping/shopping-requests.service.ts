@@ -24,10 +24,6 @@ const OPEN_PER_BUYER = 5;
 const BUYER_CANCELLABLE = ["REQUESTED", "QUOTED", "EXPIRED"] as const;
 const CONFIRM_MS = 48 * 60 * 60 * 1000;
 
-export interface Lane {
-  customsRequired: boolean;
-}
-
 @Injectable()
 export class ShoppingRequestsService {
   constructor(
@@ -49,7 +45,7 @@ export class ShoppingRequestsService {
     if (!country || country.status !== "LIVE") {
       throw Errors.validation({ countryCode: ["We don't shop in that country yet"] });
     }
-    await this.lane(this.prisma, input.countryCode, input.shipTo);
+    await this.assertDeliverable(this.prisma, input.countryCode, input.shipTo);
     const id = randomUUID();
     const reference = `SHP-${input.countryCode}-${randomCode(8)}`;
     const token = this.hasher.randomToken();
@@ -131,7 +127,7 @@ export class ShoppingRequestsService {
     if (!country || country.status !== "LIVE") {
       throw Errors.notFound();
     }
-    return this.countries.enabledDestinations(countryCode);
+    return this.countries.domesticDestinations(countryCode);
   }
 
   async listForBuyer(buyerId: string): Promise<ShoppingRequestView[]> {
@@ -163,18 +159,14 @@ export class ShoppingRequestsService {
     return this.buyerDetail(buyerId, requestId);
   }
 
-  async lane(client: DatabaseClient, originCountryCode: string, shipTo: ShipTo): Promise<Lane> {
-    const lane = await client.shippingLane.findFirst({
-      where: { originCountryCode, destinationCountryCode: shipTo.countryCode, enabled: true },
-      include: { destination: { select: { config: true } } },
-    });
-    if (!lane) {
-      throw Errors.validation({ "shipTo.countryCode": ["We can't deliver there from this country yet"] });
+  async assertDeliverable(client: DatabaseClient, countryCode: string, shipTo: ShipTo): Promise<void> {
+    if (shipTo.countryCode !== countryCode) {
+      throw Errors.validation({ "shipTo.countryCode": ["We only deliver within the country we shop in"] });
     }
-    const problems = prefixProblems(recipientProblems(shipTo, (lane.destination.config as unknown as CountryConfig).address, lane.customsRequired), "shipTo");
+    const country = await client.country.findUniqueOrThrow({ where: { code: countryCode }, select: { config: true } });
+    const problems = prefixProblems(recipientProblems(shipTo, (country.config as unknown as CountryConfig).address), "shipTo");
     if (Object.keys(problems).length > 0) {
       throw Errors.validation(problems);
     }
-    return { customsRequired: lane.customsRequired };
   }
 }

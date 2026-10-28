@@ -30,6 +30,10 @@ export class IntegrationOrdersService {
       return { created: false, order: this.view(existing) };
     }
     const vendor = await this.standing.assertVendorCanTrade(client.vendorId);
+    const added = await this.prisma.vendorCountry.findUnique({ where: { vendorId_countryCode: { vendorId: client.vendorId, countryCode: input.country } } });
+    if (!added) {
+      throw Errors.validation({ country: ["You don't store stock in this country"] });
+    }
     const codes = input.lines.map((line) => line.productCode);
     const products = await this.prisma.product.findMany({ where: { vendorId: client.vendorId, code: { in: codes }, status: "ACTIVE" }, select: { id: true, code: true } });
     const byCode = new Map(products.map((product) => [product.code, product.id]));
@@ -38,7 +42,7 @@ export class IntegrationOrdersService {
       throw Errors.validation({ lines: [`Unknown product code ${unknown.join(", ")}`] });
     }
     try {
-      const [id] = await this.creation.create(vendor, { userId: null, role: null, apiKeyId: client.apiKeyId }, "API", [
+      const [id] = await this.creation.create(vendor, input.country, { userId: null, role: null, apiKeyId: client.apiKeyId }, "API", [
         { externalReference: input.externalReference, recipient: input.recipient, lines: input.lines.map((line) => ({ productId: byCode.get(line.productCode)!, quantity: line.quantity })) },
       ]);
       return { created: true, order: this.view(await this.prisma.order.findUniqueOrThrow({ where: { id: id! } })) };

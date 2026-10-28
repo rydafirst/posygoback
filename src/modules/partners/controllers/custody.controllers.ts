@@ -4,6 +4,7 @@ import { z, type ZodType } from "zod";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
 import { CurrentPrincipal, Meta, RequirePermission } from "../../../common/auth/decorators";
+import { type SellerCountry, SelectedCountry } from "../../../common/auth/selected-country";
 import { ZodValidationPipe } from "../../../common/http/zod-validation.pipe";
 import { THROTTLE } from "../../../infrastructure/rate-limit/rate-limit.module";
 import {
@@ -268,14 +269,14 @@ export class VendorCustodyController {
 
   @RequirePermission("vendor.stock.read")
   @Get("hubs")
-  hubSignals(@CurrentPrincipal() principal: AuthPrincipal) {
-    return this.hubs.forVendor(principal);
+  hubSignals(@SelectedCountry() country: SellerCountry) {
+    return this.hubs.forVendor(country);
   }
 
   @RequirePermission("vendor.orders.read")
   @Get("claims")
-  list(@CurrentPrincipal() principal: AuthPrincipal) {
-    return this.claims.listForVendor(principal);
+  list(@SelectedCountry() country: SellerCountry) {
+    return this.claims.listForVendor(country);
   }
 
   @RequirePermission("vendor.orders.read")

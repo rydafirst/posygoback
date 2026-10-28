@@ -49,7 +49,11 @@ describe("admin vendor and product directory", () => {
 
   async function signUp(email: string, businessName: string, countryCode = "GB", verify = true): Promise<{ vendorId: string; token: string }> {
     await flushRateLimits();
-    await test.http().post("/v1/auth/signup").send({ email, password: PASSWORD, businessName, countryCode, acceptTerms: true }).expect(202);
+    await test
+      .http()
+      .post("/v1/auth/signup")
+      .send({ email, password: PASSWORD, businessName, countryCodes: [countryCode], acceptTerms: true })
+      .expect(202);
     const [user] = await query<{ vendor_id: string }>("SELECT vendor_id FROM users WHERE email = $1", [email]);
     if (!verify) {
       return { vendorId: user!.vendor_id, token: "" };

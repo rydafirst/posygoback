@@ -43,7 +43,7 @@ describe("sign-in shortcuts for testing without email", () => {
     await on
       .http()
       .post("/v1/auth/signup")
-      .send({ ...VENDOR, businessName: "Shortcut Ltd", countryCode: "GB", acceptTerms: true })
+      .send({ ...VENDOR, businessName: "Shortcut Ltd", countryCodes: ["GB"], acceptTerms: true })
       .expect(202);
     expect((await on.http().get("/v1/auth/test-shortcuts").expect(200)).body).toEqual({ enabled: true });
     await on

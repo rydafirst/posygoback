@@ -72,7 +72,6 @@ export class OrdersRepository {
     return {
       ...this.summary({ ...row, lines: row.lines, cancellations: pending ? [{ id: request!.id }] : [] }),
       recipient: revealRecipient ? this.recipient(row) : this.masked(row),
-      customsRequired: row.customsRequired,
       holdReason: row.holdReason,
       lines: row.lines.map((line) => ({
         id: line.id,
@@ -138,7 +137,7 @@ export class OrdersRepository {
   }
 
   private masked(row: OrderDetailRow): Recipient {
-    return { name: `${row.recipientName.slice(0, 1)}…`, line1: "Hidden", city: row.recipientCity, postalCode: "", countryCode: row.destinationCountryCode };
+    return { name: `${row.recipientName.slice(0, 1)}…`, line1: "Hidden", city: row.recipientCity, postalCode: "", countryCode: row.originCountryCode };
   }
 
   private summary(row: OrderSummaryRow | (OrderDetailRow & { cancellations: Array<{ id: string }> })): OrderSummaryView {
@@ -150,8 +149,7 @@ export class OrdersRepository {
       status: row.status,
       source: row.source,
       warehouseName: row.warehouse.name,
-      originCountryCode: row.originCountryCode,
-      destinationCountryCode: row.destinationCountryCode,
+      countryCode: row.originCountryCode,
       recipientName: row.recipientName,
       recipientCity: row.recipientCity,
       totalUnits: row.lines.reduce((total, line) => total + line.quantity, 0),

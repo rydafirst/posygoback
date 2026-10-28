@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Permission } from "../access/permissions";
 import type { Role } from "../access/roles";
 import type { PartnerStatus } from "../partners/partner-lifecycle";
+import { MAX_VENDOR_COUNTRIES } from "../vendors/vendor-countries";
 
 export const PASSWORD_MIN_LENGTH = 12;
 export const PASSWORD_MAX_LENGTH = 128;
@@ -32,7 +33,11 @@ export const signupSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
   businessName: z.string().trim().min(2, "Enter your business name").max(120),
-  countryCode: z.string().regex(/^[A-Z]{2}$/, "Choose where your stock will live"),
+  countryCodes: z
+    .array(z.string().regex(/^[A-Z]{2}$/, "Choose where your stock will live"))
+    .min(1, "Pick at least one country")
+    .max(MAX_VENDOR_COUNTRIES)
+    .refine((codes) => new Set(codes).size === codes.length, "Pick each country once"),
   acceptTerms: z.literal(true, { message: "Accept the terms to continue" }),
   referralCode: z.string().trim().max(40).optional(),
 });

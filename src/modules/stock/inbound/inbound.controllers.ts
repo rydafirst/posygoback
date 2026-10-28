@@ -17,6 +17,7 @@ import { z } from "zod";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
 import { CurrentPrincipal, Meta, RequirePermission } from "../../../common/auth/decorators";
+import { type SellerCountry, SelectedCountry } from "../../../common/auth/selected-country";
 import { ZodValidationPipe } from "../../../common/http/zod-validation.pipe";
 import { THROTTLE } from "../../../infrastructure/rate-limit/rate-limit.module";
 import { VendorInboundService } from "./vendor-inbound.service";
@@ -39,8 +40,8 @@ export class VendorInboundController {
 
   @RequirePermission("vendor.stock.read")
   @Get()
-  list(@CurrentPrincipal() principal: AuthPrincipal) {
-    return this.inbound.list(principal);
+  list(@SelectedCountry() country: SellerCountry) {
+    return this.inbound.list(country);
   }
 
   @RequirePermission("vendor.stock.read")
@@ -52,14 +53,14 @@ export class VendorInboundController {
   @RequirePermission("vendor.stock.read")
   @Post("estimate")
   @HttpCode(HttpStatus.OK)
-  estimate(@Body(new ZodValidationPipe(inboundEstimateSchema)) input: InboundEstimateInput, @CurrentPrincipal() principal: AuthPrincipal) {
-    return this.inbound.estimate(principal, input);
+  estimate(@Body(new ZodValidationPipe(inboundEstimateSchema)) input: InboundEstimateInput, @SelectedCountry() country: SellerCountry) {
+    return this.inbound.estimate(country, input);
   }
 
   @RequirePermission("vendor.stock.manage")
   @Post()
-  create(@Body(new ZodValidationPipe(inboundInputSchema)) input: InboundInput, @CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
-    return this.inbound.create(principal, input, meta);
+  create(@Body(new ZodValidationPipe(inboundInputSchema)) input: InboundInput, @SelectedCountry() country: SellerCountry, @CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
+    return this.inbound.create(principal, country, input, meta);
   }
 
   @RequirePermission("vendor.stock.manage")

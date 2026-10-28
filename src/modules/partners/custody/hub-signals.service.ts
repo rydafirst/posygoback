@@ -1,24 +1,19 @@
 import { Injectable } from "@nestjs/common";
 
-import type { AuthPrincipal } from "../../../common/auth/auth-principal";
+import type { SellerCountry } from "../../../common/auth/selected-country";
 import { PrismaService } from "../../../database/prisma.service";
 import { type HubSignalView, partnerProgramme, tierFor } from "../../../shared";
-import { vendorIdOf } from "../../onboarding/scope";
 
 @Injectable()
 export class HubSignalsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async forVendor(principal: AuthPrincipal): Promise<HubSignalView[]> {
-    const vendorId = vendorIdOf(principal);
-    const vendor = await this.prisma.vendor.findUniqueOrThrow({ where: { id: vendorId }, select: { countryCode: true } });
+  async forVendor({ vendorId, countryCode }: SellerCountry): Promise<HubSignalView[]> {
     const today = new Date();
     const warehouses = await this.prisma.warehouse.findMany({
       where: {
-        OR: [
-          { lots: { some: { vendorId, OR: [{ quantityAvailable: { gt: 0 } }, { quantityReserved: { gt: 0 } }] } } },
-          { countryCode: vendor.countryCode, active: true, OR: [{ partnerId: null }, { partner: { status: "ACTIVE" } }] },
-        ],
+        countryCode,
+        OR: [{ lots: { some: { vendorId, OR: [{ quantityAvailable: { gt: 0 } }, { quantityReserved: { gt: 0 } }] } } }, { active: true, OR: [{ partnerId: null }, { partner: { status: "ACTIVE" } }] }],
       },
       select: {
         id: true,

@@ -56,7 +56,7 @@ export class StorefrontFulfilmentService {
     const order = await this.prisma.storefrontOrder.findUniqueOrThrow({ where: { id: orderId }, include: { lines: true } });
     try {
       const vendor = await this.standing.assertVendorCanTrade(order.vendorId);
-      const [fulfilmentOrderId] = await this.creation.create(vendor, { userId: null, role: null, apiKeyId: null }, "STOREFRONT", [
+      const [fulfilmentOrderId] = await this.creation.create(vendor, vendor.countryCode, { userId: null, role: null, apiKeyId: null }, "STOREFRONT", [
         { externalReference: order.reference, recipient: this.repository.shipTo(order), lines: order.lines.map((line) => ({ productId: line.productId, quantity: line.quantity })) },
       ]);
       await this.prisma.storefrontOrder.update({ where: { id: orderId }, data: { fulfilmentOrderId } });

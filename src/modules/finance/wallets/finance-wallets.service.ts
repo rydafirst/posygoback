@@ -8,9 +8,7 @@ import { AuditService } from "../../../infrastructure/audit/audit.service";
 import type { ReconciliationReportView, WalletView } from "../../../shared";
 import { FinanceEmails } from "../finance-emails";
 import { WalletAlertsService } from "./wallet-alerts.service";
-import { toWalletView, WalletsService } from "./wallets.service";
-
-const WALLET_INCLUDE = { vendor: { select: { businessName: true, countryCode: true } } } as const;
+import { toWalletView, WALLET_INCLUDE, WalletsService } from "./wallets.service";
 
 @Injectable()
 export class FinanceWalletsService {
@@ -22,8 +20,15 @@ export class FinanceWalletsService {
   ) {}
 
   async list(filters: { countryCode?: string; status?: WalletStatus }): Promise<WalletView[]> {
+    const country = filters.countryCode ? await this.prisma.country.findUnique({ where: { code: filters.countryCode }, select: { currency: true } }) : null;
+    if (filters.countryCode && !country) {
+      return [];
+    }
     const rows = await this.prisma.wallet.findMany({
-      where: { ...(filters.status ? { status: filters.status } : {}), ...(filters.countryCode ? { vendor: { countryCode: filters.countryCode } } : {}) },
+      where: {
+        ...(filters.status ? { status: filters.status } : {}),
+        ...(filters.countryCode && country ? { currency: country.currency, vendor: { countries: { some: { countryCode: filters.countryCode } } } } : {}),
+      },
       include: WALLET_INCLUDE,
       orderBy: { updatedAt: "desc" },
       take: 500,

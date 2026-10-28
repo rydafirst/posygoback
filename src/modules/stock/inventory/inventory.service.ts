@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
+import type { SellerCountry } from "../../../common/auth/selected-country";
 import { Errors } from "../../../common/http/app-exception";
 import { lockRow, PrismaService } from "../../../database/prisma.service";
 import type { Prisma } from "../../../generated/prisma/client";
@@ -12,6 +13,7 @@ import { InventoryLedgerService } from "./inventory-ledger.service";
 
 export interface LotFilters {
   vendorId?: string;
+  countryCode?: string;
   warehouseId?: string;
   productId?: string;
   unplacedOnly?: boolean;
@@ -37,8 +39,8 @@ export class InventoryService {
     private readonly audit: AuditService,
   ) {}
 
-  vendorLots(principal: AuthPrincipal, productId?: string): Promise<LotView[]> {
-    return this.lots({ vendorId: vendorIdOf(principal), productId });
+  vendorLots(country: SellerCountry, productId?: string): Promise<LotView[]> {
+    return this.lots({ vendorId: country.vendorId, countryCode: country.countryCode, productId });
   }
 
   async warehouseLots(principal: AuthPrincipal, warehouseId: string, unplacedOnly: boolean): Promise<LotView[]> {
@@ -56,9 +58,9 @@ export class InventoryService {
     return new Set(lines.map((line) => line.lotId));
   }
 
-  async vendorMovements(principal: AuthPrincipal): Promise<MovementView[]> {
+  async vendorMovements(country: SellerCountry): Promise<MovementView[]> {
     const rows = await this.prisma.inventoryMovement.findMany({
-      where: { vendorId: vendorIdOf(principal) },
+      where: { vendorId: country.vendorId, warehouse: { countryCode: country.countryCode } },
       include: { lot: { select: { code: true, product: { select: { code: true } } } } },
       orderBy: { createdAt: "desc" },
       take: 200,
@@ -186,6 +188,7 @@ export class InventoryService {
     return this.prisma.stockLot.findMany({
       where: {
         ...(filters.vendorId ? { vendorId: filters.vendorId } : {}),
+        ...(filters.countryCode ? { warehouse: { countryCode: filters.countryCode } } : {}),
         ...(filters.warehouseId ? { warehouseId: filters.warehouseId } : {}),
         ...(filters.productId ? { productId: filters.productId } : {}),
         ...(filters.inboundId ? { inboundId: filters.inboundId } : {}),

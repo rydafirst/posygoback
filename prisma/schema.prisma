@@ -293,12 +293,10 @@ model Country {
   createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  lanesFrom        ShippingLane[]       @relation("LaneOrigin")
-  lanesTo          ShippingLane[]       @relation("LaneDestination")
   users            User[]
   vendors          Vendor[]
   legalDocuments   LegalDocument[]
-  destinations     VendorDestination[]
+  vendorCountries  VendorCountry[]
   verifications    VendorVerification[]
   warehouses       Warehouse[]
   inboundShipments InboundShipment[]
@@ -310,6 +308,7 @@ model Country {
   ordersTo         Order[]              @relation("OrderDestination")
   partners         FulfilmentPartner[]
   activationPayments VendorActivationPayment[]
+  orderImports       OrderImportBatch[]
 
   custodyClaims    CustodyClaim[]
   custodyAlerts    CustodyAlert[]
@@ -327,23 +326,6 @@ model Country {
   @@map("countries")
 }
 
-model ShippingLane {
-  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  originCountryCode      String   @map("origin_country_code") @db.Char(2)
-  destinationCountryCode String   @map("destination_country_code") @db.Char(2)
-  enabled                Boolean  @default(false)
-  customsRequired        Boolean  @map("customs_required")
-  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  origin      Country @relation("LaneOrigin", fields: [originCountryCode], references: [code], onDelete: Restrict, onUpdate: NoAction, map: "shipping_lanes_origin_country_code_countries_code_fk")
-  destination Country @relation("LaneDestination", fields: [destinationCountryCode], references: [code], onDelete: Restrict, onUpdate: NoAction, map: "shipping_lanes_destination_country_code_countries_code_fk")
-
-  @@unique([originCountryCode, destinationCountryCode], map: "shipping_lanes_route_unique")
-  @@index([originCountryCode, enabled], map: "shipping_lanes_origin_enabled_idx")
-  @@map("shipping_lanes")
-}
-
 model Vendor {
   id                 String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   isTestAccount      Boolean      @default(false) @map("is_test_account")
@@ -359,7 +341,7 @@ model Vendor {
   users            User[]
   files            StoredFile[]
   acceptances      AgreementAcceptance[]
-  destinations     VendorDestination[]
+  countries        VendorCountry[]
   invitations      VendorInvitation[]
   verification     VendorVerification?
   products         Product[]
@@ -686,16 +668,17 @@ model VendorInvitation {
   @@map("vendor_invitations")
 }
 
-model VendorDestination {
+model VendorCountry {
   vendorId    String   @map("vendor_id") @db.Uuid
   countryCode String   @map("country_code") @db.Char(2)
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  vendor  Vendor  @relation(fields: [vendorId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "vendor_destinations_vendor_id_vendors_id_fk")
-  country Country @relation(fields: [countryCode], references: [code], onDelete: Restrict, onUpdate: NoAction, map: "vendor_destinations_country_code_countries_code_fk")
+  vendor  Vendor  @relation(fields: [vendorId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "vendor_countries_vendor_id_vendors_id_fk")
+  country Country @relation(fields: [countryCode], references: [code], onDelete: Restrict, onUpdate: NoAction, map: "vendor_countries_country_code_countries_code_fk")
 
-  @@id([vendorId, countryCode], map: "vendor_destinations_vendor_id_country_code_pk")
-  @@map("vendor_destinations")
+  @@id([vendorId, countryCode], map: "vendor_countries_vendor_id_country_code_pk")
+  @@index([countryCode], map: "vendor_countries_country_idx")
+  @@map("vendor_countries")
 }
 
 model Warehouse {
@@ -1490,6 +1473,7 @@ model OrderCancellationRequest {
 model OrderImportBatch {
   id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   vendorId      String   @map("vendor_id") @db.Uuid
+  countryCode   String   @map("country_code") @db.Char(2)
   filename      String   @db.VarChar(200)
   ordersCreated Int      @map("orders_created")
   ordersFailed  Int      @map("orders_failed")
@@ -1498,8 +1482,9 @@ model OrderImportBatch {
   createdBy     String   @map("created_by") @db.Uuid
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  vendor  Vendor @relation(fields: [vendorId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  creator User   @relation("OrderImportCreator", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  vendor  Vendor  @relation(fields: [vendorId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  country Country @relation(fields: [countryCode], references: [code], onDelete: Restrict, onUpdate: NoAction, map: "order_import_batches_country_code_countries_code_fk")
+  creator User    @relation("OrderImportCreator", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
   @@index([vendorId, createdAt(sort: Desc)], map: "order_import_batches_vendor_idx")
   @@map("order_import_batches")

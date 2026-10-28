@@ -1,11 +1,11 @@
 import { Injectable } from "@nestjs/common";
-import { activationFeeOf, canTransitionCountry, type ChangeCountryStatusInput, type CreateCountryInput, type PublicCountry, type ShippingLaneInput, type UpdateCountryInput } from "../../shared";
+import { activationFeeOf, canTransitionCountry, type ChangeCountryStatusInput, type CreateCountryInput, type PublicCountry, type UpdateCountryInput } from "../../shared";
 
 import type { AuthPrincipal, RequestMeta } from "../../common/auth/auth-principal";
 import { Errors } from "../../common/http/app-exception";
 import { PrismaService } from "../../database/prisma.service";
 import { AuditService } from "../../infrastructure/audit/audit.service";
-import { type CountryRecord, CountriesRepository, type LaneRecord } from "./countries.repository";
+import { type CountryRecord, CountriesRepository } from "./countries.repository";
 
 @Injectable()
 export class CountriesService {
@@ -30,10 +30,6 @@ export class CountriesService {
       throw Errors.notFound("Country not found.");
     }
     return country;
-  }
-
-  destinationsFrom(originCountryCode: string) {
-    return this.countries.enabledDestinations(originCountryCode);
   }
 
   create(input: CreateCountryInput, actor: AuthPrincipal, meta: RequestMeta): Promise<CountryRecord> {
@@ -87,32 +83,6 @@ export class CountriesService {
         tx,
       );
       return updated;
-    });
-  }
-
-  setLane(input: ShippingLaneInput, actor: AuthPrincipal, meta: RequestMeta): Promise<LaneRecord> {
-    if (input.originCountryCode === input.destinationCountryCode && input.customsRequired) {
-      throw Errors.validation({ customsRequired: ["Domestic lanes never need customs."] });
-    }
-    return this.prisma.$transaction(async (tx) => {
-      await this.requireForUpdate(input.originCountryCode, tx);
-      await this.requireForUpdate(input.destinationCountryCode, tx);
-      const before = await this.countries.findLane(input.originCountryCode, input.destinationCountryCode, tx);
-      const lane = await this.countries.upsertLane(input, tx);
-      await this.audit.record(
-        {
-          actor: { userId: actor.userId, role: actor.role },
-          action: "lane.set",
-          resourceType: "shipping_lane",
-          resourceId: lane.id,
-          countryCode: lane.originCountryCode,
-          before: before ?? null,
-          after: lane,
-          meta,
-        },
-        tx,
-      );
-      return lane;
     });
   }
 

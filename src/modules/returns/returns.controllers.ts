@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import type { AuthPrincipal, RequestMeta } from "../../common/auth/auth-principal";
 import { CurrentPrincipal, Meta, RequirePermission } from "../../common/auth/decorators";
+import { type SellerCountry, SelectedCountry } from "../../common/auth/selected-country";
 import { ZodValidationPipe } from "../../common/http/zod-validation.pipe";
 import {
   type CreateVendorReturnInput,
@@ -28,8 +29,8 @@ export class VendorReturnsController {
 
   @RequirePermission("vendor.orders.read")
   @Get()
-  list(@CurrentPrincipal() principal: AuthPrincipal, @Query("status", statusFilter) status?: VendorReturnStatus) {
-    return this.returns.list(principal, status);
+  list(@SelectedCountry() country: SellerCountry, @Query("status", statusFilter) status?: VendorReturnStatus) {
+    return this.returns.list(country, status);
   }
 
   @RequirePermission("vendor.orders.read")

@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 
 import type { AuthPrincipal, RequestMeta } from "../../common/auth/auth-principal";
+import type { SellerCountry } from "../../common/auth/selected-country";
 import { Errors } from "../../common/http/app-exception";
 import { lockRow, PrismaService } from "../../database/prisma.service";
 import type { Prisma } from "../../generated/prisma/client";
@@ -38,8 +39,8 @@ export class VendorReturnsService {
     private readonly alerts: ReturnAlertsService,
   ) {}
 
-  list(principal: AuthPrincipal, status?: VendorReturnStatus): Promise<VendorReturnView[]> {
-    return this.repository.list({ vendorId: vendorIdOf(principal), ...(status ? { status } : {}) }, "VENDOR");
+  list(country: SellerCountry, status?: VendorReturnStatus): Promise<VendorReturnView[]> {
+    return this.repository.list({ vendorId: country.vendorId, countryCode: country.countryCode, ...(status ? { status } : {}) }, "VENDOR");
   }
 
   async detail(principal: AuthPrincipal, returnId: string): Promise<VendorReturnView> {

@@ -9,7 +9,7 @@ import { JobLockService } from "../../finance/jobs/job-lock.service";
 import { WalletAlertsService } from "../../finance/wallets/wallet-alerts.service";
 import type { PostingResult } from "../../finance/wallets/wallet-ledger.service";
 import { CarrierAccountsService } from "../carriers/carrier-accounts.service";
-import { CarrierError, type CustomsItem, type PurchasedLabel, type ShipmentParty } from "../carriers/carrier.port";
+import { CarrierError, type PurchasedLabel, type ShipmentParty } from "../carriers/carrier.port";
 import { OrderEmails } from "../order-emails";
 import { OrderAlertsService } from "./order-alerts.service";
 import type { OrderActor } from "./order-creation.service";
@@ -44,7 +44,7 @@ export class OrderShippingService {
   ) {}
 
   async fetchRates(actor: OrderActor, orderId: string, scope: Prisma.OrderWhereInput): Promise<void> {
-    const order = await this.prisma.order.findFirst({ where: { id: orderId, ...scope }, include: { warehouse: true, lines: true } });
+    const order = await this.prisma.order.findFirst({ where: { id: orderId, ...scope }, include: { warehouse: true } });
     if (!order) {
       throw Errors.notFound();
     }
@@ -63,16 +63,6 @@ export class OrderShippingService {
       phone: account.provider === "SHIPPO" ? account.senderPhone : undefined,
       email: account.provider === "SHIPPO" ? account.senderEmail : undefined,
     };
-    const customs: CustomsItem[] | null = order.customsRequired
-      ? order.lines.map((line) => ({
-          description: line.productName,
-          quantity: line.quantity,
-          unitValueMinor: line.unitValueMinor,
-          netWeightGrams: line.unitWeightGrams,
-          originCountry: line.countryOfOrigin,
-          hsCode: line.hsCode ?? "",
-        }))
-      : null;
     const rates = await this.carrierCall(() =>
       adapter.quote({
         reference: order.reference,
@@ -80,7 +70,7 @@ export class OrderShippingService {
         from,
         to: this.orders.recipient(order),
         parcel: { lengthMm: order.packedLengthMm!, widthMm: order.packedWidthMm!, heightMm: order.packedHeightMm!, weightGrams: order.packedWeightGrams! },
-        customs,
+        customs: null,
       }),
     );
     if (rates.length === 0) {

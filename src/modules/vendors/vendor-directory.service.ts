@@ -21,7 +21,7 @@ const ROW_INCLUDE = {
 const DETAIL_INCLUDE = {
   users: { orderBy: { createdAt: "asc" } },
   verification: true,
-  destinations: { orderBy: { countryCode: "asc" } },
+  countries: { orderBy: [{ createdAt: "asc" }, { countryCode: "asc" }] },
   wallets: { select: { currency: true, balanceMinor: true } },
   country: { select: { currency: true } },
   _count: { select: { products: true, inboundShipments: true, orders: true } },
@@ -100,7 +100,7 @@ export class VendorDirectoryService {
         submittedAt: vendor.verification?.submittedAt?.toISOString() ?? null,
         decidedAt: vendor.verification?.decidedAt?.toISOString() ?? null,
       },
-      destinations: vendor.destinations.map((destination) => destination.countryCode),
+      countries: [vendor.countryCode, ...vendor.countries.map((entry) => entry.countryCode).filter((code) => code !== vendor.countryCode)],
       wallet: walletIn(vendor.wallets, vendor.country.currency),
       counts: { products: vendor._count.products, inboundShipments: vendor._count.inboundShipments, orders: vendor._count.orders },
       unitsInStorage: unitsFor(vendor.id),

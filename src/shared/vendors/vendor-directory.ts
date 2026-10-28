@@ -65,12 +65,7 @@ export const vendorDirectoryQuerySchema = z.object({
 });
 export type VendorDirectoryQuery = z.infer<typeof vendorDirectoryQuerySchema>;
 
-export const productDirectoryQuerySchema = z.object({
-  q: search,
-  vendorId: z.string().uuid().optional(),
-  stock: z.enum(PRODUCT_STOCK_STATES).optional(),
-  page: pageNumber,
-});
+export const productDirectoryQuerySchema = z.object({ q: search, vendorId: z.string().uuid().optional(), stock: z.enum(PRODUCT_STOCK_STATES).optional(), page: pageNumber });
 export type ProductDirectoryQuery = z.infer<typeof productDirectoryQuerySchema>;
 
 export interface DirectoryPage<Row> {
@@ -126,7 +121,7 @@ export interface VendorDetailView {
   isTestAccount: boolean;
   members: VendorMemberView[];
   verification: { status: VerificationStatus; submittedAt: string | null; decidedAt: string | null };
-  destinations: string[];
+  countries: string[];
   wallet: { balanceMinor: number; currency: string };
   counts: { products: number; inboundShipments: number; orders: number };
   unitsInStorage: number;

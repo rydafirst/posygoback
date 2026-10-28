@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import type { OrderStatus } from "./order-lifecycle";
 import { externalReferenceSchema } from "./order.schema";
-import { recipientSchema } from "./recipient";
+import { isoCountryCode } from "../country/country.schema";
+import { orderRecipientSchema } from "./recipient";
 
 export const API_KEY_LIMITS = { maxActivePerVendor: 10 } as const;
 
@@ -23,8 +24,9 @@ export interface ApiKeyCreatedView extends ApiKeyView {
 
 export const integrationOrderSchema = z
   .object({
+    country: isoCountryCode,
     externalReference: externalReferenceSchema,
-    recipient: recipientSchema,
+    recipient: orderRecipientSchema,
     lines: z
       .array(z.object({ productCode: z.string().trim().toUpperCase().min(1).max(40), quantity: z.number().int().min(1).max(1000) }))
       .min(1)

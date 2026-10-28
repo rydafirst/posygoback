@@ -22,9 +22,12 @@ export const recipientSchema = z.object({
 });
 export type Recipient = z.infer<typeof recipientSchema>;
 
+export const orderRecipientSchema = recipientSchema.extend({ countryCode: isoCountryCode.optional() });
+export type OrderRecipient = z.infer<typeof orderRecipientSchema>;
+
 const MAX_POSTAL_INPUT = 16;
 
-export function recipientProblems(recipient: Recipient, rules: AddressRules, crossBorder: boolean): Record<string, string[]> {
+export function recipientProblems(recipient: Recipient, rules: AddressRules): Record<string, string[]> {
   const problems: Record<string, string[]> = {};
   const add = (field: string, message: string) => {
     problems[field] = [...(problems[field] ?? []), message];
@@ -38,9 +41,6 @@ export function recipientProblems(recipient: Recipient, rules: AddressRules, cro
   }
   if (recipient.region && rules.regionCodes.length > 0 && !rules.regionCodes.includes(recipient.region.toUpperCase())) {
     add("region", `Choose a valid ${rules.regionLabel.toLowerCase()}`);
-  }
-  if (crossBorder && !recipient.phone) {
-    add("phone", "International parcels need the recipient's phone number");
   }
   return problems;
 }

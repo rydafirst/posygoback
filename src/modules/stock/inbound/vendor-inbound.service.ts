@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
+import type { SellerCountry } from "../../../common/auth/selected-country";
 import { Errors } from "../../../common/http/app-exception";
 import { lockRow, PrismaService } from "../../../database/prisma.service";
 import type { Prisma } from "../../../generated/prisma/client";
@@ -53,8 +54,8 @@ export class VendorInboundService {
     private readonly owners: InboundAlertsService,
   ) {}
 
-  list(principal: AuthPrincipal): Promise<InboundSummaryView[]> {
-    return this.inbound.summaries({ vendorId: vendorIdOf(principal) });
+  list(country: SellerCountry): Promise<InboundSummaryView[]> {
+    return this.inbound.summaries({ vendorId: country.vendorId, countryCode: country.countryCode });
   }
 
   async detail(principal: AuthPrincipal, inboundId: string): Promise<InboundDetailView> {
@@ -64,10 +65,10 @@ export class VendorInboundService {
     return { ...detail, actions };
   }
 
-  async create(principal: AuthPrincipal, input: InboundInput, meta: RequestMeta): Promise<InboundDetailView> {
+  async create(principal: AuthPrincipal, country: SellerCountry, input: InboundInput, meta: RequestMeta): Promise<InboundDetailView> {
     const vendor = await this.standing.assertCanTrade(principal);
     this.assertArrivalDate(input.expectedArrivalDate);
-    const warehouse = await this.warehouses.receivingWarehouseFor(vendor.countryCode, input.warehouseId);
+    const warehouse = await this.warehouses.receivingWarehouseFor(country.countryCode, input.warehouseId);
     await this.assertProducts(
       this.prisma,
       vendor.vendorId,
@@ -79,10 +80,10 @@ export class VendorInboundService {
           const created = await tx.inboundShipment.create({
             data: {
               ...this.columns(input),
-              reference: inboundReference(vendor.countryCode),
+              reference: inboundReference(country.countryCode),
               vendorId: vendor.vendorId,
               warehouseId: warehouse.id,
-              countryCode: vendor.countryCode,
+              countryCode: country.countryCode,
               createdBy: principal.userId,
               lines: { create: this.lineRows(input) },
             },
@@ -102,7 +103,8 @@ export class VendorInboundService {
   async update(principal: AuthPrincipal, inboundId: string, input: InboundInput, meta: RequestMeta): Promise<InboundDetailView> {
     const vendor = await this.standing.assertCanTrade(principal);
     this.assertArrivalDate(input.expectedArrivalDate);
-    const warehouse = await this.warehouses.receivingWarehouseFor(vendor.countryCode, input.warehouseId);
+    const current = await this.owned(principal, inboundId);
+    const warehouse = await this.warehouses.receivingWarehouseFor(current.countryCode, input.warehouseId);
     await this.prisma.$transaction(async (tx) => {
       const existing = await this.lockOwned(tx, vendor.vendorId, inboundId);
       if (existing.status !== "DRAFT") {
@@ -120,8 +122,8 @@ export class VendorInboundService {
     return this.detail(principal, inboundId);
   }
 
-  estimate(principal: AuthPrincipal, input: InboundEstimateInput): Promise<InboundEstimateView> {
-    return this.charges.estimate(vendorIdOf(principal), principal.countryCode ?? "", input);
+  estimate(country: SellerCountry, input: InboundEstimateInput): Promise<InboundEstimateView> {
+    return this.charges.estimate(country.vendorId, country.countryCode, input);
   }
 
   async apply(principal: AuthPrincipal, inboundId: string, action: InboundAction, meta: RequestMeta): Promise<InboundDetailView> {

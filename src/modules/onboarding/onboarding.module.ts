@@ -10,9 +10,10 @@ import { AdminActivationFeesController, VendorActivationController } from "./act
 import { AdminLegalController, PublicLegalController, VendorAgreementsController } from "./agreements/agreements.controllers";
 import { AgreementsService } from "./agreements/agreements.service";
 import { LegalDocumentsRepository } from "./agreements/legal-documents.repository";
-import { MarketsService } from "./markets/markets.service";
+import { VendorCountriesController } from "./countries/vendor-countries.controller";
+import { VendorCountriesService } from "./countries/vendor-countries.service";
 import { InvitationsService } from "./team/invitations.service";
-import { InvitationsController, MarketsController, TeamController } from "./team/team.controllers";
+import { InvitationsController, TeamController } from "./team/team.controllers";
 import { TeamService } from "./team/team.service";
 import { VendorActivationService } from "./vendor-activation.service";
 import { VendorStandingService } from "./vendor-standing.service";
@@ -32,7 +33,7 @@ import { VerificationStore } from "./verification/verification.store";
     AdminLegalController,
     TeamController,
     InvitationsController,
-    MarketsController,
+    VendorCountriesController,
     VendorActivationController,
     AdminActivationFeesController,
   ],
@@ -46,7 +47,7 @@ import { VerificationStore } from "./verification/verification.store";
     AgreementsService,
     TeamService,
     InvitationsService,
-    MarketsService,
+    VendorCountriesService,
     VendorStandingService,
     ActivationNoticesService,
     ActivationPaymentsService,

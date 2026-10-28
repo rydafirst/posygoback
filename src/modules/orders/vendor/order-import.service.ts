@@ -1,13 +1,13 @@
 import { Injectable } from "@nestjs/common";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
+import type { SellerCountry } from "../../../common/auth/selected-country";
 import { AppException, Errors } from "../../../common/http/app-exception";
 import { PrismaService } from "../../../database/prisma.service";
 import type { Prisma } from "../../../generated/prisma/client";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
 import { CsvFormatError, type CsvOrder, csvRecipient, groupOrderRows, type ImportResultView, ORDER_CSV_LIMITS, parseCsv, recipientSchema } from "../../../shared";
 import { JobLockService } from "../../finance/jobs/job-lock.service";
-import { vendorIdOf } from "../../onboarding/scope";
 import { type TradingVendor, VendorStandingService } from "../../onboarding/vendor-standing.service";
 import { OrderCreationService } from "../core/order-creation.service";
 
@@ -37,21 +37,21 @@ export class OrderImportService {
     private readonly locks: JobLockService,
   ) {}
 
-  async history(principal: AuthPrincipal): Promise<ImportResultView[]> {
-    const rows = await this.prisma.orderImportBatch.findMany({ where: { vendorId: vendorIdOf(principal) }, orderBy: { createdAt: "desc" }, take: 20 });
+  async history(country: SellerCountry): Promise<ImportResultView[]> {
+    const rows = await this.prisma.orderImportBatch.findMany({ where: { vendorId: country.vendorId, countryCode: country.countryCode }, orderBy: { createdAt: "desc" }, take: 20 });
     return rows.map((row) => this.view(row));
   }
 
-  async run(principal: AuthPrincipal, filename: string, csv: string, meta: RequestMeta): Promise<ImportResultView> {
+  async run(principal: AuthPrincipal, country: SellerCountry, filename: string, csv: string, meta: RequestMeta): Promise<ImportResultView> {
     const vendor = await this.standing.assertCanTrade(principal);
-    const result = await this.locks.runExclusive(`order-import:${vendor.vendorId}`, IMPORT_LOCK_MS, () => this.importFor(vendor, principal, filename, csv, meta));
+    const result = await this.locks.runExclusive(`order-import:${vendor.vendorId}`, IMPORT_LOCK_MS, () => this.importFor(vendor, country.countryCode, principal, filename, csv, meta));
     if (result === null) {
       throw Errors.invalidTransition("Another import is still running. Wait for it to finish, then try again.");
     }
     return result;
   }
 
-  private async importFor(vendor: TradingVendor, principal: AuthPrincipal, filename: string, csv: string, meta: RequestMeta): Promise<ImportResultView> {
+  private async importFor(vendor: TradingVendor, countryCode: string, principal: AuthPrincipal, filename: string, csv: string, meta: RequestMeta): Promise<ImportResultView> {
     if (Buffer.byteLength(csv, "utf8") > ORDER_CSV_LIMITS.maxBytes) {
       throw Errors.validation({ csv: [`Keep the file under ${ORDER_CSV_LIMITS.maxBytes / 1000} KB`] });
     }
@@ -76,17 +76,20 @@ export class OrderImportService {
     }
     const today = await this.prisma.order.count({ where: { vendorId: vendor.vendorId, source: "CSV", createdAt: { gt: new Date(Date.now() - DAY_MS) } } });
     if (today + grouped.orders.length > ORDER_CSV_LIMITS.dailyOrdersPerVendor) {
-      throw Errors.dailyLimitReached(`Imports are limited to ${ORDER_CSV_LIMITS.dailyOrdersPerVendor} orders a day. You can import ${Math.max(0, ORDER_CSV_LIMITS.dailyOrdersPerVendor - today)} more today.`);
+      throw Errors.dailyLimitReached(
+        `Imports are limited to ${ORDER_CSV_LIMITS.dailyOrdersPerVendor} orders a day. You can import ${Math.max(0, ORDER_CSV_LIMITS.dailyOrdersPerVendor - today)} more today.`,
+      );
     }
     const products = await this.productIds(vendor.vendorId, grouped.orders);
     const results: ImportResult[] = [];
     for (const order of grouped.orders) {
-      results.push(await this.createOne(vendor, principal, order, products));
+      results.push(await this.createOne(vendor, countryCode, principal, order, products));
     }
     const created = results.filter((result) => result.orderReference).length;
     const batch = await this.prisma.orderImportBatch.create({
       data: {
         vendorId: vendor.vendorId,
+        countryCode,
         filename: filename.slice(0, 200),
         ordersCreated: created,
         ordersFailed: results.length - created,
@@ -101,15 +104,16 @@ export class OrderImportService {
       resourceType: "order_import",
       resourceId: batch.id,
       vendorId: vendor.vendorId,
+      countryCode,
       after: { created, failed: results.length - created },
       meta,
     });
     return this.view(batch);
   }
 
-  private async createOne(vendor: TradingVendor, principal: AuthPrincipal, order: CsvOrder, products: Map<string, string>): Promise<ImportResult> {
+  private async createOne(vendor: TradingVendor, countryCode: string, principal: AuthPrincipal, order: CsvOrder, products: Map<string, string>): Promise<ImportResult> {
     const base = { reference: order.reference, rows: order.rows };
-    const recipient = recipientSchema.safeParse(csvRecipient(order.recipient));
+    const recipient = recipientSchema.safeParse(csvRecipient(order.recipient, countryCode));
     if (!recipient.success) {
       const issue = recipient.error.issues[0]!;
       return { ...base, orderReference: null, message: `${issue.path.join(".") || "address"}: ${issue.message}` };
@@ -123,7 +127,7 @@ export class OrderImportService {
       return { ...base, orderReference: null, message: "Each product can only appear once per order" };
     }
     try {
-      const [id] = await this.creation.create(vendor, { userId: principal.userId, role: principal.role, apiKeyId: null }, "CSV", [
+      const [id] = await this.creation.create(vendor, countryCode, { userId: principal.userId, role: principal.role, apiKeyId: null }, "CSV", [
         { externalReference: order.reference, recipient: recipient.data, lines: order.lines.map((line) => ({ productId: products.get(line.productCode)!, quantity: line.quantity })) },
       ]);
       const created = await this.prisma.order.findUniqueOrThrow({ where: { id: id! }, select: { reference: true } });

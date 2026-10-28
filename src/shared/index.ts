@@ -45,3 +45,4 @@ export * from "./commerce/storefront.schema";
 export * from "./commerce/storefront.views";
 export * from "./commerce/shopping.schema";
 export * from "./vendors/vendor-directory";
+export * from "./vendors/vendor-countries";

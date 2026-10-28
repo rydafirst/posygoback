@@ -1,20 +1,10 @@
-import { Body, Controller, Get, Param, Patch, Post, Put } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
-import {
-  changeCountryStatusSchema,
-  createCountrySchema,
-  shippingLaneSchema,
-  updateCountrySchema,
-  type ChangeCountryStatusInput,
-  type CreateCountryInput,
-  type ShippingLaneInput,
-  type UpdateCountryInput,
-} from "../../shared";
+import { changeCountryStatusSchema, createCountrySchema, updateCountrySchema, type ChangeCountryStatusInput, type CreateCountryInput, type UpdateCountryInput } from "../../shared";
 import { z } from "zod";
 
 import type { AuthPrincipal, RequestMeta } from "../../common/auth/auth-principal";
 import { CurrentPrincipal, Meta, Public, RequirePermission } from "../../common/auth/decorators";
-import { Errors } from "../../common/http/app-exception";
 import { ZodValidationPipe } from "../../common/http/zod-validation.pipe";
 import { THROTTLE } from "../../infrastructure/rate-limit/rate-limit.module";
 import { CountriesService } from "./countries.service";
@@ -30,14 +20,6 @@ export class CountriesController {
   @Get()
   listLive() {
     return this.countries.listLive();
-  }
-
-  @Get(":code/destinations")
-  destinations(@Param("code", countryCodeParam) code: string, @CurrentPrincipal() principal: AuthPrincipal) {
-    if (principal.vendorId && principal.countryCode !== code) {
-      throw Errors.notFound();
-    }
-    return this.countries.destinationsFrom(code);
   }
 }
 
@@ -83,11 +65,5 @@ export class AdminCountriesController {
     @Meta() meta: RequestMeta,
   ) {
     return this.countries.changeStatus(code, input, principal, meta);
-  }
-
-  @RequirePermission("lanes.manage")
-  @Put("lanes")
-  setLane(@Body(new ZodValidationPipe(shippingLaneSchema)) input: ShippingLaneInput, @CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
-    return this.countries.setLane(input, principal, meta);
   }
 }

@@ -19,7 +19,6 @@ export const PERMISSIONS = [
   "legal.manage",
   "countries.read",
   "countries.manage",
-  "lanes.manage",
   "audit.read",
   "users.read",
   "staff.manage",
@@ -177,7 +176,6 @@ const GRANTS: Record<Role, readonly Permission[]> = {
   SUPER_ADMIN: [
     "countries.read",
     "countries.manage",
-    "lanes.manage",
     "audit.read",
     "users.read",
     "vendors.read",

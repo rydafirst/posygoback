@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import type { AuthPrincipal, RequestMeta } from "../../common/auth/auth-principal";
 import { CurrentPrincipal, Meta, Public, RequirePermission } from "../../common/auth/decorators";
+import { type SellerCountry, SelectedCountry } from "../../common/auth/selected-country";
 import { Errors } from "../../common/http/app-exception";
 import { ZodValidationPipe } from "../../common/http/zod-validation.pipe";
 import { APP_CONFIG } from "../../config/config.module";
@@ -63,34 +64,34 @@ export class VendorOrdersController {
 
   @RequirePermission("vendor.orders.read")
   @Get()
-  list(@Query(listQuery) query: { status?: (typeof ORDER_STATUSES)[number]; q?: string }, @CurrentPrincipal() principal: AuthPrincipal) {
-    return this.orders.list(principal, query);
+  list(@Query(listQuery) query: { status?: (typeof ORDER_STATUSES)[number]; q?: string }, @SelectedCountry() country: SellerCountry) {
+    return this.orders.list(country, query);
   }
 
   @RequirePermission("vendor.orders.manage")
   @Post()
-  create(@Body(new ZodValidationPipe(createOrdersSchema)) input: CreateOrdersInput, @CurrentPrincipal() principal: AuthPrincipal) {
-    return this.orders.create(principal, input);
+  create(@Body(new ZodValidationPipe(createOrdersSchema)) input: CreateOrdersInput, @SelectedCountry() country: SellerCountry, @CurrentPrincipal() principal: AuthPrincipal) {
+    return this.orders.create(principal, country, input);
   }
 
   @RequirePermission("vendor.orders.read")
   @Post("estimate")
   @HttpCode(HttpStatus.OK)
-  estimate(@Body(estimateBody) input: { units: number }, @CurrentPrincipal() principal: AuthPrincipal) {
-    return this.orders.estimate(principal, input.units);
+  estimate(@Body(estimateBody) input: { units: number }, @SelectedCountry() country: SellerCountry) {
+    return this.orders.estimate(country, input.units);
   }
 
   @RequirePermission("vendor.orders.read")
   @Get("imports")
-  importHistory(@CurrentPrincipal() principal: AuthPrincipal) {
-    return this.imports.history(principal);
+  importHistory(@SelectedCountry() country: SellerCountry) {
+    return this.imports.history(country);
   }
 
   @RequirePermission("vendor.orders.manage")
   @Throttle(THROTTLE.authStrict)
   @Post("imports")
-  importCsv(@Body(importBody) input: { filename: string; csv: string }, @CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
-    return this.imports.run(principal, input.filename, input.csv, meta);
+  importCsv(@Body(importBody) input: { filename: string; csv: string }, @SelectedCountry() country: SellerCountry, @CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
+    return this.imports.run(principal, country, input.filename, input.csv, meta);
   }
 
   @RequirePermission("vendor.orders.read")

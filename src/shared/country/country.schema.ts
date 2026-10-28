@@ -144,8 +144,6 @@ export const updateCountrySchema = z.object({ name: z.string().min(2).max(80).op
 
 export const changeCountryStatusSchema = z.object({ status: z.enum(COUNTRY_STATUSES), reason: z.string().min(3).max(500) });
 
-export const shippingLaneSchema = z.object({ originCountryCode: isoCountryCode, destinationCountryCode: isoCountryCode, enabled: z.boolean(), customsRequired: z.boolean() });
-
 export type AddressRules = z.infer<typeof addressRulesSchema>;
 export type TaxRules = z.infer<typeof taxRulesSchema>;
 export type KycRuleset = z.infer<typeof kycRulesetSchema>;
@@ -153,7 +151,6 @@ export type CountryConfig = z.infer<typeof countryConfigSchema>;
 export type CreateCountryInput = z.infer<typeof createCountrySchema>;
 export type UpdateCountryInput = z.infer<typeof updateCountrySchema>;
 export type ChangeCountryStatusInput = z.infer<typeof changeCountryStatusSchema>;
-export type ShippingLaneInput = z.infer<typeof shippingLaneSchema>;
 
 export interface PublicCountry {
   code: string;

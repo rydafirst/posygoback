@@ -182,7 +182,7 @@ describe("orders, packing and shipping", () => {
       await fundWallet(vendorId, 20_000);
       const placed = await placeOrder([{ externalReference: "SHOP-1001", recipient: GB_RECIPIENT, lines: [{ productId: wigId, quantity: 2 }] }]).expect(201);
       expect(placed.body).toHaveLength(1);
-      expect(placed.body[0]).toMatchObject({ status: "PENDING_PACKING", source: "PORTAL", destinationCountryCode: "GB", totalUnits: 2, externalReference: "SHOP-1001" });
+      expect(placed.body[0]).toMatchObject({ status: "PENDING_PACKING", source: "PORTAL", countryCode: "GB", totalUnits: 2, externalReference: "SHOP-1001" });
       expect(placed.body[0].reference).toMatch(/^ORD-GB-[A-Z2-9]{7}$/);
       expect(await lot()).toEqual({ quantity_available: 28, quantity_reserved: 2 });
       expect(await balance()).toBe(20_000 - 398);
@@ -195,29 +195,31 @@ describe("orders, packing and shipping", () => {
       await test.http().get(`/v1/vendor/orders/${placed.body[0].id}`).set(as(otherOwner)).expect(404);
     });
 
-    it("checks lanes, addresses, customs details and stock", async () => {
-      const lane = await placeOrder([{ recipient: { ...GB_RECIPIENT, countryCode: "FR", postalCode: "75001" }, lines: [{ productId: wigId, quantity: 1 }] }]).expect(400);
-      expect(lane.body.fieldErrors["deliveries.0.recipient.countryCode"]).toEqual(["We don't ship from GB to FR yet"]);
+    it("checks the address is in the order's country, the postcode and stock", async () => {
+      const abroad = await placeOrder([{ recipient: US_RECIPIENT, lines: [{ productId: wigId, quantity: 1 }] }]).expect(400);
+      expect(abroad.body.fieldErrors["deliveries.0.recipient.countryCode"]).toEqual(["Use an address in United Kingdom"]);
       const postcode = await placeOrder([{ recipient: { ...GB_RECIPIENT, postalCode: "NOPE" }, lines: [{ productId: wigId, quantity: 1 }] }]).expect(400);
       expect(Object.keys(postcode.body.fieldErrors)).toEqual(["deliveries.0.recipient.postalCode"]);
-      const customs = await placeOrder([{ recipient: { ...US_RECIPIENT, phone: undefined }, lines: [{ productId: capId, quantity: 1 }] }]).expect(400);
-      expect(Object.keys(customs.body.fieldErrors).sort()).toEqual(["deliveries.0.lines", "deliveries.0.recipient.phone"]);
       const stock = await placeOrder([{ recipient: GB_RECIPIENT, lines: [{ productId: capId, quantity: 11 }] }]).expect(409);
       expect(stock.body).toMatchObject({ code: "insufficient_stock", message: expect.stringContaining("Wig cap") });
     });
 
-    it("splits a request with several destinations into one order each", async () => {
+    it("splits a request with several deliveries into one order each, all in the same country", async () => {
       const placed = await placeOrder([
         { recipient: GB_RECIPIENT, lines: [{ productId: capId, quantity: 1 }] },
-        { recipient: US_RECIPIENT, lines: [{ productId: wigId, quantity: 1 }] },
+        { recipient: { name: "Ben Ade", line1: "2 Low Road", city: "Leeds", postalCode: "LS1 1AA" }, lines: [{ productId: wigId, quantity: 1 }] },
       ]).expect(201);
       const orders = placed.body as OrderSummaryView[];
-      expect(orders.map((order) => order.destinationCountryCode).sort()).toEqual(["GB", "US"]);
-      const groups = await query<{ group_id: string; customs_required: boolean }>("SELECT group_id, customs_required FROM orders WHERE id = ANY($1::uuid[]) ORDER BY destination_country_code", [
-        orders.map((order) => order.id),
-      ]);
+      expect(orders.map((order) => order.countryCode)).toEqual(["GB", "GB"]);
+      const groups = await query<{ group_id: string; customs_required: boolean; destination_country_code: string }>(
+        "SELECT group_id, customs_required, destination_country_code FROM orders WHERE id = ANY($1::uuid[])",
+        [orders.map((order) => order.id)],
+      );
       expect(groups[0]!.group_id).toBe(groups[1]!.group_id);
-      expect(groups.map((group) => group.customs_required)).toEqual([false, true]);
+      expect(groups.map((group) => [group.customs_required, group.destination_country_code])).toEqual([
+        [false, "GB"],
+        [false, "GB"],
+      ]);
     });
 
     it("estimates the fee before placing", async () => {
@@ -502,7 +504,7 @@ describe("orders, packing and shipping", () => {
 
     it("places orders idempotently by the store's reference", async () => {
       await fundWallet(vendorId, 5_000);
-      const body = { externalReference: "#5001", recipient: GB_RECIPIENT, lines: [{ productCode: "wig-1", quantity: 1 }] };
+      const body = { country: "GB", externalReference: "#5001", recipient: GB_RECIPIENT, lines: [{ productCode: "wig-1", quantity: 1 }] };
       await test.http().post("/v1/integration/orders").send(body).expect(401);
       await test
         .http()
@@ -527,7 +529,7 @@ describe("orders, packing and shipping", () => {
 
     it("returns the same order when a store retries at the same moment", async () => {
       await fundWallet(vendorId, 5_000);
-      const body = { externalReference: "#5002", recipient: GB_RECIPIENT, lines: [{ productCode: "cap-1", quantity: 1 }] };
+      const body = { country: "GB", externalReference: "#5002", recipient: GB_RECIPIENT, lines: [{ productCode: "cap-1", quantity: 1 }] };
       const responses = await Promise.all([1, 2, 3].map(() => test.http().post("/v1/integration/orders").set("X-Api-Key", key).send(body)));
       expect(responses.map((response) => response.status).sort()).toEqual([200, 200, 201]);
       expect(new Set(responses.map((response) => (response.body as { reference: string }).reference)).size).toBe(1);

@@ -1,15 +1,6 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post, Put, Res } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post, Res } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
-import {
-  type AcceptInvitationInput,
-  acceptInvitationSchema,
-  type AuthenticatedResult,
-  type InviteMemberInput,
-  inviteMemberSchema,
-  invitationTokenSchema,
-  type PreferredDestinationsInput,
-  preferredDestinationsSchema,
-} from "../../../shared";
+import { type AcceptInvitationInput, acceptInvitationSchema, type AuthenticatedResult, type InviteMemberInput, inviteMemberSchema, invitationTokenSchema } from "../../../shared";
 import type { Response } from "express";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
@@ -19,7 +10,6 @@ import { APP_CONFIG } from "../../../config/config.module";
 import type { AppConfig } from "../../../config/config.schema";
 import { THROTTLE } from "../../../infrastructure/rate-limit/rate-limit.module";
 import { setRefreshCookie } from "../../auth/tokens/refresh-cookie";
-import { MarketsService } from "../markets/markets.service";
 import { InvitationsService } from "./invitations.service";
 import { TeamService } from "./team.service";
 
@@ -86,22 +76,5 @@ export class InvitationsController {
     const issued = await this.invitations.accept(input, meta);
     setRefreshCookie(response, issued.refreshToken, this.config);
     return issued.result;
-  }
-}
-
-@Controller({ path: "vendor/markets", version: "1" })
-export class MarketsController {
-  constructor(private readonly markets: MarketsService) {}
-
-  @RequirePermission("vendor.portal.access")
-  @Get()
-  view(@CurrentPrincipal() principal: AuthPrincipal) {
-    return this.markets.preferences(principal);
-  }
-
-  @RequirePermission("vendor.markets.manage")
-  @Put()
-  set(@Body(new ZodValidationPipe(preferredDestinationsSchema)) input: PreferredDestinationsInput, @CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
-    return this.markets.setPreferences(principal, input.countryCodes, meta);
   }
 }

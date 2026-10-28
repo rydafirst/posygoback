@@ -12,7 +12,6 @@ import { Money, SHOPPING_RULES, shoppingCommission, shoppingRates, type Shopping
 import { FilesService } from "../../files/files.service";
 import { FeeSchedulesService } from "../../finance/fees/fee-schedules.service";
 import { reviewerCountryScope } from "../../onboarding/scope";
-import type { CustomsItem } from "../../orders/carriers/carrier.port";
 import { DeliveryQuotesService } from "../checkout/delivery-quotes.service";
 import { ShoppingEmails } from "./shopping-emails";
 import { SHOPPING_INCLUDE, ShoppingRepository, type ShoppingRow, type StoredParcel } from "./shopping.repository";
@@ -79,30 +78,17 @@ export class ShoppingQuotesService {
       throw Errors.validation(warehouse ? { packagingPresetId: ["Choose a box from this country"] } : { warehouseId: ["Choose an active warehouse in this country"] });
     }
     const shipTo = this.repository.shipTo(row);
-    const lane = await this.requests.lane(this.prisma, row.countryCode, shipTo);
+    await this.requests.assertDeliverable(this.prisma, row.countryCode, shipTo);
     const available = input.lines.filter((line) => line.available);
-    if (lane.customsRequired && available.some((line) => !line.hsCode)) {
-      throw Errors.validation({ lines: ["Add a customs code for every item going abroad"] });
-    }
     const quantityOf = new Map(row.lines.map((line) => [line.id, line.quantity]));
     const goodsMinor = available.reduce((total, line) => total + line.unitPriceMinor! * quantityOf.get(line.lineId)!, 0);
     const weightGrams = available.reduce((total, line) => total + line.unitWeightGrams! * quantityOf.get(line.lineId)!, SHOPPING_RULES.packingAllowanceGrams as number);
     const parcel = { lengthMm: box.lengthMm, widthMm: box.widthMm, heightMm: box.heightMm, weightGrams };
-    const customs: CustomsItem[] | null = lane.customsRequired
-      ? available.map((line) => ({
-          description: row.lines.find((candidate) => candidate.id === line.lineId)!.description.slice(0, 100),
-          quantity: quantityOf.get(line.lineId)!,
-          unitValueMinor: line.unitPriceMinor!,
-          netWeightGrams: line.unitWeightGrams!,
-          originCountry: row.countryCode,
-          hsCode: line.hsCode!,
-        }))
-      : null;
     const { schedule } = await this.fees.active(row.countryCode);
-    const options = await this.delivery.optionsFor(warehouse, shipTo, parcel, customs, row.currency, schedule);
+    const options = await this.delivery.optionsFor(warehouse, shipTo, parcel, null, row.currency, schedule);
     const commissionMinor = shoppingCommission(shoppingRates(schedule), goodsMinor);
     const deliveryMinor = options[0]!.priceMinor;
-    const stored: StoredParcel = { packagingPresetId: box.id, ...parcel, options, customs };
+    const stored: StoredParcel = { packagingPresetId: box.id, ...parcel, options, customs: null };
     const expiresAt = new Date(Date.now() + SHOPPING_RULES.quoteValidDays * DAY_MS);
     await this.prisma.$transaction(async (tx) => {
       await lockRow(tx, "shoppingRequests", row.id);

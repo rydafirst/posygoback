@@ -24,7 +24,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     body.correlationId = request.correlationId;
 
     if (body.statusCode >= 500) {
-      this.logger.error({ err: exception, correlationId: request.correlationId }, "Unhandled error");
+      this.logger.error({ err: exception, correlationId: request.correlationId }, `Unhandled error on ${request.method} ${request.path}: ${describe(exception)}`);
     }
     response.status(body.statusCode).json(body);
   }
@@ -57,4 +57,8 @@ function bodyParserStatus(exception: unknown): ApiErrorBody | null {
     return { statusCode: HttpStatus.BAD_REQUEST, code: ERROR_CODES.validationFailed, message: "The request body could not be read." };
   }
   return null;
+}
+
+function describe(exception: unknown): string {
+  return exception instanceof Error ? `${exception.name}: ${exception.message}`.slice(0, 500) : String(exception).slice(0, 500);
 }

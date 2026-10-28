@@ -59,8 +59,8 @@ export class DeliveryQuotesService {
     private readonly carriers: CarrierAccountsService,
   ) {}
 
-  async options(warehouse: Warehouse, shipTo: ShipTo, lines: readonly QuoteLine[], currency: string, schedule: FeeSchedule, customsRequired: boolean): Promise<DeliveryOption[]> {
-    return this.optionsFor(warehouse, shipTo, await this.parcel(warehouse.countryCode, lines), customsRequired ? this.customs(lines) : null, currency, schedule);
+  async options(warehouse: Warehouse, shipTo: ShipTo, lines: readonly QuoteLine[], currency: string, schedule: FeeSchedule): Promise<DeliveryOption[]> {
+    return this.optionsFor(warehouse, shipTo, await this.parcel(warehouse.countryCode, lines), null, currency, schedule);
   }
 
   async optionsFor(warehouse: Warehouse, shipTo: ShipTo, parcel: Parcel, customs: CustomsItem[] | null, currency: string, schedule: FeeSchedule): Promise<DeliveryOption[]> {
@@ -104,16 +104,5 @@ export class DeliveryQuotesService {
     const fits = bySize.find((entry) => entry.volume >= volume) ?? bySize.at(-1);
     const box = fits?.box ?? FALLBACK_BOX;
     return { lengthMm: box.lengthMm, widthMm: box.widthMm, heightMm: box.heightMm, weightGrams };
-  }
-
-  private customs(lines: readonly QuoteLine[]): CustomsItem[] {
-    return lines.map((line) => ({
-      description: line.product.name,
-      quantity: line.quantity,
-      unitValueMinor: line.product.declaredValueMinor,
-      netWeightGrams: line.product.weightGrams,
-      originCountry: line.product.countryOfOrigin,
-      hsCode: line.product.hsCode ?? "",
-    }));
   }
 }

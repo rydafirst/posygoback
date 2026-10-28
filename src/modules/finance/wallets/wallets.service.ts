@@ -1,15 +1,16 @@
 import { Injectable } from "@nestjs/common";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
-import { Errors } from "../../../common/http/app-exception";
+import type { SellerCountry } from "../../../common/auth/selected-country";
 import { PrismaService } from "../../../database/prisma.service";
 import type { LedgerEntry, Prisma } from "../../../generated/prisma/client";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
 import type { LedgerEntryView, WalletView } from "../../../shared";
-import { vendorIdOf } from "../../onboarding/scope";
 import { WalletLedgerService } from "./wallet-ledger.service";
 
-const WALLET_INCLUDE = { vendor: { select: { businessName: true, countryCode: true } } } satisfies Prisma.WalletInclude;
+export const WALLET_INCLUDE = {
+  vendor: { select: { businessName: true, countryCode: true, countries: { select: { countryCode: true, country: { select: { currency: true } } } } } },
+} satisfies Prisma.WalletInclude;
 
 export type WalletWithVendor = Prisma.WalletGetPayload<{ include: typeof WALLET_INCLUDE }>;
 
@@ -18,12 +19,19 @@ export function toWalletView(wallet: WalletWithVendor): WalletView {
     id: wallet.id,
     vendorId: wallet.vendorId,
     businessName: wallet.vendor.businessName,
-    countryCode: wallet.vendor.countryCode,
+    countryCode: walletCountryCode(wallet),
     currency: wallet.currency,
     balanceMinor: Number(wallet.balanceMinor),
     lowBalanceThresholdMinor: Number(wallet.lowBalanceThresholdMinor),
     status: wallet.status,
   };
+}
+
+export function walletCountryCode(wallet: WalletWithVendor): string {
+  if (wallet.vendor.countries.some((entry) => entry.countryCode === wallet.vendor.countryCode && entry.country.currency === wallet.currency)) {
+    return wallet.vendor.countryCode;
+  }
+  return wallet.vendor.countries.find((entry) => entry.country.currency === wallet.currency)?.countryCode ?? wallet.vendor.countryCode;
 }
 
 export function toLedgerView(entry: LedgerEntry): LedgerEntryView {
@@ -45,17 +53,17 @@ export class WalletsService {
     private readonly audit: AuditService,
   ) {}
 
-  async mine(principal: AuthPrincipal): Promise<WalletView> {
-    return toWalletView(await this.vendorWallet(principal));
+  async mine(country: SellerCountry): Promise<WalletView> {
+    return { ...toWalletView(await this.vendorWallet(country)), countryCode: country.countryCode };
   }
 
-  async myLedger(principal: AuthPrincipal): Promise<LedgerEntryView[]> {
-    const wallet = await this.vendorWallet(principal);
+  async myLedger(country: SellerCountry): Promise<LedgerEntryView[]> {
+    const wallet = await this.vendorWallet(country);
     return this.entries(wallet.id);
   }
 
-  async updateSettings(principal: AuthPrincipal, lowBalanceThresholdMinor: number, meta: RequestMeta): Promise<WalletView> {
-    const wallet = await this.vendorWallet(principal);
+  async updateSettings(principal: AuthPrincipal, country: SellerCountry, lowBalanceThresholdMinor: number, meta: RequestMeta): Promise<WalletView> {
+    const wallet = await this.vendorWallet(country);
     const updated = await this.prisma.$transaction(async (tx) => {
       const row = await tx.wallet.update({ where: { id: wallet.id }, data: { lowBalanceThresholdMinor: BigInt(lowBalanceThresholdMinor) }, include: WALLET_INCLUDE });
       await this.audit.record(
@@ -65,6 +73,7 @@ export class WalletsService {
           resourceType: "wallet",
           resourceId: wallet.id,
           vendorId: wallet.vendorId,
+          countryCode: country.countryCode,
           before: { lowBalanceThresholdMinor: Number(wallet.lowBalanceThresholdMinor) },
           after: { lowBalanceThresholdMinor },
           meta,
@@ -73,7 +82,7 @@ export class WalletsService {
       );
       return row;
     });
-    return toWalletView(updated);
+    return { ...toWalletView(updated), countryCode: country.countryCode };
   }
 
   async entries(walletId: string): Promise<LedgerEntryView[]> {
@@ -81,13 +90,8 @@ export class WalletsService {
     return rows.map(toLedgerView);
   }
 
-  private async vendorWallet(principal: AuthPrincipal): Promise<WalletWithVendor> {
-    const vendorId = vendorIdOf(principal);
-    const vendor = await this.prisma.vendor.findUnique({ where: { id: vendorId }, include: { country: { select: { currency: true } } } });
-    if (!vendor) {
-      throw Errors.notFound();
-    }
-    const wallet = await this.ledger.walletFor(this.prisma, vendorId, vendor.country.currency);
+  private async vendorWallet(country: SellerCountry): Promise<WalletWithVendor> {
+    const wallet = await this.ledger.walletFor(this.prisma, country.vendorId, country.currency);
     return this.prisma.wallet.findUniqueOrThrow({ where: { id: wallet.id }, include: WALLET_INCLUDE });
   }
 }

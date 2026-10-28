@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
+import type { SellerCountry } from "../../../common/auth/selected-country";
 import { Errors } from "../../../common/http/app-exception";
 import { APP_CONFIG } from "../../../config/config.module";
 import type { AppConfig } from "../../../config/config.schema";
@@ -8,7 +9,6 @@ import { PrismaService } from "../../../database/prisma.service";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
 import { currencyDefinition, grossUpForProcessorFees, Money, TOP_UP_LIMITS, type TopUpQuote, type TopUpStarted, type TopUpView } from "../../../shared";
 import { UsersRepository } from "../../auth/users.repository";
-import { vendorIdOf } from "../../onboarding/scope";
 import { WalletLedgerService } from "../wallets/wallet-ledger.service";
 import { PaymentAccountsService } from "./payment-accounts.service";
 import { PaymentEventsService } from "./payment-events.service";
@@ -25,17 +25,17 @@ export class TopUpsService {
     private readonly audit: AuditService,
   ) {}
 
-  async quote(principal: AuthPrincipal, amountMinor: number): Promise<TopUpQuote> {
-    const { currency, feePercentBps, fixedFeeMinor } = await this.terms(principal);
+  quote(country: SellerCountry, amountMinor: number): TopUpQuote {
+    const { currency, feePercentBps, fixedFeeMinor } = this.terms(country);
     this.assertWithinLimits(amountMinor, currency);
     const grossMinor = grossUpForProcessorFees(amountMinor, feePercentBps, fixedFeeMinor);
     return { netMinor: amountMinor, grossMinor, feeMinor: grossMinor - amountMinor, currency };
   }
 
-  async start(principal: AuthPrincipal, amountMinor: number, meta: RequestMeta): Promise<TopUpStarted> {
-    const vendorId = vendorIdOf(principal);
-    const quote = await this.quote(principal, amountMinor);
-    const resolved = this.accounts.forCountry(principal.countryCode ?? "");
+  async start(principal: AuthPrincipal, country: SellerCountry, amountMinor: number, meta: RequestMeta): Promise<TopUpStarted> {
+    const { vendorId } = country;
+    const quote = this.quote(country, amountMinor);
+    const resolved = this.accounts.forCountry(country.countryCode);
     const owner = await this.users.findById(principal.userId);
     const wallet = await this.ledger.walletFor(this.prisma, vendorId, quote.currency);
     const topUp = await this.prisma.$transaction(async (tx) => {
@@ -81,8 +81,8 @@ export class TopUpsService {
     return { topUpId: topUp.id, redirectUrl: session.redirectUrl, ...quote };
   }
 
-  async list(principal: AuthPrincipal): Promise<TopUpView[]> {
-    const rows = await this.prisma.topUp.findMany({ where: { vendorId: vendorIdOf(principal) }, orderBy: { createdAt: "desc" }, take: 50 });
+  async list(country: SellerCountry): Promise<TopUpView[]> {
+    const rows = await this.prisma.topUp.findMany({ where: { vendorId: country.vendorId, countryCode: country.countryCode }, orderBy: { createdAt: "desc" }, take: 50 });
     return rows.map((row) => ({
       id: row.id,
       status: row.status,
@@ -94,8 +94,8 @@ export class TopUpsService {
     }));
   }
 
-  async completeSandbox(principal: AuthPrincipal, topUpId: string): Promise<TopUpView[]> {
-    const topUp = await this.prisma.topUp.findFirst({ where: { id: topUpId, vendorId: vendorIdOf(principal) } });
+  async completeSandbox(country: SellerCountry, topUpId: string): Promise<TopUpView[]> {
+    const topUp = await this.prisma.topUp.findFirst({ where: { id: topUpId, vendorId: country.vendorId } });
     if (!topUp || topUp.processor !== "SANDBOX" || this.config.NODE_ENV === "production" || !topUp.providerReference) {
       throw Errors.notFound();
     }
@@ -110,15 +110,11 @@ export class TopUpsService {
       type: "sandbox.paid",
       payload: { topUpId },
     });
-    return this.list(principal);
+    return this.list({ ...country, countryCode: topUp.countryCode });
   }
 
-  private async terms(principal: AuthPrincipal) {
-    const country = await this.prisma.country.findUnique({ where: { code: principal.countryCode ?? "" } });
-    if (!country) {
-      throw Errors.notFound();
-    }
-    const { account } = this.accounts.forCountry(country.code);
+  private terms(country: SellerCountry) {
+    const { account } = this.accounts.forCountry(country.countryCode);
     return { currency: country.currency, feePercentBps: account.feePercentBps, fixedFeeMinor: account.fixedFeeMinor };
   }
 

@@ -71,7 +71,7 @@ describe("answers from the helper", () => {
     expect(reply.body).toEqual({ answer: "Packing an order costs £2.50.", handoff: false });
     const request = model.requests.at(-1)!;
     expect(request.system).toContain("Page: Wallet (/wallet)");
-    expect(request.system).toContain("Wallet balance: £42.00");
+    expect(request.system).toContain("- £42.00 (status ACTIVE");
     expect(request.system).toContain("Prices in United Kingdom (GBP)");
     expect(request.system).not.toContain("Prices in United States");
     expect(request.turns).toEqual([{ role: "user", content: "How much is packing? My card is [number removed]" }]);

@@ -55,7 +55,7 @@ export class CheckoutPreparationService {
     if (!choice.warehouse) {
       throw Errors.validation({ items: [`Not enough left of ${choice.shortProductIds.map((id) => byId.get(id)?.name ?? "an item").join(", ")}`] });
     }
-    const customsRequired = await this.assertDeliverable(choice.warehouse.countryCode, input, lines);
+    this.assertDeliverable(store.vendor.countryCode, store.vendor.country.config as unknown as CountryConfig, input);
     const active = await this.fees.active(choice.warehouse.countryCode);
     const rates = storefrontRates(active.schedule);
     const goodsMinor = goodsTotal(lines.map((line) => ({ unitPriceMinor: line.product.retailPriceMinor ?? 0, quantity: line.quantity })));
@@ -74,26 +74,17 @@ export class CheckoutPreparationService {
       goodsMinor,
       discount: discount?.ok ? { id: discount.id, minor: discount.discountMinor } : null,
       discountProblem: discount && !discount.ok ? discount.problem : null,
-      options: await this.delivery.options(choice.warehouse, input.shipTo, lines, store.vendor.country.currency, active.schedule, customsRequired),
+      options: await this.delivery.options(choice.warehouse, input.shipTo, lines, store.vendor.country.currency, active.schedule),
     };
   }
 
-  private async assertDeliverable(originCountryCode: string, input: QuoteInput, lines: readonly QuoteLine[]): Promise<boolean> {
-    const lane = await this.prisma.shippingLane.findFirst({
-      where: { originCountryCode, destinationCountryCode: input.shipTo.countryCode, enabled: true },
-      include: { destination: { select: { config: true } } },
-    });
-    if (!lane) {
-      throw Errors.validation({ "shipTo.countryCode": ["This store doesn't deliver there yet"] });
+  private assertDeliverable(countryCode: string, config: CountryConfig, input: QuoteInput): void {
+    if (input.shipTo.countryCode !== countryCode) {
+      throw Errors.validation({ "shipTo.countryCode": ["This store only delivers within its own country"] });
     }
-    if (lane.customsRequired && lines.some((line) => !line.product.hsCode)) {
-      throw Errors.validation({ "shipTo.countryCode": ["Some of these items can't be sent abroad yet. Choose an address in the store's country"] });
-    }
-    const destination = lane.destination.config as unknown as CountryConfig;
-    const problems = prefixProblems(recipientProblems(input.shipTo, destination.address, lane.customsRequired), "shipTo");
+    const problems = prefixProblems(recipientProblems(input.shipTo, config.address), "shipTo");
     if (Object.keys(problems).length > 0) {
       throw Errors.validation(problems);
     }
-    return lane.customsRequired;
   }
 }

@@ -1,11 +1,11 @@
 import { Injectable } from "@nestjs/common";
 
 import type { AuthPrincipal, RequestMeta } from "../../common/auth/auth-principal";
+import type { SellerCountry } from "../../common/auth/selected-country";
 import { Errors } from "../../common/http/app-exception";
 import { PrismaService } from "../../database/prisma.service";
 import { AuditService } from "../../infrastructure/audit/audit.service";
 import { currencyDefinition, EXPORT_LIMITS, type ExportKind, type ExportRange } from "../../shared";
-import { vendorIdOf } from "../onboarding/scope";
 import { type CsvCell, minorToDecimal, toCsv } from "./csv";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -26,8 +26,8 @@ export class VendorExportsService {
     private readonly audit: AuditService,
   ) {}
 
-  async orders(principal: AuthPrincipal, range: ExportRange, meta: RequestMeta): Promise<CsvFile> {
-    const where = { vendorId: vendorIdOf(principal), createdAt: window(range) };
+  async orders(principal: AuthPrincipal, country: SellerCountry, range: ExportRange, meta: RequestMeta): Promise<CsvFile> {
+    const where = { vendorId: country.vendorId, originCountryCode: country.countryCode, createdAt: window(range) };
     this.assertSize(await this.prisma.order.count({ where }));
     const rows = await this.prisma.order.findMany({ where, include: { lines: { select: { quantity: true } }, warehouse: { select: { name: true } } }, orderBy: { createdAt: "asc" } });
     const body = toCsv(
@@ -40,7 +40,7 @@ export class VendorExportsService {
         "warehouse",
         "recipient",
         "city",
-        "destination",
+        "country",
         "units",
         "currency",
         "fulfilment_fee",
@@ -62,7 +62,7 @@ export class VendorExportsService {
           row.warehouse.name,
           row.recipientName,
           row.recipientCity,
-          row.destinationCountryCode,
+          row.originCountryCode,
           row.lines.reduce((total, line) => total + line.quantity, 0),
           row.currency,
           minorToDecimal(row.fulfilmentFeeMinor, digits),
@@ -75,11 +75,11 @@ export class VendorExportsService {
         ] satisfies CsvCell[];
       }),
     );
-    return this.done(principal, "orders", range, rows.length, body, meta);
+    return this.done(principal, country, "orders", range, rows.length, body, meta);
   }
 
-  async ledger(principal: AuthPrincipal, range: ExportRange, meta: RequestMeta): Promise<CsvFile> {
-    const where = { vendorId: vendorIdOf(principal), createdAt: window(range) };
+  async ledger(principal: AuthPrincipal, country: SellerCountry, range: ExportRange, meta: RequestMeta): Promise<CsvFile> {
+    const where = { vendorId: country.vendorId, wallet: { currency: country.currency }, createdAt: window(range) };
     this.assertSize(await this.prisma.ledgerEntry.count({ where }));
     const rows = await this.prisma.ledgerEntry.findMany({ where, include: { wallet: { select: { currency: true } } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
     const body = toCsv(
@@ -98,11 +98,11 @@ export class VendorExportsService {
         ] satisfies CsvCell[];
       }),
     );
-    return this.done(principal, "ledger", range, rows.length, body, meta);
+    return this.done(principal, country, "ledger", range, rows.length, body, meta);
   }
 
-  async inventory(principal: AuthPrincipal, meta: RequestMeta): Promise<CsvFile> {
-    const where = { vendorId: vendorIdOf(principal), OR: [{ quantityAvailable: { gt: 0 } }, { quantityReserved: { gt: 0 } }] };
+  async inventory(principal: AuthPrincipal, country: SellerCountry, meta: RequestMeta): Promise<CsvFile> {
+    const where = { vendorId: country.vendorId, warehouse: { countryCode: country.countryCode }, OR: [{ quantityAvailable: { gt: 0 } }, { quantityReserved: { gt: 0 } }] };
     this.assertSize(await this.prisma.stockLot.count({ where }));
     const rows = await this.prisma.stockLot.findMany({
       where,
@@ -116,7 +116,7 @@ export class VendorExportsService {
       ),
     );
     const today = new Date().toISOString().slice(0, 10);
-    return this.done(principal, "inventory", { from: today, to: today }, rows.length, body, meta);
+    return this.done(principal, country, "inventory", { from: today, to: today }, rows.length, body, meta);
   }
 
   private assertSize(count: number): void {
@@ -125,16 +125,18 @@ export class VendorExportsService {
     }
   }
 
-  private async done(principal: AuthPrincipal, kind: ExportKind, range: ExportRange, rows: number, body: string, meta: RequestMeta): Promise<CsvFile> {
+  private async done(principal: AuthPrincipal, country: SellerCountry, kind: ExportKind, range: ExportRange, rows: number, body: string, meta: RequestMeta): Promise<CsvFile> {
     await this.audit.record({
       actor: { userId: principal.userId, role: principal.role },
       action: `export.${kind}`,
       resourceType: "vendor",
-      resourceId: principal.vendorId,
-      vendorId: principal.vendorId,
+      resourceId: country.vendorId,
+      vendorId: country.vendorId,
+      countryCode: country.countryCode,
       after: { ...range, rows },
       meta,
     });
-    return { filename: kind === "inventory" ? `inventory-${range.to}.csv` : `${kind}-${range.from}-to-${range.to}.csv`, body };
+    const prefix = `${kind}-${country.countryCode.toLowerCase()}`;
+    return { filename: kind === "inventory" ? `${prefix}-${range.to}.csv` : `${prefix}-${range.from}-to-${range.to}.csv`, body };
   }
 }

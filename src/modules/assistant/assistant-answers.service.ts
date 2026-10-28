@@ -91,9 +91,11 @@ export class AssistantAnswersService {
   }
 
   private async priceLists(principal: AuthPrincipal | null): Promise<PublicPriceListView[]> {
-    const codes = principal?.countryCode
-      ? [principal.countryCode]
-      : (await this.prisma.country.findMany({ where: { status: "LIVE" }, select: { code: true }, orderBy: { code: "asc" } })).map((country) => country.code);
+    const codes = principal?.vendorId
+      ? (await this.prisma.vendorCountry.findMany({ where: { vendorId: principal.vendorId }, select: { countryCode: true }, orderBy: { countryCode: "asc" } })).map((entry) => entry.countryCode)
+      : principal?.countryCode
+        ? [principal.countryCode]
+        : (await this.prisma.country.findMany({ where: { status: "LIVE" }, select: { code: true }, orderBy: { code: "asc" } })).map((country) => country.code);
     const lists = await Promise.all(codes.map((code) => this.prices.forCountry(code).catch(() => null)));
     return lists.filter((list): list is PublicPriceListView => list !== null);
   }

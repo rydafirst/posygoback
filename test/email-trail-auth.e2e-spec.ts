@@ -32,7 +32,7 @@ describe("email trail: sign-in and accounts", () => {
       .http()
       .post("/v1/auth/signup")
       .set("User-Agent", CHROME_WINDOWS)
-      .send({ email: EMAIL, password: PASSWORD, businessName: "Trail Traders", countryCode: "GB", acceptTerms: true })
+      .send({ email: EMAIL, password: PASSWORD, businessName: "Trail Traders", countryCodes: ["GB"], acceptTerms: true })
       .expect(202);
     const code = codeFrom(test.email.lastTo(EMAIL)!.text);
     await test.http().post("/v1/auth/verify-email").set("User-Agent", CHROME_WINDOWS).send({ email: EMAIL, code, password: PASSWORD }).expect(200);

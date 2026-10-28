@@ -27,6 +27,12 @@ function digest(parts: string[]): string {
 
 export { addDays, startOfUtcDay };
 
+interface BillableAccount {
+  vendorId: string;
+  countryCode: string;
+  currency: string;
+}
+
 @Injectable()
 export class StorageBillingService {
   private readonly logger = new Logger(StorageBillingService.name);
@@ -41,31 +47,37 @@ export class StorageBillingService {
   ) {}
 
   async run(today: Date = startOfUtcDay(new Date())): Promise<BillingRunSummary> {
-    const due = await this.prisma.storageBox.groupBy({ by: ["vendorId"], where: { removedAt: null, nextBillingDate: { lte: today } } });
+    const due = await this.prisma.storageBox.findMany({
+      where: { removedAt: null, nextBillingDate: { lte: today } },
+      distinct: ["vendorId", "warehouseId"],
+      select: { vendorId: true, warehouse: { select: { countryCode: true, country: { select: { currency: true } } } } },
+    });
+    const accounts = new Map(
+      due.map((box) => [`${box.vendorId}:${box.warehouse.countryCode}`, { vendorId: box.vendorId, countryCode: box.warehouse.countryCode, currency: box.warehouse.country.currency }]),
+    );
     const summary: BillingRunSummary = { vendorsCharged: 0, vendorsOverdue: 0, boxesBilled: 0 };
-    for (const { vendorId } of due) {
+    for (const account of accounts.values()) {
       try {
-        const billed = await this.billVendor(vendorId, today);
+        const billed = await this.billVendor(account, today);
         summary.boxesBilled += billed > 0 ? billed : 0;
         summary.vendorsCharged += billed > 0 ? 1 : 0;
         summary.vendorsOverdue += billed < 0 ? 1 : 0;
       } catch (error) {
-        this.logger.error(`Storage billing failed for vendor ${vendorId}: ${String(error)}`);
+        this.logger.error(`Storage billing failed for vendor ${account.vendorId} in ${account.countryCode}: ${String(error)}`);
       }
     }
     return summary;
   }
 
-  private async billVendor(vendorId: string, today: Date): Promise<number> {
-    const vendor = await this.prisma.vendor.findUniqueOrThrow({ where: { id: vendorId }, include: { country: { select: { currency: true } } } });
-    const { schedule } = await this.fees.active(vendor.countryCode);
-    const boxes = await this.prisma.storageBox.findMany({ where: { vendorId, removedAt: null, nextBillingDate: { lte: today } } });
+  private async billVendor({ vendorId, countryCode, currency }: BillableAccount, today: Date): Promise<number> {
+    const { schedule } = await this.fees.active(countryCode);
+    const boxes = await this.prisma.storageBox.findMany({ where: { vendorId, removedAt: null, nextBillingDate: { lte: today }, warehouse: { countryCode } } });
     const billable = boxes.filter((box) => schedule.monthlyStorage[box.tier] !== null);
     const amountMinor = billable.reduce((total, box) => total + (schedule.monthlyStorage[box.tier] ?? 0), 0);
     if (billable.length === 0 || amountMinor === 0) {
       return 0;
     }
-    const wallet = await this.ledger.walletFor(this.prisma, vendorId, vendor.country.currency);
+    const wallet = await this.ledger.walletFor(this.prisma, vendorId, currency);
     const runKey = `storage:${today.toISOString().slice(0, 10)}:${digest(billable.map((box) => `${box.id}@${box.nextBillingDate!.toISOString()}`))}`;
     try {
       const posting = await this.prisma.$transaction(async (tx) => {
@@ -94,7 +106,7 @@ export class StorageBillingService {
       if (!(error instanceof AppException) || (error.code !== ERROR_CODES.insufficientFunds && error.code !== ERROR_CODES.walletUnavailable)) {
         throw error;
       }
-      await this.markOverdue(wallet.id, vendorId, amountMinor, vendor.country.currency);
+      await this.markOverdue(wallet.id, vendorId, amountMinor, currency);
       return -1;
     }
   }

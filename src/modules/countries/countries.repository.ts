@@ -1,13 +1,11 @@
 import { Injectable } from "@nestjs/common";
 
 import { type DatabaseClient, PrismaService } from "../../database/prisma.service";
-import type { Country, CountryStatus, Prisma, ShippingLane } from "../../generated/prisma/client";
+import type { Country, CountryStatus, Prisma } from "../../generated/prisma/client";
 import type { CountryConfig, DestinationView } from "../../shared";
 
 export type CountryRecord = Omit<Country, "config"> & { config: CountryConfig };
 export type CountryInsert = Omit<Prisma.CountryUncheckedCreateInput, "config"> & { config: CountryConfig };
-export type LaneRecord = ShippingLane;
-export type LaneInsert = Pick<ShippingLane, "originCountryCode" | "destinationCountryCode" | "enabled" | "customsRequired">;
 
 function toRecord(country: Country): CountryRecord {
   return { ...country, config: country.config as unknown as CountryConfig };
@@ -41,29 +39,8 @@ export class CountriesRepository {
     return toRecord(updated);
   }
 
-  async enabledDestinations(originCountryCode: string): Promise<DestinationView[]> {
-    const lanes = await this.prisma.shippingLane.findMany({
-      where: { originCountryCode, enabled: true },
-      include: { destination: { select: { code: true, name: true, config: true } } },
-      orderBy: { destination: { name: "asc" } },
-    });
-    return lanes.map((lane) => ({
-      code: lane.destination.code,
-      name: lane.destination.name,
-      customsRequired: lane.customsRequired,
-      address: (lane.destination.config as unknown as CountryConfig).address,
-    }));
-  }
-
-  async findLane(origin: string, destination: string, client: DatabaseClient): Promise<LaneRecord | undefined> {
-    return (await client.shippingLane.findUnique({ where: { originCountryCode_destinationCountryCode: { originCountryCode: origin, destinationCountryCode: destination } } })) ?? undefined;
-  }
-
-  upsertLane(values: LaneInsert, client: DatabaseClient): Promise<LaneRecord> {
-    return client.shippingLane.upsert({
-      where: { originCountryCode_destinationCountryCode: { originCountryCode: values.originCountryCode, destinationCountryCode: values.destinationCountryCode } },
-      create: values,
-      update: { enabled: values.enabled, customsRequired: values.customsRequired },
-    });
+  async domesticDestinations(countryCode: string): Promise<DestinationView[]> {
+    const country = await this.findByCode(countryCode);
+    return country ? [{ code: country.code, name: country.name, customsRequired: false, address: country.config.address }] : [];
   }
 }

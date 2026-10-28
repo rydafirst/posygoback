@@ -127,25 +127,16 @@ describe("privileged access", () => {
     expect(codes).toContain("DE");
   });
 
-  it("refuses a domestic lane that claims to need customs", async () => {
-    const response = await test
+  it("has no shipping lanes or destination lists", async () => {
+    const vendor = await signUpAndVerify(test, "lanes@example.com");
+    await test
       .http()
       .put("/v1/admin/countries/lanes")
       .set("Authorization", `Bearer ${adminToken}`)
-      .send({ originCountryCode: "DE", destinationCountryCode: "DE", enabled: true, customsRequired: true })
-      .expect(400);
-    expect(response.body.fieldErrors.customsRequired).toBeDefined();
-  });
-
-  it("shows a vendor only the destinations enabled from its own country", async () => {
-    const vendor = await signUpAndVerify(test, "lanes@example.com");
-    const auth = { Authorization: `Bearer ${vendor.accessToken}` };
-    const destinations = await test.http().get("/v1/countries/GB/destinations").set(auth).expect(200);
-    expect(destinations.body).toMatchObject([
-      { code: "GB", name: "United Kingdom", customsRequired: false, address: { postalCodeLabel: "Postcode" } },
-      { code: "US", name: "United States", customsRequired: true, address: { regionLabel: "State" } },
-    ]);
-    await test.http().get("/v1/countries/US/destinations").set(auth).expect(404);
+      .send({ originCountryCode: "GB", destinationCountryCode: "US", enabled: true, customsRequired: true })
+      .expect(404);
+    await test.http().get("/v1/countries/GB/destinations").set("Authorization", `Bearer ${vendor.accessToken}`).expect(404);
+    await test.http().get("/v1/vendor/markets").set("Authorization", `Bearer ${vendor.accessToken}`).expect(404);
   });
 
   it("keeps an unbroken, tamper-evident audit chain", async () => {

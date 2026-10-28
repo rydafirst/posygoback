@@ -280,7 +280,7 @@ describe("email trail: accounts and money", () => {
       const code = (await http().get("/v1/vendor/referrals").set(as(referrer)).expect(200)).body.code as string;
       await http()
         .post("/v1/auth/signup")
-        .send({ email: "joiner@growth.example", password: "a long enough password", businessName: "New Seller", countryCode: "GB", acceptTerms: true, referralCode: code })
+        .send({ email: "joiner@growth.example", password: "a long enough password", businessName: "New Seller", countryCodes: ["GB"], acceptTerms: true, referralCode: code })
         .expect(202);
       const joined = await http()
         .post("/v1/auth/verify-email")

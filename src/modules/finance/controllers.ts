@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import type { AuthPrincipal, RequestMeta } from "../../common/auth/auth-principal";
 import { CurrentPrincipal, Meta, Public, RequirePermission } from "../../common/auth/decorators";
+import { type SellerCountry, SelectedCountry } from "../../common/auth/selected-country";
 import { Errors } from "../../common/http/app-exception";
 import { ZodValidationPipe } from "../../common/http/zod-validation.pipe";
 import { THROTTLE } from "../../infrastructure/rate-limit/rate-limit.module";
@@ -62,48 +63,53 @@ export class VendorWalletController {
 
   @RequirePermission("vendor.wallet.read")
   @Get()
-  view(@CurrentPrincipal() principal: AuthPrincipal) {
-    return this.wallets.mine(principal);
+  view(@SelectedCountry() country: SellerCountry) {
+    return this.wallets.mine(country);
   }
 
   @RequirePermission("vendor.wallet.read")
   @Get("ledger")
-  ledger(@CurrentPrincipal() principal: AuthPrincipal) {
-    return this.wallets.myLedger(principal);
+  ledger(@SelectedCountry() country: SellerCountry) {
+    return this.wallets.myLedger(country);
   }
 
   @RequirePermission("vendor.wallet.manage")
   @Put("settings")
-  settings(@Body(new ZodValidationPipe(walletSettingsSchema)) input: WalletSettingsInput, @CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
-    return this.wallets.updateSettings(principal, input.lowBalanceThresholdMinor, meta);
+  settings(
+    @Body(new ZodValidationPipe(walletSettingsSchema)) input: WalletSettingsInput,
+    @SelectedCountry() country: SellerCountry,
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Meta() meta: RequestMeta,
+  ) {
+    return this.wallets.updateSettings(principal, country, input.lowBalanceThresholdMinor, meta);
   }
 
   @RequirePermission("vendor.wallet.read")
   @Get("top-ups")
-  topUpsList(@CurrentPrincipal() principal: AuthPrincipal) {
-    return this.topUps.list(principal);
+  topUpsList(@SelectedCountry() country: SellerCountry) {
+    return this.topUps.list(country);
   }
 
   @RequirePermission("vendor.wallet.manage")
   @Post("top-ups/quote")
   @HttpCode(HttpStatus.OK)
-  quote(@Body(new ZodValidationPipe(startTopUpSchema)) input: StartTopUpInput, @CurrentPrincipal() principal: AuthPrincipal) {
-    return this.topUps.quote(principal, input.amountMinor);
+  quote(@Body(new ZodValidationPipe(startTopUpSchema)) input: StartTopUpInput, @SelectedCountry() country: SellerCountry) {
+    return this.topUps.quote(country, input.amountMinor);
   }
 
   @RequirePermission("vendor.wallet.manage")
   @Throttle(THROTTLE.authStrict)
   @Post("top-ups")
-  start(@Body(new ZodValidationPipe(startTopUpSchema)) input: StartTopUpInput, @CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
-    return this.topUps.start(principal, input.amountMinor, meta);
+  start(@Body(new ZodValidationPipe(startTopUpSchema)) input: StartTopUpInput, @SelectedCountry() country: SellerCountry, @CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
+    return this.topUps.start(principal, country, input.amountMinor, meta);
   }
 
   @RequirePermission("vendor.wallet.manage")
   @Throttle(THROTTLE.authStrict)
   @Post("top-ups/:id/sandbox-pay")
   @HttpCode(HttpStatus.OK)
-  sandboxPay(@Param("id", uuid) id: string, @CurrentPrincipal() principal: AuthPrincipal) {
-    return this.topUps.completeSandbox(principal, id);
+  sandboxPay(@Param("id", uuid) id: string, @SelectedCountry() country: SellerCountry) {
+    return this.topUps.completeSandbox(country, id);
   }
 }
 
@@ -113,8 +119,8 @@ export class VendorFeesController {
 
   @RequirePermission("vendor.portal.access")
   @Get()
-  async current(@CurrentPrincipal() principal: AuthPrincipal): Promise<VendorFeesView> {
-    const { currency, schedule } = await this.fees.active(principal.countryCode ?? "");
+  async current(@SelectedCountry() country: SellerCountry): Promise<VendorFeesView> {
+    const { currency, schedule } = await this.fees.active(country.countryCode);
     return { currency, schedule: vendorFeeSchedule(schedule) };
   }
 }

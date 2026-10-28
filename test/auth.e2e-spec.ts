@@ -22,7 +22,7 @@ describe("authentication", () => {
     await test
       .http()
       .post("/v1/auth/signup")
-      .send({ email: "Ada@Example.com", password: "a long enough password", businessName: "Ada Ltd", countryCode: "GB", acceptTerms: true })
+      .send({ email: "Ada@Example.com", password: "a long enough password", businessName: "Ada Ltd", countryCodes: ["GB"], acceptTerms: true })
       .expect(202, { status: "VERIFICATION_SENT" });
 
     const code = codeFrom(test.email.lastTo("ada@example.com")!.text);
@@ -43,7 +43,7 @@ describe("authentication", () => {
     const again = await test
       .http()
       .post("/v1/auth/signup")
-      .send({ email: "taken@example.com", password: "another long password", businessName: "Copycat", countryCode: "GB", acceptTerms: true })
+      .send({ email: "taken@example.com", password: "another long password", businessName: "Copycat", countryCodes: ["GB"], acceptTerms: true })
       .expect(202);
     expect(again.body).toEqual({ status: "VERIFICATION_SENT" });
     expect(test.email.lastTo("taken@example.com")!.subject).toMatch(/tried to create an account/);
@@ -53,13 +53,17 @@ describe("authentication", () => {
     const response = await test
       .http()
       .post("/v1/auth/signup")
-      .send({ email: "de@example.com", password: "a long enough password", businessName: "DE GmbH", countryCode: "DE", acceptTerms: true })
+      .send({ email: "de@example.com", password: "a long enough password", businessName: "DE GmbH", countryCodes: ["DE"], acceptTerms: true })
       .expect(400);
     expect(response.body.code).toBe("country_unavailable");
   });
 
   it("burns a verification code after five wrong guesses", async () => {
-    await test.http().post("/v1/auth/signup").send({ email: "guess@example.com", password: "a long enough password", businessName: "Guess", countryCode: "GB", acceptTerms: true }).expect(202);
+    await test
+      .http()
+      .post("/v1/auth/signup")
+      .send({ email: "guess@example.com", password: "a long enough password", businessName: "Guess", countryCodes: ["GB"], acceptTerms: true })
+      .expect(202);
     const realCode = codeFrom(test.email.lastTo("guess@example.com")!.text);
     const wrong = realCode === "00000000" ? "11111111" : "00000000";
     for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -131,7 +135,11 @@ describe("authentication", () => {
 
   it("stops someone who pre-registers an email from owning the real person's account", async () => {
     const signup = (password: string, businessName: string) =>
-      test.http().post("/v1/auth/signup").send({ email: "victim@example.com", password, businessName, countryCode: "GB", acceptTerms: true }).expect(202);
+      test
+        .http()
+        .post("/v1/auth/signup")
+        .send({ email: "victim@example.com", password, businessName, countryCodes: ["GB"], acceptTerms: true })
+        .expect(202);
 
     await signup("attacker chosen password", "Evil Ltd");
     await signup("the victims own password", "Victim Ltd");
@@ -161,7 +169,11 @@ describe("authentication", () => {
   });
 
   it("verifies a pending account through a password reset, since the link proves the email", async () => {
-    await test.http().post("/v1/auth/signup").send({ email: "stuck@example.com", password: "someone elses password", businessName: "Stuck", countryCode: "GB", acceptTerms: true }).expect(202);
+    await test
+      .http()
+      .post("/v1/auth/signup")
+      .send({ email: "stuck@example.com", password: "someone elses password", businessName: "Stuck", countryCodes: ["GB"], acceptTerms: true })
+      .expect(202);
     await test.http().post("/v1/auth/forgot-password").send({ email: "stuck@example.com" }).expect(202);
     const token = decodeURIComponent(/#token=([^\s]+)/.exec(test.email.lastTo("stuck@example.com")!.text)![1]!);
     await test.http().post("/v1/auth/reset-password").send({ token, password: "my own fresh password" }).expect(204);

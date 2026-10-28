@@ -59,10 +59,6 @@ export async function resetDatabase(): Promise<void> {
     for (const [countryCode, schedule] of Object.entries(SEED_FEE_SCHEDULES)) {
       await pool.query("INSERT INTO fee_schedules (country_code, version, status, schedule, note) VALUES ($1, 1, 'ACTIVE', $2, 'Test prices')", [countryCode, JSON.stringify(schedule)]);
     }
-    await pool.query(
-      `INSERT INTO shipping_lanes (origin_country_code, destination_country_code, enabled, customs_required)
-       VALUES ('GB', 'GB', true, false), ('GB', 'US', true, true)`,
-    );
     await pool.query("INSERT INTO users (email, password_hash, role, status, email_verified_at) VALUES ($1, $2, 'SUPER_ADMIN', 'ACTIVE', now())", [
       SUPER_ADMIN.email,
       await hash(SUPER_ADMIN.password, { type: argon2id }),
@@ -118,7 +114,11 @@ export function refreshCookie(setCookie: string[] | string | undefined): string 
 }
 
 export async function signUpAndVerify(test: TestApp, email: string, password = "a long enough password", countryCode = "GB"): Promise<{ accessToken: string; cookie: string }> {
-  await test.http().post("/v1/auth/signup").send({ email, password, businessName: "Acme Goods", countryCode, acceptTerms: true }).expect(202);
+  await test
+    .http()
+    .post("/v1/auth/signup")
+    .send({ email, password, businessName: "Acme Goods", countryCodes: [countryCode], acceptTerms: true })
+    .expect(202);
   const code = codeFrom(test.email.lastTo(email)!.text);
   const verified = await test.http().post("/v1/auth/verify-email").send({ email, code, password }).expect(200);
   return { accessToken: verified.body.accessToken, cookie: refreshCookie(verified.headers["set-cookie"]) };
@@ -221,11 +221,13 @@ export async function seedStock(input: { vendorId: string; productId: string; wa
   const pool = new Pool({ connectionString: loadConfig().DATABASE_URL });
   try {
     const user = await pool.query<{ id: string }>("SELECT id FROM users WHERE vendor_id = $1 ORDER BY created_at LIMIT 1", [input.vendorId]);
-    const reference = `IN-GB-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    const warehouse = await pool.query<{ country_code: string }>("SELECT country_code FROM warehouses WHERE id = $1", [input.warehouseId]);
+    const countryCode = warehouse.rows[0]!.country_code;
+    const reference = `IN-${countryCode}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
     const inbound = await pool.query<{ id: string }>(
       `INSERT INTO inbound_shipments (reference, vendor_id, warehouse_id, country_code, status, shipping_mode, expected_arrival_date, declared_box_counts, created_by, received_at)
-       VALUES ($1, $2, $3, 'GB', 'RECEIVED', 'LOOSE', current_date, '{"SMALL":1}', $4, now()) RETURNING id`,
-      [reference, input.vendorId, input.warehouseId, user.rows[0]!.id],
+       VALUES ($1, $2, $3, $4, 'RECEIVED', 'LOOSE', current_date, '{"SMALL":1}', $5, now()) RETURNING id`,
+      [reference, input.vendorId, input.warehouseId, countryCode, user.rows[0]!.id],
     );
     const lot = await pool.query<{ id: string }>(
       `INSERT INTO stock_lots (code, vendor_id, product_id, warehouse_id, inbound_id, condition, storage_tier, quantity_available, location_id, received_at)

@@ -17,7 +17,10 @@ describe("referrals and campaigns", () => {
 
   const http = () => test.http();
   const signUpWith = async (email: string, referralCode: string, countryCode = "GB") => {
-    await http().post("/v1/auth/signup").send({ email, password: "a long enough password", businessName: "New Seller", countryCode, acceptTerms: true, referralCode }).expect(202);
+    await http()
+      .post("/v1/auth/signup")
+      .send({ email, password: "a long enough password", businessName: "New Seller", countryCodes: [countryCode], acceptTerms: true, referralCode })
+      .expect(202);
     const verified = await http()
       .post("/v1/auth/verify-email")
       .send({ email, code: codeFrom(test.email.lastTo(email)!.text), password: "a long enough password" })

@@ -6,7 +6,7 @@ import { Errors } from "../../../common/http/app-exception";
 import { isUniqueViolation, PrismaService } from "../../../database/prisma.service";
 import type { OrderSource, Prisma } from "../../../generated/prisma/client";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
-import { type CountryConfig, fulfilmentFee, prefixProblems, type Recipient, recipientProblems, type Role, unitsOf } from "../../../shared";
+import { type CountryConfig, fulfilmentFee, type OrderRecipient, prefixProblems, type Recipient, recipientProblems, type Role, unitsOf } from "../../../shared";
 import { FeeSchedulesService } from "../../finance/fees/fee-schedules.service";
 import { WalletAlertsService } from "../../finance/wallets/wallet-alerts.service";
 import type { PostingResult } from "../../finance/wallets/wallet-ledger.service";
@@ -26,7 +26,7 @@ export interface OrderActor {
 
 export interface NewDelivery {
   externalReference?: string;
-  recipient: Recipient;
+  recipient: OrderRecipient;
   lines: Array<{ productId: string; quantity: number }>;
 }
 
@@ -56,30 +56,20 @@ export class OrderCreationService {
     private readonly audit: AuditService,
   ) {}
 
-  async create(vendor: TradingVendor, actor: OrderActor, source: OrderSource, deliveries: NewDelivery[], requestedWarehouseId?: string): Promise<string[]> {
+  async create(vendor: TradingVendor, countryCode: string, actor: OrderActor, source: OrderSource, deliveries: NewDelivery[], requestedWarehouseId?: string): Promise<string[]> {
+    const country = await this.prisma.country.findUniqueOrThrow({ where: { code: countryCode }, select: { name: true, currency: true, config: true } });
+    const recipients = this.recipientsIn(countryCode, country.name, (country.config as unknown as CountryConfig).address, deliveries);
     const products = await this.products(vendor.vendorId, deliveries);
-    const warehouse = await this.warehouse(vendor, deliveries, products, requestedWarehouseId);
-    const destinations = await this.destinations(warehouse.countryCode, deliveries);
-    const active = await this.fees.active(warehouse.countryCode);
-    const currency = (await this.prisma.country.findUniqueOrThrow({ where: { code: warehouse.countryCode }, select: { currency: true } })).currency;
-    const problems: Record<string, string[]> = {};
-    deliveries.forEach((delivery, index) => {
-      const destination = destinations.get(delivery.recipient.countryCode)!;
-      Object.assign(problems, prefixProblems(recipientProblems(delivery.recipient, destination.config.address, destination.customsRequired), `deliveries.${index}.recipient`));
-      const missingHs = destination.customsRequired ? delivery.lines.map((line) => products.get(line.productId)!).filter((product) => !product.hsCode) : [];
-      if (missingHs.length > 0) {
-        problems[`deliveries.${index}.lines`] = [`Add an HS code to ${missingHs.map((product) => product.name).join(", ")} before sending it abroad`];
-      }
-    });
-    if (Object.keys(problems).length > 0) {
-      throw Errors.validation(problems);
-    }
+    const warehouse = await this.warehouse(vendor, countryCode, deliveries, products, requestedWarehouseId);
+    const active = await this.fees.active(countryCode);
+    const { currency } = country;
 
     const postings: PostingResult[] = [];
     const ids = await this.insert(
       async (tx) => {
         const created: string[] = [];
-        for (const delivery of deliveries) {
+        for (const [index, delivery] of deliveries.entries()) {
+          const recipient = recipients[index]!;
           const id = randomUUID();
           const reference = orderReference(warehouse.countryCode);
           const feeMinor = fulfilmentFee(active.schedule, unitsOf(delivery.lines));
@@ -90,14 +80,14 @@ export class OrderCreationService {
               vendorId: vendor.vendorId,
               warehouseId: warehouse.id,
               originCountryCode: warehouse.countryCode,
-              destinationCountryCode: delivery.recipient.countryCode,
+              destinationCountryCode: warehouse.countryCode,
               source,
               externalReference: delivery.externalReference ?? null,
               groupId: deliveries.length > 1 ? (created.length === 0 ? id : created[0]!) : id,
-              recipientEncrypted: this.orders.encryptRecipient(id, delivery.recipient),
-              recipientName: delivery.recipient.name,
-              recipientCity: delivery.recipient.city,
-              customsRequired: destinations.get(delivery.recipient.countryCode)!.customsRequired,
+              recipientEncrypted: this.orders.encryptRecipient(id, recipient),
+              recipientName: recipient.name,
+              recipientCity: recipient.city,
+              customsRequired: false,
               currency,
               feeScheduleId: active.id,
               fulfilmentFeeMinor: BigInt(feeMinor),
@@ -145,7 +135,7 @@ export class OrderCreationService {
               resourceId: id,
               vendorId: vendor.vendorId,
               countryCode: warehouse.countryCode,
-              after: { reference, source, destination: delivery.recipient.countryCode, apiKeyId: actor.apiKeyId },
+              after: { reference, source, apiKeyId: actor.apiKeyId },
             },
             tx,
           );
@@ -195,14 +185,14 @@ export class OrderCreationService {
     return found;
   }
 
-  private async warehouse(vendor: TradingVendor, deliveries: NewDelivery[], products: Map<string, PreparedProduct>, requestedId?: string) {
+  private async warehouse(vendor: TradingVendor, countryCode: string, deliveries: NewDelivery[], products: Map<string, PreparedProduct>, requestedId?: string) {
     const needed = new Map<string, number>();
     for (const line of deliveries.flatMap((delivery) => delivery.lines)) {
       needed.set(line.productId, (needed.get(line.productId) ?? 0) + line.quantity);
     }
-    const choice = await this.chooser.choose(vendor.vendorId, vendor.countryCode, needed, requestedId);
+    const choice = await this.chooser.choose(vendor.vendorId, countryCode, needed, requestedId);
     if (choice.candidates === 0) {
-      throw requestedId ? Errors.validation({ warehouseId: ["Choose one of your market's warehouses"] }) : Errors.invalidTransition("There's no warehouse open in your market yet.");
+      throw requestedId ? Errors.validation({ warehouseId: ["Choose a warehouse in this country"] }) : Errors.invalidTransition("There's no warehouse open in this country yet.");
     }
     if (!choice.warehouse) {
       throw Errors.insufficientStock(choice.shortProductIds.map((productId) => products.get(productId)!.name));
@@ -210,22 +200,19 @@ export class OrderCreationService {
     return choice.warehouse;
   }
 
-  private async destinations(originCountryCode: string, deliveries: NewDelivery[]) {
-    const codes = [...new Set(deliveries.map((delivery) => delivery.recipient.countryCode))];
-    const lanes = await this.prisma.shippingLane.findMany({
-      where: { originCountryCode, destinationCountryCode: { in: codes }, enabled: true },
-      include: { destination: { select: { config: true } } },
-    });
-    const byCode = new Map(lanes.map((lane) => [lane.destinationCountryCode, { customsRequired: lane.customsRequired, config: lane.destination.config as unknown as CountryConfig }]));
+  private recipientsIn(countryCode: string, countryName: string, rules: CountryConfig["address"], deliveries: NewDelivery[]): Recipient[] {
     const problems: Record<string, string[]> = {};
-    deliveries.forEach((delivery, index) => {
-      if (!byCode.has(delivery.recipient.countryCode)) {
-        problems[`deliveries.${index}.recipient.countryCode`] = [`We don't ship from ${originCountryCode} to ${delivery.recipient.countryCode} yet`];
+    const recipients = deliveries.map((delivery, index) => {
+      if (delivery.recipient.countryCode && delivery.recipient.countryCode !== countryCode) {
+        problems[`deliveries.${index}.recipient.countryCode`] = [`Use an address in ${countryName}`];
       }
+      const recipient = { ...delivery.recipient, countryCode };
+      Object.assign(problems, prefixProblems(recipientProblems(recipient, rules), `deliveries.${index}.recipient`));
+      return recipient;
     });
     if (Object.keys(problems).length > 0) {
       throw Errors.validation(problems);
     }
-    return byCode;
+    return recipients;
   }
 }

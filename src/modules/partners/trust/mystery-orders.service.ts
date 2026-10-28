@@ -52,6 +52,7 @@ export class MysteryOrdersService {
     const vendor = await this.standing.assertVendorCanTrade(vendorId);
     const [orderId] = await this.creation.create(
       vendor,
+      partner.countryCode,
       { userId: principal.userId, role: principal.role, apiKeyId: null },
       "PORTAL",
       [{ recipient: input.recipient, lines: [{ productId: input.productId, quantity: input.quantity }] }],

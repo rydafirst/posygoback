@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
+import type { SellerCountry } from "../../../common/auth/selected-country";
 import { Errors } from "../../../common/http/app-exception";
 import { type DatabaseClient, PrismaService } from "../../../database/prisma.service";
 import type { Prisma } from "../../../generated/prisma/client";
@@ -137,8 +138,8 @@ export class ClaimsService {
     return this.list(where, "STAFF");
   }
 
-  listForVendor(principal: AuthPrincipal): Promise<ClaimView[]> {
-    return this.list({ vendorId: vendorIdOf(principal) }, "VENDOR");
+  listForVendor(country: SellerCountry): Promise<ClaimView[]> {
+    return this.list({ vendorId: country.vendorId, countryCode: country.countryCode }, "VENDOR");
   }
 
   listForPartner(principal: AuthPrincipal): Promise<ClaimView[]> {

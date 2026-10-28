@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import { emailSchema, passwordSchema } from "../auth/auth.schema";
-import type { DestinationView } from "../country/country.schema";
 
 export const LEGAL_DOCUMENT_KINDS = ["VENDOR_AGREEMENT", "TERMS", "PRIVACY", "PARTNER_AGREEMENT", "CUSTODY_TERMS", "NON_DIVERSION", "DATA_PROCESSING", "INSURANCE_OBLIGATION"] as const;
 export type LegalDocumentKind = (typeof LEGAL_DOCUMENT_KINDS)[number];
@@ -64,11 +63,4 @@ export interface TeamView {
 export interface InvitationPreview {
   businessName: string;
   email: string;
-}
-
-export const preferredDestinationsSchema = z.object({ countryCodes: z.array(z.string().regex(/^[A-Z]{2}$/)).max(60) });
-export type PreferredDestinationsInput = z.infer<typeof preferredDestinationsSchema>;
-
-export interface DestinationPreferenceView extends DestinationView {
-  preferred: boolean;
 }

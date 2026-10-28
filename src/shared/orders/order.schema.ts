@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import type { OrderAction, OrderStatus, PublicTrackingStatus, TrackingStatus } from "./order-lifecycle";
-import { type Recipient, recipientSchema } from "./recipient";
+import { orderRecipientSchema, type Recipient } from "./recipient";
 
 export const ORDER_SOURCES = ["PORTAL", "CSV", "API", "STOREFRONT"] as const;
 export type OrderSource = (typeof ORDER_SOURCES)[number];
@@ -21,7 +21,7 @@ function uniqueProducts<T extends { lines: Array<{ productId: string }> }>(deliv
 }
 
 export const deliverySchema = z
-  .object({ externalReference: externalReferenceSchema.optional(), recipient: recipientSchema, lines: z.array(orderLineSchema).min(1, "Add at least one product").max(50) })
+  .object({ externalReference: externalReferenceSchema.optional(), recipient: orderRecipientSchema, lines: z.array(orderLineSchema).min(1, "Add at least one product").max(50) })
   .superRefine(uniqueProducts);
 export type DeliveryInput = z.infer<typeof deliverySchema>;
 
@@ -105,8 +105,7 @@ export interface OrderSummaryView {
   status: OrderStatus;
   source: OrderSource;
   warehouseName: string;
-  originCountryCode: string;
-  destinationCountryCode: string;
+  countryCode: string;
   recipientName: string;
   recipientCity: string;
   totalUnits: number;
@@ -184,7 +183,6 @@ export interface CancellationRequestView {
 
 export interface OrderDetailView extends OrderSummaryView {
   recipient: Recipient;
-  customsRequired: boolean;
   holdReason: string | null;
   lines: OrderLineView[];
   charges: OrderChargesView | null;
