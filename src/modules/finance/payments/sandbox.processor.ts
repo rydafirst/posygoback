@@ -1,4 +1,4 @@
-import type { CheckoutRequest, CheckoutSession, OrderCheckoutRequest, PaymentEvent, PaymentProcessor, RefundRequest } from "./payment-processor.port";
+import type { ActivationCheckoutRequest, CheckoutRequest, CheckoutSession, OrderCheckoutRequest, PaymentEvent, PaymentProcessor, RefundRequest } from "./payment-processor.port";
 import { WebhookSignatureError } from "./payment-processor.port";
 
 export class SandboxProcessor implements PaymentProcessor {
@@ -15,6 +15,10 @@ export class SandboxProcessor implements PaymentProcessor {
       providerReference: `sandbox_${request.orderId}`,
       redirectUrl: `${this.webOrigin}/${request.kind === "SHOPPING" ? "shopping" : "checkout"}/sandbox?order=${encodeURIComponent(request.reference)}&id=${encodeURIComponent(request.orderId)}`,
     });
+  }
+
+  createActivationCheckout(request: ActivationCheckoutRequest): Promise<CheckoutSession> {
+    return Promise.resolve({ providerReference: `sandbox_${request.paymentId}`, redirectUrl: `${this.webOrigin}/verification/sandbox-checkout?payment=${encodeURIComponent(request.paymentId)}` });
   }
 
   refund(request: RefundRequest): Promise<string> {

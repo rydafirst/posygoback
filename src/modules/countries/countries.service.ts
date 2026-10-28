@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { canTransitionCountry, type ChangeCountryStatusInput, type CreateCountryInput, type PublicCountry, type ShippingLaneInput, type UpdateCountryInput } from "../../shared";
+import { activationFeeOf, canTransitionCountry, type ChangeCountryStatusInput, type CreateCountryInput, type PublicCountry, type ShippingLaneInput, type UpdateCountryInput } from "../../shared";
 
 import type { AuthPrincipal, RequestMeta } from "../../common/auth/auth-principal";
 import { Errors } from "../../common/http/app-exception";
@@ -57,7 +57,7 @@ export class CountriesService {
       if (testVendorId && !(await tx.vendor.findFirst({ where: { id: testVendorId, countryCode: code, isTestAccount: true }, select: { id: true } }))) {
         throw Errors.validation({ "config.partners.mysteryVendorId": ["Use an internal test vendor account in this country"] });
       }
-      const updated = await this.countries.update(code, input, tx);
+      const updated = await this.countries.update(code, { ...input, config: input.config && { ...input.config, activationFeeMinor: activationFeeOf(before.config) } }, tx);
       await this.audit.record(
         { actor: { userId: actor.userId, role: actor.role }, action: "country.updated", resourceType: "country", resourceId: code, countryCode: code, before, after: updated, meta },
         tx,

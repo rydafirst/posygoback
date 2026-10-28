@@ -229,7 +229,7 @@ export class AdminPartnersService {
   private async approve(tx: Prisma.TransactionClient, partner: FulfilmentPartner, principal: AuthPrincipal): Promise<void> {
     const reviewed = await tx.partnerCheck.count({ where: { partnerId: partner.id, kind: { in: [...REVIEWED_CHECKS] }, reviewedBy: principal.userId } });
     if (reviewed > 0) {
-      throw Errors.forbidden("Someone who didn't review the verification steps approves the partner.");
+      throw Errors.secondPersonRequired("Someone who didn't review the verification steps approves the partner.");
     }
     const schedule = await tx.feeSchedule.findFirst({ where: { countryCode: partner.countryCode, status: "ACTIVE" }, select: { schedule: true } });
     const rates = partnerRates((schedule?.schedule ?? {}) as { partner?: unknown });

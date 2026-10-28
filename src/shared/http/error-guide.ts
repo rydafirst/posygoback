@@ -3,21 +3,30 @@ import type { ErrorCode } from "./api-error";
 export const ERROR_SIDES = ["INPUT", "ACCOUNT", "SYSTEM"] as const;
 export type ErrorSide = (typeof ERROR_SIDES)[number];
 
+export interface ErrorLink {
+  href: string;
+  label: string;
+}
+
 export interface ErrorGuide {
   side: ErrorSide;
   meaning: string;
   nextStep: string;
   needsSupport: boolean;
+  general?: boolean;
+  link?: ErrorLink;
 }
 
 const input = (meaning: string, nextStep: string): ErrorGuide => ({ side: "INPUT", meaning, nextStep, needsSupport: false });
 const account = (meaning: string, nextStep: string, needsSupport = false): ErrorGuide => ({ side: "ACCOUNT", meaning, nextStep, needsSupport });
+const general = (side: ErrorSide, meaning: string, nextStep: string): ErrorGuide => ({ side, meaning, nextStep, needsSupport: false, general: true });
+const accountStep = (meaning: string, nextStep: string, link: ErrorLink): ErrorGuide => ({ side: "ACCOUNT", meaning, nextStep, needsSupport: false, link });
 const system = (meaning: string): ErrorGuide => ({ side: "SYSTEM", meaning, nextStep: "What you've typed on this page is still there, so you can try again in a few minutes.", needsSupport: true });
 
 export const ERROR_GUIDE: Record<ErrorCode, ErrorGuide> = {
   validation_failed: input("Some details in the form aren't in the format we need.", "Fix the fields marked in red. I can explain any of them."),
   unauthenticated: account("You're not signed in, or your sign-in has expired.", "Sign in again, then come back to this page."),
-  forbidden: account("Your account doesn't have permission for this.", "Ask the owner of your account to change your role."),
+  forbidden: general("ACCOUNT", "Your account can't do this.", "If you think it should, ask whoever manages your account, or our team."),
   not_found: input("What you're looking for doesn't exist or has been removed.", "Check the link, or go back to the list and pick it again."),
   rate_limited: input("There were too many attempts in a short time.", "Wait a minute, then try again."),
   invalid_credentials: input("The email or password doesn't match an account.", "Check both, or reset your password."),
@@ -32,15 +41,28 @@ export const ERROR_GUIDE: Record<ErrorCode, ErrorGuide> = {
   account_inactive: account("This account isn't active.", "Our team needs to look at it with you.", true),
   country_unavailable: input("We're not open for sellers in that country yet.", "Choose a country that's open."),
   country_exists: input("That country is already set up.", "Edit the existing country instead."),
-  invalid_transition: input("This action doesn't fit where the item is now, for example it has already moved on.", "Refresh the page to see its latest state."),
+  invalid_transition: general("INPUT", "This action doesn't fit where the item is now, for example it has already moved on.", "Refresh the page to see its latest state."),
   origin_rejected: system("Your browser sent the request in a way our security checks didn't accept."),
   upload_rejected: input("The file wasn't accepted.", "Check its type and size, then upload it again."),
-  insufficient_funds: input("Your wallet doesn't have enough money for this.", "Top up your wallet, then try again."),
+  insufficient_funds: { ...input("Your wallet doesn't have enough money for this.", "Top up your wallet, then try again."), link: { href: "/wallet", label: "Go to wallet" } },
   wallet_unavailable: account("Your wallet is frozen.", "Our team needs to look at it with you.", true),
   payment_not_ready: system("A payment update arrived before we were ready to apply it."),
   insufficient_stock: input("There isn't enough stock in one hub for this.", "Send more stock, or lower the quantities."),
   carrier_failed: system("The delivery company didn't accept the request."),
-  daily_limit_reached: account("You've reached today's limit for this action.", "Try again tomorrow, or ask another approver."),
+  daily_limit_reached: account("You've reached today's limit for this action.", "Try again tomorrow."),
+  verification_required: accountStep("Your business isn't verified yet, so this can't happen yet.", "It only takes a few minutes, and your answers are saved as you go.", {
+    href: "/verification",
+    label: "Go to verification",
+  }),
+  agreement_required: accountStep("There's an agreement for your market you haven't accepted yet.", "It takes a minute, then you can carry on.", {
+    href: "/verification",
+    label: "Review the agreement",
+  }),
+  activation_required: accountStep("Your business is verified, but your account goes live only once the activation fee is paid.", "Pay it once and you can start straight away.", {
+    href: "/verification",
+    label: "Activate your account",
+  }),
+  second_person_required: account("This needs a second person, so the one who started it can't also finish it.", "Ask someone else on your team with the same access to do this step."),
   fee_schedule_missing: system("Prices for this market aren't set up yet."),
   internal_error: system("Something failed on our side."),
 };
@@ -52,5 +74,5 @@ export function errorGuide(code: string | null | undefined, status = 0): ErrorGu
   if (known) {
     return known;
   }
-  return status >= 400 && status < 500 ? input("The request wasn't accepted.", "Check the details and try again.") : UNKNOWN;
+  return status >= 400 && status < 500 ? general("INPUT", "The request wasn't accepted.", "Check the details and try again.") : UNKNOWN;
 }

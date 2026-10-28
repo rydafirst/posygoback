@@ -8,7 +8,7 @@ export interface CheckoutRequest {
   cancelUrl: string;
 }
 
-export type OrderKind = "STORE" | "SHOPPING";
+export type OrderKind = "STORE" | "SHOPPING" | "ACTIVATION";
 
 export interface OrderCheckoutRequest {
   kind: OrderKind;
@@ -22,6 +22,16 @@ export interface OrderCheckoutRequest {
   successUrl: string;
   cancelUrl: string;
   expiresAt: Date;
+}
+
+export interface ActivationCheckoutRequest {
+  paymentId: string;
+  currency: string;
+  amountMinor: number;
+  description: string;
+  customerEmail: string;
+  successUrl: string;
+  cancelUrl: string;
 }
 
 export interface RefundRequest {
@@ -50,6 +60,7 @@ export interface PaymentProcessor {
   readonly name: string;
   createCheckout(request: CheckoutRequest): Promise<CheckoutSession>;
   createOrderCheckout(request: OrderCheckoutRequest): Promise<CheckoutSession>;
+  createActivationCheckout(request: ActivationCheckoutRequest): Promise<CheckoutSession>;
   refund(request: RefundRequest): Promise<string>;
   parseWebhook(rawBody: Buffer, headers: Record<string, string | string[] | undefined>): PaymentEvent & { type: string; payload: unknown };
 }

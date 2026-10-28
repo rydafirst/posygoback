@@ -36,7 +36,7 @@ export class ClaimDecisionsService {
         throw Errors.invalidTransition("This claim has already been assessed.");
       }
       if (current.createdBy === principal.userId) {
-        throw Errors.forbidden("Someone other than the person who opened the claim assesses it.");
+        throw Errors.secondPersonRequired("Someone other than the person who opened the claim assesses it.");
       }
       if (input.liability === "PARTNER" && !current.partnerId) {
         throw Errors.validation({ liability: ["This stock wasn't at a partner hub"] });
@@ -94,7 +94,7 @@ export class ClaimDecisionsService {
         throw Errors.invalidTransition(input.approve ? "Assess the claim before approving it." : "This claim has already been decided.");
       }
       if (current.assessedBy === principal.userId || current.createdBy === principal.userId) {
-        throw Errors.forbidden("Someone who didn't open or assess the claim makes the decision.");
+        throw Errors.secondPersonRequired("Someone who didn't open or assess the claim makes the decision.");
       }
       const split = input.approve ? await this.settlement.settle(tx, current, principal.userId) : null;
       await tx.custodyClaim.update({

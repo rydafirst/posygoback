@@ -7,8 +7,9 @@ export interface StaffTopic {
 }
 
 export const STAFF_TOPICS = {
-  vendorJoined: { label: "New vendors", href: "/admin/verifications", permission: "verifications.review" },
+  vendorJoined: { label: "New vendors", href: "/admin/vendors", permission: "vendors.read" },
   verifications: { label: "Vendor checks to review", href: "/admin/verifications", permission: "verifications.review" },
+  vendorActivated: { label: "Vendors who paid the activation fee", href: "/admin/verifications", permission: "verifications.review" },
   partnerApplied: { label: "New partner applications", href: "/admin/partners", permission: "partners.review" },
   partners: { label: "Partner applications to review", href: "/admin/partners", permission: "partners.review" },
   prices: { label: "Price lists waiting for approval", href: "/admin/fees", permission: "fees.approve" },

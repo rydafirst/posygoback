@@ -3,6 +3,12 @@ import { EMAIL_SIGN_OFF, PLATFORM_NAME } from "../../common/brand/brand";
 
 const verificationPage = (webUrl: string) => `${webUrl}/verification`;
 
+export interface ActivationReceipt {
+  amount: string;
+  paidOn: string;
+  reference: string;
+}
+
 export const OnboardingEmails = {
   verificationReceived: (to: string, webUrl: string): EmailMessage => ({
     to,
@@ -19,6 +25,22 @@ export const OnboardingEmails = {
       ? `Good news: your verification is approved and you can start sending stock.${EMAIL_SIGN_OFF}`
       : `Good news: your verification is approved. Once the vendor agreement is accepted you can start sending stock.${EMAIL_SIGN_OFF}`,
     action: readyToTrade ? { label: "Open your dashboard", url: `${webUrl}/overview` } : { label: "Accept the vendor agreement", url: verificationPage(webUrl) },
+  }),
+  activationDue: (to: string, fee: string, webUrl: string): EmailMessage => ({
+    to,
+    kind: "onboarding.activation_due",
+    subject: "You're verified: activate your account",
+    text: `Your business is verified and the agreement is accepted. The last step is a one-off activation fee of ${fee}. Once it's paid your account goes live and you can start sending stock. The activation fee isn't refundable.${EMAIL_SIGN_OFF}`,
+    action: { label: "Activate your account", url: verificationPage(webUrl) },
+  }),
+  accountLive: (to: string, receipt: ActivationReceipt | null, webUrl: string): EmailMessage => ({
+    to,
+    kind: "onboarding.account_live",
+    subject: "Your account is live",
+    text: receipt
+      ? `Thanks, we've received your activation fee.\n\nActivation fee: ${receipt.amount}\nPaid on: ${receipt.paidOn}\nReference: ${receipt.reference}\n\nYour account is live and you can start sending stock.${EMAIL_SIGN_OFF}`
+      : `Your account is live and you can start sending stock.${EMAIL_SIGN_OFF}`,
+    action: { label: "Open your dashboard", url: `${webUrl}/overview` },
   }),
   verificationNeedsChanges: (to: string, reason: string, webUrl: string): EmailMessage => ({
     to,

@@ -46,6 +46,7 @@ export const SEED_COUNTRIES: CreateCountryInput[] = [
         noScanAlertHours: 48,
         tiers: DEFAULT_PARTNER_TIERS,
       },
+      activationFeeMinor: 0,
     },
   },
   {
@@ -150,6 +151,7 @@ export const SEED_COUNTRIES: CreateCountryInput[] = [
         noScanAlertHours: 48,
         tiers: DEFAULT_PARTNER_TIERS,
       },
+      activationFeeMinor: 0,
     },
   },
 ];

@@ -90,7 +90,7 @@ export class PartnerFinanceService {
         throw Errors.invalidTransition("This payout has already been decided.");
       }
       if (payout.requestedBy === principal.userId) {
-        throw Errors.forbidden("Someone else must approve a payout you requested.");
+        throw Errors.secondPersonRequired("Someone else must approve a payout you requested.");
       }
       if (input.approve) {
         const account = await tx.partnerPayoutAccount.findUnique({ where: { partnerId: payout.partnerId }, select: { status: true, detailsChangedAt: true } });

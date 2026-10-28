@@ -104,7 +104,7 @@ export class FeeSchedulesService {
         throw Errors.invalidTransition("This change has already been decided.");
       }
       if (row.proposedBy === principal.userId) {
-        throw Errors.forbidden("Someone other than the proposer must approve a fee change.");
+        throw Errors.secondPersonRequired("Someone other than the proposer must approve a fee change.");
       }
       const previous = await this.activeRow(tx, row.countryCode);
       if (input.approve && previous) {

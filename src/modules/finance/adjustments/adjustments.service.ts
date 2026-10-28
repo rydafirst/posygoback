@@ -117,7 +117,7 @@ export class AdjustmentsService {
         throw Errors.invalidTransition("This adjustment has already been decided.");
       }
       if (adjustment.requestedBy === principal.userId) {
-        throw Errors.forbidden("Someone other than the requester must approve this adjustment.");
+        throw Errors.secondPersonRequired("Someone other than the requester must approve this adjustment.");
       }
       if (input.approve) {
         posting = await this.apply(tx, adjustment, principal, principal.userId, input.note, meta);

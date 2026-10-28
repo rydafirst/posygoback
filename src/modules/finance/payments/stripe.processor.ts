@@ -1,15 +1,17 @@
 import Stripe from "stripe";
 
-import type { CheckoutRequest, CheckoutSession, OrderCheckoutRequest, OrderKind, PaymentEvent, PaymentProcessor, RefundRequest } from "./payment-processor.port";
+import type { ActivationCheckoutRequest, CheckoutRequest, CheckoutSession, OrderCheckoutRequest, OrderKind, PaymentEvent, PaymentProcessor, RefundRequest } from "./payment-processor.port";
 import { WebhookSignatureError } from "./payment-processor.port";
 
 const TOLERANCE_SECONDS = 300;
 const ORDER_PURPOSE = "storefront.order";
+const ORDER_KINDS: readonly OrderKind[] = ["STORE", "SHOPPING", "ACTIVATION"];
+const CHECKOUT_WINDOW_SECONDS = 60 * 60;
 
 type ParsedEvent = PaymentEvent & { type: string; payload: unknown };
 
 function orderKindOf(metadata: Stripe.Metadata | null | undefined): OrderKind {
-  return metadata?.orderKind === "SHOPPING" ? "SHOPPING" : "STORE";
+  return ORDER_KINDS.find((kind) => kind === metadata?.orderKind) ?? "STORE";
 }
 
 export class StripeProcessor implements PaymentProcessor {
@@ -34,7 +36,7 @@ export class StripeProcessor implements PaymentProcessor {
         payment_intent_data: { metadata: { topUpId: request.topUpId, purpose: "wallet.top_up" } },
         success_url: request.successUrl,
         cancel_url: request.cancelUrl,
-        expires_at: Math.floor(Date.now() / 1000) + 60 * 60,
+        expires_at: Math.floor(Date.now() / 1000) + CHECKOUT_WINDOW_SECONDS,
       },
       { idempotencyKey: `top-up:${request.topUpId}` },
     );
@@ -68,6 +70,28 @@ export class StripeProcessor implements PaymentProcessor {
         expires_at: Math.floor(request.expiresAt.getTime() / 1000),
       },
       { idempotencyKey: `${request.kind === "STORE" ? "storefront-order" : "shopping-order"}:${request.orderId}` },
+    );
+    if (!session.url) {
+      throw new Error("Stripe did not return a checkout link");
+    }
+    return { providerReference: session.id, redirectUrl: session.url };
+  }
+
+  async createActivationCheckout(request: ActivationCheckoutRequest): Promise<CheckoutSession> {
+    const metadata = { orderId: request.paymentId, orderKind: "ACTIVATION", purpose: ORDER_PURPOSE };
+    const session = await this.client.checkout.sessions.create(
+      {
+        mode: "payment",
+        customer_email: request.customerEmail,
+        client_reference_id: request.paymentId,
+        line_items: [{ quantity: 1, price_data: { currency: request.currency.toLowerCase(), unit_amount: request.amountMinor, product_data: { name: request.description } } }],
+        metadata,
+        payment_intent_data: { metadata },
+        success_url: request.successUrl,
+        cancel_url: request.cancelUrl,
+        expires_at: Math.floor(Date.now() / 1000) + CHECKOUT_WINDOW_SECONDS,
+      },
+      { idempotencyKey: `activation:${request.paymentId}` },
     );
     if (!session.url) {
       throw new Error("Stripe did not return a checkout link");

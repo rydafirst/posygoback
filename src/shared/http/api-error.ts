@@ -33,6 +33,10 @@ export const ERROR_CODES = {
   insufficientStock: "insufficient_stock",
   carrierFailed: "carrier_failed",
   dailyLimitReached: "daily_limit_reached",
+  verificationRequired: "verification_required",
+  agreementRequired: "agreement_required",
+  activationRequired: "activation_required",
+  secondPersonRequired: "second_person_required",
   feeScheduleMissing: "fee_schedule_missing",
   internal: "internal_error",
 } as const;

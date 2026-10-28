@@ -12,7 +12,8 @@ import { UsersRepository } from "../../auth/users.repository";
 import { FilesService } from "../../files/files.service";
 import { OnboardingEmails } from "../onboarding-emails";
 import { reviewerCountryScope } from "../scope";
-import { VendorActivationService } from "../vendor-activation.service";
+import { ActivationNoticesService } from "../activation/activation-notices.service";
+import { type ActivationResult, VendorActivationService } from "../vendor-activation.service";
 import { REVIEWABLE_STATUSES, type VerificationRecord, VerificationStore } from "./verification.store";
 import { NotificationsService } from "../../notifications/notifications.service";
 
@@ -26,6 +27,7 @@ export class VerificationReviewService {
     private readonly store: VerificationStore,
     private readonly files: FilesService,
     private readonly activation: VendorActivationService,
+    private readonly notices: ActivationNoticesService,
     private readonly users: UsersRepository,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
@@ -90,7 +92,7 @@ export class VerificationReviewService {
     const { countryCode } = await this.load(principal, vendorId);
     const scope = reviewerCountryScope(principal);
     const status = DECISION_STATUS[input.decision];
-    const vendorActive = await this.prisma.$transaction(async (tx) => {
+    const activation = await this.prisma.$transaction(async (tx) => {
       const record = await this.store.findLocked(vendorId, tx);
       if (!record || (scope && record.countryCode !== scope)) {
         throw Errors.notFound();
@@ -115,8 +117,8 @@ export class VerificationReviewService {
       );
       return this.activation.refresh(vendorId, countryCode, tx);
     });
-    await this.notifyOwner(vendorId, input, vendorActive);
-    return { status, vendorActive };
+    await this.notifyOwner(vendorId, input, activation);
+    return { status, vendorActive: activation.vendorActive };
   }
 
   private async load(principal: AuthPrincipal, vendorId: string): Promise<{ record: VerificationRecord; businessName: string; countryCode: string }> {
@@ -129,14 +131,18 @@ export class VerificationReviewService {
     return { record, businessName: vendor.businessName, countryCode: record.countryCode };
   }
 
-  private async notifyOwner(vendorId: string, input: VerificationDecisionInput, readyToTrade: boolean): Promise<void> {
+  private async notifyOwner(vendorId: string, input: VerificationDecisionInput, activation: ActivationResult): Promise<void> {
+    if (activation.activationDue) {
+      await this.notices.due(vendorId);
+      return;
+    }
     const owner = await this.users.findVendorOwner(vendorId);
     const reason = input.reason ?? "";
     const to = owner?.email ?? "";
     const webUrl = this.config.WEB_PUBLIC_URL;
     const message =
       input.decision === "APPROVE"
-        ? OnboardingEmails.verificationApproved(to, readyToTrade, webUrl)
+        ? OnboardingEmails.verificationApproved(to, activation.vendorActive, webUrl)
         : input.decision === "REJECT"
           ? OnboardingEmails.verificationRejected(to, reason)
           : OnboardingEmails.verificationNeedsChanges(to, reason, webUrl);

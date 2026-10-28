@@ -6,6 +6,7 @@ import { Errors } from "../../../common/http/app-exception";
 import { PrismaService } from "../../../database/prisma.service";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
 import { CountriesRepository } from "../../countries/countries.repository";
+import { ActivationNoticesService } from "../activation/activation-notices.service";
 import { vendorIdOf } from "../scope";
 import { VendorActivationService } from "../vendor-activation.service";
 import { LegalDocumentsRepository, toLegalView } from "./legal-documents.repository";
@@ -17,6 +18,7 @@ export class AgreementsService {
     private readonly legal: LegalDocumentsRepository,
     private readonly countries: CountriesRepository,
     private readonly activation: VendorActivationService,
+    private readonly notices: ActivationNoticesService,
     private readonly audit: AuditService,
   ) {}
 
@@ -40,7 +42,7 @@ export class AgreementsService {
     if (latest?.id !== document.id) {
       throw Errors.invalidTransition("A newer version of this document has been published. Review the latest version.");
     }
-    const vendorActive = await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       await this.legal.accept({ vendorId, legalDocumentId: document.id, acceptedBy: principal.userId, ip: meta.ip, userAgent: meta.userAgent }, tx);
       await this.audit.record(
         {
@@ -57,7 +59,10 @@ export class AgreementsService {
       );
       return this.activation.refresh(vendorId, document.countryCode, tx);
     });
-    return { vendorActive };
+    if (result.activationDue) {
+      await this.notices.due(vendorId);
+    }
+    return { vendorActive: result.vendorActive };
   }
 
   async publicLatest(countryCode: string, kind: LegalDocumentKind): Promise<LegalDocumentView> {

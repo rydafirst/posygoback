@@ -52,6 +52,7 @@ const LOCKABLE_TABLES = {
   storefrontOrders: "storefront_orders",
   vendorReturns: "vendor_returns",
   shoppingRequests: "shopping_requests",
+  vendorActivationPayments: "vendor_activation_payments",
 } as const;
 
 export type LockableTable = keyof typeof LOCKABLE_TABLES;

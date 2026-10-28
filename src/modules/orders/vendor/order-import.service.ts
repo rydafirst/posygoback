@@ -76,7 +76,7 @@ export class OrderImportService {
     }
     const today = await this.prisma.order.count({ where: { vendorId: vendor.vendorId, source: "CSV", createdAt: { gt: new Date(Date.now() - DAY_MS) } } });
     if (today + grouped.orders.length > ORDER_CSV_LIMITS.dailyOrdersPerVendor) {
-      throw Errors.forbidden(`Imports are limited to ${ORDER_CSV_LIMITS.dailyOrdersPerVendor} orders a day. You can import ${Math.max(0, ORDER_CSV_LIMITS.dailyOrdersPerVendor - today)} more today.`);
+      throw Errors.dailyLimitReached(`Imports are limited to ${ORDER_CSV_LIMITS.dailyOrdersPerVendor} orders a day. You can import ${Math.max(0, ORDER_CSV_LIMITS.dailyOrdersPerVendor - today)} more today.`);
     }
     const products = await this.productIds(vendor.vendorId, grouped.orders);
     const results: ImportResult[] = [];

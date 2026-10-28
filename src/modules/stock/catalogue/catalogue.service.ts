@@ -44,7 +44,7 @@ export class CatalogueService {
     const { barcodes, ...fields } = input;
     const productId = await this.write(async (tx) => {
       const created = await tx.product.create({
-        data: { ...this.columns(fields), vendorId: vendor.vendorId, currency: country.currency, barcodes: { create: this.barcodeRows(vendor.vendorId, barcodes) } },
+        data: { ...this.columns(fields), vendorId: vendor.vendorId, createdById: principal.userId, currency: country.currency, barcodes: { create: this.barcodeRows(vendor.vendorId, barcodes) } },
         select: { id: true },
       });
       await this.audit.record(

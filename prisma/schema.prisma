@@ -257,6 +257,16 @@ enum TopUpStatus {
   @@map("top_up_status")
 }
 
+enum ActivationPaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  EXPIRED
+  REFUNDED
+
+  @@map("activation_payment_status")
+}
+
 enum AdjustmentDirection {
   CREDIT
   DEBIT
@@ -299,6 +309,7 @@ model Country {
   ordersFrom       Order[]              @relation("OrderOrigin")
   ordersTo         Order[]              @relation("OrderDestination")
   partners         FulfilmentPartner[]
+  activationPayments VendorActivationPayment[]
 
   custodyClaims    CustodyClaim[]
   custodyAlerts    CustodyAlert[]
@@ -340,6 +351,7 @@ model Vendor {
   signupReferralCode String?      @map("signup_referral_code") @db.VarChar(40)
   countryCode        String       @map("country_code") @db.Char(2)
   status             VendorStatus @default(PENDING_VERIFICATION)
+  activationDueAt    DateTime?    @map("activation_due_at") @db.Timestamptz(6)
   createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -377,6 +389,8 @@ model Vendor {
   referralCode  ReferralCode?
   referredBy    Referral?     @relation("ReferralReferred")
   referralsMade Referral[]    @relation("ReferralReferrer")
+
+  activationPayments VendorActivationPayment[]
 
   @@index([countryCode, status], map: "vendors_country_status_idx")
   @@map("vendors")
@@ -481,6 +495,8 @@ model User {
   supportReports       SupportReport[]
   assistantQuestions   AssistantQuestion[]
   supportCasesResolved SupportCase[]   @relation("SupportCaseResolver")
+
+  productsCreated Product[] @relation("ProductCreator")
 
   @@index([vendorId], map: "users_vendor_idx")
   @@index([partnerId], map: "users_partner_idx")
@@ -772,8 +788,12 @@ model Product {
 
   returnLines VendorReturnLine[]
 
+  createdById String? @map("created_by_id") @db.Uuid
+  createdBy   User?   @relation("ProductCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "products_created_by_id_users_id_fk")
+
   @@unique([vendorId, code], map: "products_vendor_code_unique")
   @@index([vendorId, status], map: "products_vendor_status_idx")
+  @@index([createdById], map: "products_created_by_idx")
   @@map("products")
 }
 
@@ -1110,6 +1130,28 @@ model TopUp {
 
   @@index([vendorId, createdAt], map: "top_ups_vendor_created_idx")
   @@map("top_ups")
+}
+
+model VendorActivationPayment {
+  id                String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendorId          String                  @map("vendor_id") @db.Uuid
+  countryCode       String                  @map("country_code") @db.Char(2)
+  processor         String                  @db.VarChar(20)
+  providerReference String?                 @unique(map: "vendor_activation_payments_provider_reference_unique") @map("provider_reference") @db.VarChar(255)
+  providerPaymentId String?                 @unique(map: "vendor_activation_payments_provider_payment_unique") @map("provider_payment_id") @db.VarChar(255)
+  currency          String                  @db.Char(3)
+  feeMinor          BigInt                  @map("fee_minor")
+  paidMinor         BigInt?                 @map("paid_minor")
+  status            ActivationPaymentStatus @default(PENDING)
+  createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  paidAt            DateTime?               @map("paid_at") @db.Timestamptz(6)
+  closedAt          DateTime?               @map("closed_at") @db.Timestamptz(6)
+
+  vendor  Vendor  @relation(fields: [vendorId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "vendor_activation_payments_vendor_id_vendors_id_fk")
+  country Country @relation(fields: [countryCode], references: [code], onDelete: Restrict, onUpdate: NoAction, map: "vendor_activation_payments_country_code_countries_code_fk")
+
+  @@index([vendorId, createdAt], map: "vendor_activation_payments_vendor_created_idx")
+  @@map("vendor_activation_payments")
 }
 
 model PaymentEvent {

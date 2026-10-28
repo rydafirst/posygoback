@@ -62,7 +62,7 @@ export class PartnerSecuritiesService {
         throw Errors.notFound();
       }
       if (current.recordedBy === principal.userId) {
-        throw Errors.forbidden("Someone else must confirm a deposit you recorded.");
+        throw Errors.secondPersonRequired("Someone else must confirm a deposit you recorded.");
       }
       const confirmed = await tx.partnerSecurity.updateMany({ where: { id: securityId, confirmedAt: null }, data: { confirmedBy: principal.userId, confirmedAt: new Date() } });
       if (confirmed.count === 0) {
@@ -92,7 +92,7 @@ export class PartnerSecuritiesService {
         throw Errors.notFound();
       }
       if (security.recordedBy === principal.userId) {
-        throw Errors.forbidden("Someone else must release a deposit you recorded.");
+        throw Errors.secondPersonRequired("Someone else must release a deposit you recorded.");
       }
       await tx.partnerSecurity.update({ where: { id: securityId }, data: { releasedAt: new Date(), releasedBy: principal.userId, releaseNote: note } });
       await this.audit.record(

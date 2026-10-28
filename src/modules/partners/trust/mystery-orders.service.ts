@@ -105,7 +105,7 @@ export class MysteryOrdersService {
       throw Errors.notFound();
     }
     if (existing.createdBy === principal.userId) {
-      throw Errors.forbidden("Someone other than the person who placed the test order records the result.");
+      throw Errors.secondPersonRequired("Someone other than the person who placed the test order records the result.");
     }
     if (!(SHIPPED_ORDER_STATUSES as readonly string[]).includes(existing.order.status)) {
       throw Errors.invalidTransition("Assess the test order once it has been handed to the carrier.");

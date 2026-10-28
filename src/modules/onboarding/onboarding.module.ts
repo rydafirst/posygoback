@@ -1,7 +1,12 @@
 import { Module } from "@nestjs/common";
 
 import { CountriesModule } from "../countries/countries.module";
+import { FinanceModule } from "../finance/finance.module";
 import { FilesModule } from "../files/files.module";
+import { ActivationFeesService } from "./activation/activation-fees.service";
+import { ActivationNoticesService } from "./activation/activation-notices.service";
+import { ActivationPaymentsService } from "./activation/activation-payments.service";
+import { AdminActivationFeesController, VendorActivationController } from "./activation/activation.controllers";
 import { AdminLegalController, PublicLegalController, VendorAgreementsController } from "./agreements/agreements.controllers";
 import { AgreementsService } from "./agreements/agreements.service";
 import { LegalDocumentsRepository } from "./agreements/legal-documents.repository";
@@ -18,7 +23,7 @@ import { VerificationReviewService } from "./verification/verification-review.se
 import { VerificationStore } from "./verification/verification.store";
 
 @Module({
-  imports: [CountriesModule, FilesModule],
+  imports: [CountriesModule, FilesModule, FinanceModule],
   controllers: [
     VendorVerificationController,
     AdminVerificationsController,
@@ -28,6 +33,8 @@ import { VerificationStore } from "./verification/verification.store";
     TeamController,
     InvitationsController,
     MarketsController,
+    VendorActivationController,
+    AdminActivationFeesController,
   ],
   providers: [
     VerificationStore,
@@ -41,6 +48,9 @@ import { VerificationStore } from "./verification/verification.store";
     InvitationsService,
     MarketsService,
     VendorStandingService,
+    ActivationNoticesService,
+    ActivationPaymentsService,
+    ActivationFeesService,
   ],
   exports: [VendorStandingService],
 })

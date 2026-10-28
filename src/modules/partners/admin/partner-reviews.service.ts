@@ -37,7 +37,7 @@ export class PartnerReviewsService {
         throw Errors.invalidTransition("There's nothing waiting for review in this step.");
       }
       if (check.submittedBy === principal.userId) {
-        throw Errors.forbidden("Someone else must review a step you submitted.");
+        throw Errors.secondPersonRequired("Someone else must review a step you submitted.");
       }
       const status = input.accept ? "ACCEPTED" : "REJECTED";
       await tx.partnerCheck.update({ where: { id: check.id }, data: { status, reviewedBy: principal.userId, reviewedAt: new Date(), reviewNote: input.note } });
@@ -99,7 +99,7 @@ export class PartnerReviewsService {
         throw Errors.notFound();
       }
       if (policy.uploadedBy === principal.userId) {
-        throw Errors.forbidden("Someone else must review a policy you uploaded.");
+        throw Errors.secondPersonRequired("Someone else must review a policy you uploaded.");
       }
       const status = input.accept ? "VERIFIED" : "REJECTED";
       const updated = await tx.partnerInsurancePolicy.updateMany({
