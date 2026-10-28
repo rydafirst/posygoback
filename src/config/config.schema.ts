@@ -56,11 +56,16 @@ const carrierAccountSchema = z.discriminatedUnion("provider", [
     webhookToken: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/, "Use a random token of at least 32 letters and numbers"),
     senderPhone: z.string().regex(/^\+?[0-9 ()-]{6,20}$/),
     senderEmail: z.string().email(),
+    testMode: z.boolean().default(false),
   }),
   z.object({ provider: z.literal("SANDBOX") }),
 ]);
 
 const carrierAccounts = jsonRecord("CARRIER_ACCOUNTS", carrierAccountSchema);
+
+function isRealCarrier(account: z.infer<typeof carrierAccountSchema>): boolean {
+  return account.provider === "SHIPPO" && (account.apiKey.startsWith("shippo_live_") || account.testMode);
+}
 
 export type CarrierAccount = z.infer<typeof carrierAccountSchema>;
 
@@ -203,8 +208,8 @@ export const configSchema = z
     message: "Production needs live Stripe keys",
     path: ["PAYMENT_ACCOUNTS"],
   })
-  .refine((config) => config.NODE_ENV !== "production" || Object.values(config.CARRIER_ACCOUNTS).every((account) => account.provider === "SHIPPO" && account.apiKey.startsWith("shippo_live_")), {
-    message: "Production needs live carrier accounts; the sandbox carrier and test tokens are for development",
+  .refine((config) => config.NODE_ENV !== "production" || Object.values(config.CARRIER_ACCOUNTS).every(isRealCarrier), {
+    message: 'Production needs Shippo accounts with live tokens. To try Shippo\'s test tokens on a live site, add "testMode": true to that country',
     path: ["CARRIER_ACCOUNTS"],
   })
   .refine((config) => config.NODE_ENV !== "production" || (config.PARTNER_SERVICES.provider === "STRIPE" && config.PARTNER_SERVICES.secretKey.includes("_live_")), {
