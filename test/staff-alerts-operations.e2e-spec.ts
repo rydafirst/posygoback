@@ -107,6 +107,9 @@ describe("staff alerts for operations work", () => {
     const draft = await post(owner, "/v1/vendor/inbound", { shippingMode: "LOOSE", expectedArrivalDate: inDays(3), boxCounts: { SMALL: 2 }, lines: [{ productId, quantity: 10 }] }).expect(201);
     const { id, reference } = draft.body as { id: string; reference: string };
     await post(owner, `/v1/vendor/inbound/${id}/actions`, { action: "SUBMIT" }).expect(200);
+    const businessName = (await http().get("/v1/auth/me").set(as(owner))).body.businessName as string;
+    await expectAlert(watcher, `${businessName} sent stock shipment ${reference}`, `/admin/receiving/${id}`);
+    expect(test.email.lastTo("watcher@alerts.test")?.subject ?? "").not.toContain(reference);
 
     await post(operator, `/v1/warehouse/inbound/${id}/actions`, { action: "CHECK_IN" }).expect(200);
     await expectAlert(watcher, `Stock shipment ${reference} arrived at Manchester`, `/admin/receiving/${id}`);
@@ -207,5 +210,24 @@ describe("staff alerts for operations work", () => {
     await post(operator, `/v1/warehouse/shopping/${request.id}/arrival`, { lines: request.lines.map((line) => ({ lineId: line.id, receivedQuantity: 1 })), photoFileIds: [photo] }).expect(200);
     await expectAlert(watcher, `Shopping parcel ${reference} arrived at Manchester`, "/admin/shopping-desk");
     await expectNoAlert(operator, `Shopping parcel ${reference} arrived at Manchester`);
+  });
+
+  it("lets an admin choose which alerts are also emailed", async () => {
+    const settings = (await http().get("/v1/admin/email-alerts").set(as(superAdmin)).expect(200)).body as Array<{ topic: string; label: string; enabled: boolean }>;
+    expect(settings).toContainEqual({ topic: "inboundSubmitted", label: "Stock shipments sent by sellers", enabled: false });
+    expect(settings).toContainEqual(expect.objectContaining({ topic: "support", enabled: true }));
+    await http().put("/v1/admin/email-alerts/inboundSubmitted").set(as(finance)).send({ enabled: true }).expect(404);
+    await http().put("/v1/admin/email-alerts/nonsense").set(as(superAdmin)).send({ enabled: true }).expect(404);
+    const changed = (await http().put("/v1/admin/email-alerts/inboundSubmitted").set(as(superAdmin)).send({ enabled: true }).expect(200)).body as Array<{ topic: string; enabled: boolean }>;
+    expect(changed).toContainEqual(expect.objectContaining({ topic: "inboundSubmitted", enabled: true }));
+
+    const draft = await post(owner, "/v1/vendor/inbound", { warehouseId, shippingMode: "LOOSE", expectedArrivalDate: inDays(3), boxCounts: { SMALL: 2 }, lines: [{ productId, quantity: 10 }] }).expect(
+      201,
+    );
+    const { id, reference } = draft.body as { id: string; reference: string };
+    await post(owner, `/v1/vendor/inbound/${id}/actions`, { action: "SUBMIT" }).expect(200);
+    expect(test.email.lastTo("watcher@alerts.test")?.subject).toContain(reference);
+    expect(test.email.lastTo("watcher@alerts.test")?.action?.url).toContain(`/admin/receiving/${id}`);
+    await http().put("/v1/admin/email-alerts/inboundSubmitted").set(as(superAdmin)).send({ enabled: false }).expect(200);
   });
 });

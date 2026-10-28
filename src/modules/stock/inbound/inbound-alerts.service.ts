@@ -20,6 +20,15 @@ export interface WaitingInbound {
   warehouse: { name: string };
 }
 
+export interface SubmittedInbound {
+  id: string;
+  reference: string;
+  countryCode: string;
+  vendorName: string;
+  warehouseName: string;
+  arrival: string;
+}
+
 @Injectable()
 export class InboundAlertsService {
   private readonly logger = new Logger(InboundAlertsService.name);
@@ -34,6 +43,15 @@ export class InboundAlertsService {
     await this.alerts
       .notifyOwner(inbound.vendorId, (to) => message(to, this.config.WEB_PUBLIC_URL), `/inbound/${inbound.id}`)
       .catch((error: unknown) => this.logger.error(`Couldn't tell the vendor about shipment ${inbound.id}: ${String(error)}`));
+  }
+
+  async tellStaffSubmitted(inbound: SubmittedInbound): Promise<void> {
+    await this.staffAlerts.raise("inboundSubmitted", {
+      countryCode: inbound.countryCode,
+      title: `${inbound.vendorName} sent stock shipment ${inbound.reference}`,
+      body: `Expected ${inbound.arrival} at ${inbound.warehouseName}.`,
+      href: `/admin/receiving/${inbound.id}`,
+    });
   }
 
   async tellStaff(inbound: WaitingInbound, exceptUserId: string): Promise<void> {

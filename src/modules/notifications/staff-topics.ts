@@ -18,6 +18,7 @@ export const STAFF_TOPICS = {
   claimsToAssess: { label: "Claims to assess", href: "/admin/claims", permission: "claims.assess" },
   claimsToDecide: { label: "Claims to decide", href: "/admin/claims", permission: "claims.decide" },
   alerts: { label: "Open custody alerts", href: "/admin/custody-alerts", permission: "claims.read" },
+  inboundSubmitted: { label: "Stock shipments sent by sellers", href: "/admin/receiving", permission: "inbound.receive" },
   inbound: { label: "Stock shipments waiting at the door", href: "/admin/receiving", permission: "inbound.receive" },
   ordersStuck: { label: "Orders on hold or with a carrier problem", href: "/admin/orders", permission: "orders.read" },
   returns: { label: "Returns ready to finish", href: "/admin/returns", permission: "inbound.receive" },
@@ -30,3 +31,9 @@ export const STAFF_TOPICS = {
 } as const satisfies Record<string, StaffTopic>;
 
 export type StaffTopicKey = keyof typeof STAFF_TOPICS;
+
+export const EMAILED_BY_DEFAULT: ReadonlySet<StaffTopicKey> = new Set(["support"]);
+
+export function isStaffTopic(value: string): value is StaffTopicKey {
+  return value in STAFF_TOPICS;
+}

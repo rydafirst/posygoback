@@ -7,15 +7,6 @@ import { SEED_COUNTRIES, SEED_FEE_SCHEDULES } from "../shared";
 import { standardAgreementsFor } from "./agreements/standard-agreements";
 import { createAdapter } from "./prisma.service";
 
-const PLACEHOLDER_BODY =
-  "DEVELOPMENT PLACEHOLDER. This text must be replaced with the version drafted by counsel for this market before any vendor signs it. " +
-  "It exists only so the acceptance flow can be exercised locally.";
-
-const LEGAL_KINDS = [
-  ["TERMS", "Terms of service"],
-  ["PRIVACY", "Privacy policy"],
-] as const;
-
 const DEV_WAREHOUSES = [
   { countryCode: "GB", code: "GB-DEV-1", name: "Manchester (development)", addressLines: ["Development warehouse"], city: "Manchester", postalCode: "M1 1AA" },
   { countryCode: "US", code: "US-DEV-1", name: "New Jersey (development)", addressLines: ["Development warehouse"], city: "Newark", postalCode: "07102" },
@@ -33,10 +24,6 @@ async function seed(prisma: PrismaClient): Promise<void> {
   for (const country of SEED_COUNTRIES) {
     await prisma.country.upsert({ where: { code: country.code }, update: {}, create: { ...country, status: "LIVE", statusChangedAt: new Date(), statusReason: "Development seed" } });
   }
-  await prisma.legalDocument.createMany({
-    data: SEED_COUNTRIES.flatMap((country) => LEGAL_KINDS.map(([kind, title]) => ({ countryCode: country.code, kind, version: "dev-1", title: `${title} (${country.name})`, body: PLACEHOLDER_BODY }))),
-    skipDuplicates: true,
-  });
   const countries = await prisma.country.findMany({ select: { code: true } });
   await prisma.legalDocument.createMany({ data: countries.flatMap((country) => standardAgreementsFor(country.code)), skipDuplicates: true });
   for (const [countryCode, schedule] of Object.entries(SEED_FEE_SCHEDULES)) {

@@ -403,6 +403,7 @@ model User {
   verificationCodes       VerificationCode[]
   sessions                Session[]
   formDrafts              FormDraft[]
+  emailSettingsChanged    StaffEmailSetting[]
   recoveryCodes           RecoveryCode[]
   files                   StoredFile[]
   acceptances             AgreementAcceptance[]
@@ -2828,4 +2829,14 @@ model IdentityWebhookEvent {
   @@id([provider, eventId], map: "identity_webhook_events_pkey")
   @@index([receivedAt], map: "identity_webhook_events_received_idx")
   @@map("identity_webhook_events")
+}
+
+model StaffEmailSetting {
+  topic     String   @id @db.VarChar(40)
+  enabled   Boolean
+  updatedBy String?  @map("updated_by") @db.Uuid
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  updater   User?    @relation(fields: [updatedBy], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "staff_email_settings_updated_by_users_id_fk")
+
+  @@map("staff_email_settings")
 }

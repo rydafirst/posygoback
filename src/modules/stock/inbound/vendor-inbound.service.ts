@@ -164,7 +164,10 @@ export class VendorInboundService {
   }
 
   private async confirmSubmission(inboundId: string): Promise<void> {
-    const inbound = await this.prisma.inboundShipment.findUniqueOrThrow({ where: { id: inboundId }, include: { warehouse: true, country: { select: { currency: true } } } });
+    const inbound = await this.prisma.inboundShipment.findUniqueOrThrow({
+      where: { id: inboundId },
+      include: { warehouse: true, country: { select: { currency: true } }, vendor: { select: { businessName: true } } },
+    });
     const fee = Number(inbound.onboardingFeeMinor ?? 0n);
     const details = {
       hub: { name: inbound.warehouse.name, addressLines: inbound.warehouse.addressLines as string[], city: inbound.warehouse.city, postalCode: inbound.warehouse.postalCode },
@@ -172,6 +175,14 @@ export class VendorInboundService {
       charge: fee > 0 ? Money.of(fee, inbound.country.currency).format("en-GB") : null,
     };
     await this.owners.tellOwner(inbound, (to, webUrl) => StockEmails.submitted(to, inbound, details, webUrl));
+    await this.owners.tellStaffSubmitted({
+      id: inbound.id,
+      reference: inbound.reference,
+      countryCode: inbound.countryCode,
+      vendorName: inbound.vendor.businessName,
+      warehouseName: inbound.warehouse.name,
+      arrival: details.arrival,
+    });
   }
 
   private async effects(tx: Prisma.TransactionClient, principal: AuthPrincipal, existing: InboundRow, action: InboundAction, postings: PostingResult[]): Promise<Prisma.InboundShipmentUpdateInput> {

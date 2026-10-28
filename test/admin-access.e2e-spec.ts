@@ -115,7 +115,7 @@ describe("privileged access", () => {
     const created = await test.http().post("/v1/admin/countries").set(auth).send(GERMANY).expect(201);
     expect(created.body.status).toBe("PROSPECTIVE");
     await test.http().post("/v1/admin/countries").set(auth).send(GERMANY).expect(409);
-    for (const kind of ["VENDOR_AGREEMENT", "PARTNER_AGREEMENT"]) {
+    for (const kind of ["VENDOR_AGREEMENT", "PARTNER_AGREEMENT", "TERMS", "PRIVACY"]) {
       const agreement = (await test.http().get(`/v1/legal/DE/${kind}`).expect(200)).body as { title: string; version: string; body: string };
       expect(agreement.version).toBe("2026.10");
       expect(agreement.body).toContain("Germany");

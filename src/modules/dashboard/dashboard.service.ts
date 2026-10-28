@@ -13,7 +13,7 @@ const CHARGES = ["ONBOARDING", "STORAGE", "FULFILMENT", "SHIPPING", "RETURN", "R
 
 type Counter = (country: string | undefined) => Promise<number>;
 
-type AttentionKey = Exclude<StaffTopicKey, "vendorJoined" | "vendorActivated" | "partnerApplied" | "support">;
+type AttentionKey = Exclude<StaffTopicKey, "vendorJoined" | "vendorActivated" | "partnerApplied" | "support" | "inboundSubmitted">;
 
 @Injectable()
 export class DashboardService {

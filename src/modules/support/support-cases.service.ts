@@ -11,7 +11,7 @@ import type { Prisma } from "../../generated/prisma/client";
 import { type AuditActor, AuditService } from "../../infrastructure/audit/audit.service";
 import { EMAIL_SENDER, type EmailSender } from "../../infrastructure/email/email.port";
 import { AttemptLimiterService } from "../../infrastructure/rate-limit/attempt-limiter.service";
-import { hasPermission, scrubSensitive, type SupportReport, type SupportReportResult } from "../../shared";
+import { scrubSensitive, type SupportReport, type SupportReportResult } from "../../shared";
 import { randomCode } from "../stock/inbound/references";
 import { NotificationsService } from "../notifications/notifications.service";
 import { StaffAlertsService } from "../notifications/staff-alerts.service";
@@ -154,7 +154,7 @@ export class SupportCasesService {
       if (opened) {
         const what = `${fault.errorName} on ${fault.method} ${normalisePath(fault.path)}`;
         await this.tellTeam(opened, "the system failed before anyone reported it", what, normalisePath(fault.path), report.message);
-        await this.staffAlerts.raise("support", { countryCode: fault.countryCode, title: `${opened}: the system failed`, body: `${what}. Nobody has reported it yet.` });
+        await this.staffAlerts.raise("support", { countryCode: fault.countryCode, title: `${opened}: the system failed before anyone reported it`, body: `${what}. ${report.message}` });
       }
     } catch (error) {
       this.logger.error(`Couldn't record a server fault: ${error instanceof Error ? error.message : String(error)}`);
@@ -208,21 +208,12 @@ export class SupportCasesService {
   }
 
   private async tellTeam(reference: string, headline: string, what: string, page: string, message: string): Promise<void> {
-    const recipients = new Set<string>(this.config.SUPPORT_EMAIL ? [this.config.SUPPORT_EMAIL] : []);
-    if (headline !== "a user needs help") {
-      for (const email of await this.supportStaffEmails()) {
-        recipients.add(email);
-      }
+    if (!this.config.SUPPORT_EMAIL) {
+      return;
     }
-    for (const to of recipients) {
-      await this.email
-        .send(SupportEmails.newCase(to, reference, headline, what, page, message, this.config.WEB_PUBLIC_URL))
-        .catch((error: unknown) => this.logger.warn(`Couldn't email ${to} about ${reference}: ${error instanceof Error ? error.message : String(error)}`));
-    }
+    await this.email
+      .send(SupportEmails.newCase(this.config.SUPPORT_EMAIL, reference, headline, what, page, message, this.config.WEB_PUBLIC_URL))
+      .catch((error: unknown) => this.logger.warn(`Couldn't email support about ${reference}: ${error instanceof Error ? error.message : String(error)}`));
   }
 
-  private async supportStaffEmails(): Promise<string[]> {
-    const staff = await this.prisma.user.findMany({ where: { status: "ACTIVE", vendorId: null, partnerId: null }, select: { email: true, role: true } });
-    return staff.filter((person) => hasPermission(person.role, "support.manage")).map((person) => person.email);
-  }
 }
