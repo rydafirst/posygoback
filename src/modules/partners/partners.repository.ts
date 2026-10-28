@@ -18,6 +18,7 @@ import {
   type SecurityView,
   tierFor,
 } from "../../shared";
+import { toCertificate } from "../onboarding/agreements/signatures";
 
 const SUMMARY_INCLUDE = { warehouses: { select: { id: true, code: true, name: true }, orderBy: { code: "asc" } } } satisfies Prisma.FulfilmentPartnerInclude;
 
@@ -25,7 +26,7 @@ const DETAIL_INCLUDE = {
   ...SUMMARY_INCLUDE,
   country: { select: { currency: true, config: true } },
   checks: true,
-  acceptances: { include: { document: { select: { id: true, kind: true, version: true, title: true } } } },
+  acceptances: { include: { document: { select: { id: true, kind: true, version: true, title: true } }, user: { select: { email: true } } } },
   insurance: { orderBy: { createdAt: "desc" }, take: 20 },
   securities: { orderBy: { receivedAt: "desc" }, include: { draws: { select: { amountMinor: true } } } },
   payoutAccount: true,
@@ -42,7 +43,7 @@ export interface StoredProfile extends PartnerProfileInput {
   heardFrom?: HeardFrom;
 }
 
-const PUBLIC_DETAIL_KEYS = ["name", "contact", "relationship", "documentType", "issuedOn", "taxIdProvided", "declaredAt", "provider", "failureReason"] as const;
+const PUBLIC_DETAIL_KEYS = ["name", "contact", "relationship", "documentType", "issuedOn", "taxIdProvided", "declaredAt", "provider", "failureReason", "inReview"] as const;
 
 function isoDay(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -158,6 +159,7 @@ export class PartnersRepository {
           version: document?.version ?? null,
           signedAt: signature?.acceptedAt.toISOString() ?? null,
           signatureName: signature?.signatureName ?? null,
+          certificate: signature && document ? toCertificate(signature, document, signature.user.email) : null,
         };
       }),
       insurance: row.insurance.map((policy): InsurancePolicyView => ({

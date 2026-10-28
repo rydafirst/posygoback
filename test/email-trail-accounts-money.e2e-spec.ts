@@ -19,6 +19,7 @@ import {
   signUpAndVerify,
   startApp,
   type TestApp,
+  testSignature,
   uploadVerifiedFile,
 } from "./harness";
 import { application, as, query } from "./partner-helpers";
@@ -36,9 +37,6 @@ const ANSWERS = {
   contactFullName: "Ada Trail",
   contactRole: "Director",
   contactPhone: "+447700900123",
-  idType: "PASSPORT",
-  idNumber: "533401872",
-  idExpiry: "2031-06-30",
   productsDescription: "Human hair wigs and extensions",
   monthlyUnits: "UP_TO_1000",
   monthlyOrders: "UP_TO_500",
@@ -64,18 +62,23 @@ describe("email trail: accounts and money", () => {
   const walletIdOf = async (token: string) => (await http().get("/v1/vendor/wallet").set(as(token)).expect(200)).body.id as string;
 
   async function submitVerification(token: string): Promise<void> {
-    const documents = { idFront: await uploadVerifiedFile(test, token), selfie: await uploadVerifiedFile(test, token), businessDocument: await uploadVerifiedFile(test, token) };
+    const documents = { businessDocument: await uploadVerifiedFile(test, token) };
     await http()
       .put("/v1/vendor/verification")
       .set(as(token))
       .send({ ...ANSWERS, documents })
       .expect(200);
+    const view = await http().get("/v1/vendor/verification").set(as(token)).expect(200);
+    if (!view.body.identityCheck) {
+      await http().post("/v1/vendor/verification/identity/session").set(as(token)).expect(200);
+      await http().post("/v1/vendor/verification/identity/refresh").set(as(token)).expect(200);
+    }
     await http().post("/v1/vendor/verification/submit").set(as(token)).expect(200);
   }
 
   async function acceptAgreement(token: string): Promise<void> {
     const [current] = (await http().get("/v1/vendor/agreements").set(as(token)).expect(200)).body as Array<{ document: { id: string } }>;
-    await http().post(`/v1/vendor/agreements/${current!.document.id}/accept`).set(as(token)).expect(200);
+    await http().post(`/v1/vendor/agreements/${current!.document.id}/accept`).set(as(token)).send({ signature: testSignature() }).expect(200);
   }
 
   const decide = (vendorId: string, decision: string, reason?: string) => http().post(`/v1/admin/verifications/${vendorId}/decision`).set(as(compliance)).send({ decision, reason }).expect(200);

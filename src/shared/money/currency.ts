@@ -9,6 +9,7 @@ const DEFINITIONS: readonly CurrencyDefinition[] = [
   { code: "GBP", minorUnits: 2, symbol: "£" },
   { code: "EUR", minorUnits: 2, symbol: "€" },
   { code: "CAD", minorUnits: 2, symbol: "CA$" },
+  { code: "AUD", minorUnits: 2, symbol: "A$" },
   { code: "NGN", minorUnits: 2, symbol: "₦" },
   { code: "GHS", minorUnits: 2, symbol: "GH₵" },
   { code: "KES", minorUnits: 2, symbol: "KSh" },

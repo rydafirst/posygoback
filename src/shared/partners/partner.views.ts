@@ -1,3 +1,4 @@
+import type { SignatureCertificateView } from "../onboarding/signature.schema";
 import type { PartnerDecision, PartnerStatus } from "./partner-lifecycle";
 import type { HeardFrom, PartnerCheckKind, PartnerCheckStatus, PartnerEntryType, PartnerKind, PartnerLegalKind, PartnerProfileInput, SecurityKind } from "./partner.schema";
 
@@ -22,6 +23,7 @@ export interface PartnerAgreementView {
   version: string | null;
   signedAt: string | null;
   signatureName: string | null;
+  certificate: SignatureCertificateView | null;
 }
 
 export interface InsurancePolicyView {

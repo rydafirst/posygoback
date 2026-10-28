@@ -6,13 +6,23 @@ import type { AuthPrincipal, RequestMeta } from "../../common/auth/auth-principa
 import { AllowPendingMfa, CurrentPrincipal, Meta, Public, RequirePermission } from "../../common/auth/decorators";
 import { ZodValidationPipe } from "../../common/http/zod-validation.pipe";
 import { THROTTLE } from "../../infrastructure/rate-limit/rate-limit.module";
-import { type ResolveSupportCaseInput, resolveSupportCaseSchema, SUPPORT_CASE_STATUSES, type SupportCaseStatus, type SupportReport, supportReportSchema } from "../../shared";
+import {
+  type ResolveSupportCaseInput,
+  resolveSupportCaseSchema,
+  SUPPORT_CASE_KINDS,
+  SUPPORT_CASE_STATUSES,
+  type SupportCaseKind,
+  type SupportCaseStatus,
+  type SupportReport,
+  supportReportSchema,
+} from "../../shared";
 import { SupportCasesRepository } from "./support-cases.repository";
 import { SupportCasesService } from "./support-cases.service";
 
 const uuid = new ParseUUIDPipe({ version: "4" });
 const reportPipe = new ZodValidationPipe(supportReportSchema);
 const statusFilter = new ZodValidationPipe(z.enum(SUPPORT_CASE_STATUSES).optional());
+const kindFilter = new ZodValidationPipe(z.enum(SUPPORT_CASE_KINDS).optional());
 
 @Controller({ path: "public/support-cases", version: "1" })
 export class PublicSupportController {
@@ -47,8 +57,8 @@ export class AdminSupportController {
 
   @RequirePermission("support.read")
   @Get()
-  list(@Query("status", statusFilter) status: SupportCaseStatus | undefined) {
-    return this.repository.list(status);
+  list(@Query("status", statusFilter) status: SupportCaseStatus | undefined, @Query("kind", kindFilter) kind: SupportCaseKind | undefined) {
+    return this.repository.list(status, kind);
   }
 
   @RequirePermission("support.read")

@@ -1,5 +1,5 @@
 import type { HubView, PartnerDetailView, PartnerProgrammeView } from "../src/shared";
-import { createStaff, flushRateLimits, insertLegalDocument, resetDatabase, startApp, type TestApp } from "./harness";
+import { createStaff, flushRateLimits, insertLegalDocument, resetDatabase, startApp, type TestApp, testSignature } from "./harness";
 import { application, as, inDays, PartnerFlow, query } from "./partner-helpers";
 
 describe("partner applications and verification", () => {
@@ -157,9 +157,23 @@ describe("partner applications and verification", () => {
 
     it("signs the agreement with the partner's typed name and keeps a fingerprint of what was signed", async () => {
       const { agreements } = await flow.overview(leadA);
-      await test.http().post("/v1/partner/agreement/sign").set(as(leadA)).send({ documentId: agreements[0]!.documentId, signatureName: "Someone Else", consent: true }).expect(400);
-      const signed = await test.http().post("/v1/partner/agreement/sign").set(as(leadA)).send({ documentId: agreements[0]!.documentId, signatureName: "  ada  OBI ", consent: true }).expect(200);
-      expect((signed.body as PartnerDetailView).agreements[0]).toMatchObject({ kind: "PARTNER_AGREEMENT", signatureName: "ada  OBI" });
+      await test
+        .http()
+        .post("/v1/partner/agreement/sign")
+        .set(as(leadA))
+        .send({ documentId: agreements[0]!.documentId, signature: testSignature("Someone Else") })
+        .expect(400);
+      const signed = await test
+        .http()
+        .post("/v1/partner/agreement/sign")
+        .set(as(leadA))
+        .send({ documentId: agreements[0]!.documentId, signature: testSignature("  ada  OBI ") })
+        .expect(200);
+      expect((signed.body as PartnerDetailView).agreements[0]).toMatchObject({
+        kind: "PARTNER_AGREEMENT",
+        signatureName: "ada OBI",
+        certificate: { reference: expect.stringMatching(/^PSG-[A-Z2-9]{10}$/), signerName: "ada OBI", method: "TYPED", documentSha256: expect.stringMatching(/^[0-9a-f]{64}$/) },
+      });
       const [row] = await query<{ document_sha256: string; ip: string }>("SELECT document_sha256, ip FROM partner_agreement_acceptances WHERE partner_id = $1", [partnerA]);
       expect(row!.document_sha256).toMatch(/^[0-9a-f]{64}$/);
     });
@@ -262,7 +276,12 @@ describe("partner applications and verification", () => {
         .send({ documentType: "UTILITY_BILL", issuedOn: inDays(-10), fileId: proof })
         .expect(200);
       const { profile, agreements } = await flow.overview(token);
-      await test.http().post("/v1/partner/agreement/sign").set(as(token)).send({ documentId: agreements[0]!.documentId, signatureName: "Femi Cole", consent: true }).expect(200);
+      await test
+        .http()
+        .post("/v1/partner/agreement/sign")
+        .set(as(token))
+        .send({ documentId: agreements[0]!.documentId, signature: testSignature("Femi Cole") })
+        .expect(200);
       const moved = (
         await test
           .http()

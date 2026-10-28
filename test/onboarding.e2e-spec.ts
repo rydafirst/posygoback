@@ -1,7 +1,7 @@
 import { Pool } from "pg";
 
 import { loadConfig } from "../src/config/config.schema";
-import { createStaff, flushRateLimits, insertLegalDocument, refreshCookie, resetDatabase, signUpAndVerify, startApp, type TestApp, uploadVerifiedFile, WEB_ORIGIN } from "./harness";
+import { createStaff, flushRateLimits, insertLegalDocument, refreshCookie, resetDatabase, signUpAndVerify, startApp, type TestApp, testSignature, uploadVerifiedFile, WEB_ORIGIN } from "./harness";
 
 const ANSWERS = {
   businessType: "LIMITED_COMPANY",
@@ -12,9 +12,6 @@ const ANSWERS = {
   contactFullName: "Adaeze Okafor",
   contactRole: "Director",
   contactPhone: "+447700900123",
-  idType: "PASSPORT",
-  idNumber: "533401872",
-  idExpiry: "2031-06-30",
   productsDescription: "Human hair wigs and extensions",
   monthlyUnits: "UP_TO_1000",
   monthlyOrders: "UP_TO_500",
@@ -67,16 +64,22 @@ describe("vendor onboarding", () => {
     expect(bad.body.fieldErrors.businessType).toBeDefined();
   });
 
-  it("encrypts answers and the ID number at rest", async () => {
-    const saved = await test.http().put("/v1/vendor/verification").set(as(vendor.accessToken)).send(ANSWERS).expect(200);
+  it("encrypts answers at rest and no longer takes a typed ID number", async () => {
+    const saved = await test
+      .http()
+      .put("/v1/vendor/verification")
+      .set(as(vendor.accessToken))
+      .send({ ...ANSWERS, idNumber: "533401872" })
+      .expect(200);
     expect(saved.body.status).toBe("IN_PROGRESS");
-    expect(saved.body.idNumberLast4).toBe("1872");
-    const [row] = await query<{ answers_encrypted: string; id_number_encrypted: string }>("SELECT answers_encrypted, id_number_encrypted FROM vendor_verifications WHERE vendor_id = $1", [
+    expect(saved.body.idNumberLast4).toBeNull();
+    expect(saved.body.identityCheck).toBeNull();
+    const [row] = await query<{ answers_encrypted: string; id_number_encrypted: string | null }>("SELECT answers_encrypted, id_number_encrypted FROM vendor_verifications WHERE vendor_id = $1", [
       vendor.vendorId,
     ]);
     expect(row!.answers_encrypted).not.toContain("Adaeze");
     expect(row!.answers_encrypted).not.toContain("+4477");
-    expect(row!.id_number_encrypted).not.toContain("533401872");
+    expect(row!.id_number_encrypted).toBeNull();
   });
 
   it("keeps a draft away from staff until the vendor submits it", async () => {
@@ -88,9 +91,10 @@ describe("vendor onboarding", () => {
     expect(inProgress.body).toEqual([]);
   });
 
-  it("refuses to submit until every document is uploaded and checked", async () => {
+  it("refuses to submit until the business document is uploaded and identity is checked", async () => {
     const missing = await test.http().post("/v1/vendor/verification/submit").set(as(vendor.accessToken)).expect(400);
-    expect(missing.body.fieldErrors["documents.idFront"]).toBeDefined();
+    expect(missing.body.fieldErrors["documents.businessDocument"]).toBeDefined();
+    expect(missing.body.fieldErrors.identity).toEqual(["Verify your identity first"]);
   });
 
   it("will not reference another vendor's files", async () => {
@@ -100,17 +104,16 @@ describe("vendor onboarding", () => {
       .http()
       .put("/v1/vendor/verification")
       .set(as(vendor.accessToken))
-      .send({ documents: { idFront: foreignFile } })
+      .send({ documents: { businessDocument: foreignFile } })
       .expect(400);
   });
 
   it("submits, then locks the answers while under review", async () => {
-    const documents = {
-      idFront: await uploadVerifiedFile(test, vendor.accessToken),
-      selfie: await uploadVerifiedFile(test, vendor.accessToken),
-      businessDocument: await uploadVerifiedFile(test, vendor.accessToken),
-    };
+    const documents = { businessDocument: await uploadVerifiedFile(test, vendor.accessToken) };
     await test.http().put("/v1/vendor/verification").set(as(vendor.accessToken)).send({ documents }).expect(200);
+    await test.http().post("/v1/vendor/verification/identity/session").set(as(vendor.accessToken)).expect(200);
+    const checked = await test.http().post("/v1/vendor/verification/identity/refresh").set(as(vendor.accessToken)).expect(200);
+    expect(checked.body.identityCheck).toMatchObject({ status: "APPROVED", provider: "PRACTICE" });
     const submitted = await test.http().post("/v1/vendor/verification/submit").set(as(vendor.accessToken)).expect(200);
     expect(submitted.body.status).toBe("SUBMITTED");
     await test.http().put("/v1/vendor/verification").set(as(vendor.accessToken)).send({ contactRole: "CEO" }).expect(409);
@@ -125,15 +128,16 @@ describe("vendor onboarding", () => {
   });
 
   it("lets readers see the case but only reviewers open documents or the ID number", async () => {
-    await test.http().get(`/v1/admin/verifications/${vendor.vendorId}`).set(as(generalAdmin)).expect(200);
-    await test.http().post(`/v1/admin/verifications/${vendor.vendorId}/documents/idFront/url`).set(as(generalAdmin)).expect(404);
+    const detail = await test.http().get(`/v1/admin/verifications/${vendor.vendorId}`).set(as(generalAdmin)).expect(200);
+    expect(detail.body.identityCheck).toMatchObject({ status: "APPROVED", provider: "PRACTICE" });
+    await test.http().post(`/v1/admin/verifications/${vendor.vendorId}/documents/businessDocument/url`).set(as(generalAdmin)).expect(404);
     await test.http().post(`/v1/admin/verifications/${vendor.vendorId}/id-number`).set(as(ukOps)).expect(404);
     await test.http().get("/v1/admin/verifications").set(as(vendor.accessToken)).expect(404);
 
-    const url = await test.http().post(`/v1/admin/verifications/${vendor.vendorId}/documents/idFront/url`).set(as(compliance)).expect(200);
+    const url = await test.http().post(`/v1/admin/verifications/${vendor.vendorId}/documents/businessDocument/url`).set(as(compliance)).expect(200);
     expect(url.body.url).toMatch(/^memory:\/\/verified\//);
     const revealed = await test.http().post(`/v1/admin/verifications/${vendor.vendorId}/id-number`).set(as(compliance)).expect(200);
-    expect(revealed.body.idNumber).toBe("533401872");
+    expect(revealed.body.idNumber).toBeNull();
 
     const audit = await query<{ action: string }>("SELECT action FROM audit_log_entries WHERE vendor_id = $1 AND action IN ('file.viewed_by_reviewer', 'verification.id_number_revealed')", [
       vendor.vendorId,
@@ -147,11 +151,11 @@ describe("vendor onboarding", () => {
       .http()
       .post(`/v1/admin/verifications/${vendor.vendorId}/decision`)
       .set(as(compliance))
-      .send({ decision: "REQUEST_RESUBMISSION", reason: "The selfie is blurry, please retake it in good light." })
+      .send({ decision: "REQUEST_RESUBMISSION", reason: "The business document is blurry, please scan it again." })
       .expect(200);
-    expect(test.email.lastTo("owner@adaeze.example")!.text).toContain("selfie is blurry");
-    const selfie = await uploadVerifiedFile(test, vendor.accessToken);
-    await test.http().put("/v1/vendor/verification").set(as(vendor.accessToken)).send({ documents: { selfie } }).expect(200);
+    expect(test.email.lastTo("owner@adaeze.example")!.text).toContain("business document is blurry");
+    const businessDocument = await uploadVerifiedFile(test, vendor.accessToken);
+    await test.http().put("/v1/vendor/verification").set(as(vendor.accessToken)).send({ documents: { businessDocument } }).expect(200);
     await test.http().post("/v1/vendor/verification/submit").set(as(vendor.accessToken)).expect(200);
   });
 
@@ -166,8 +170,34 @@ describe("vendor onboarding", () => {
 
     const [current] = (await test.http().get("/v1/vendor/agreements").set(as(vendor.accessToken)).expect(200)).body as Array<{ document: { id: string; version: string } }>;
     expect(current!.document.version).toBe("1.1");
-    const accepted = await test.http().post(`/v1/vendor/agreements/${current!.document.id}/accept`).set(as(vendor.accessToken)).expect(200);
+    const unsigned = await test.http().post(`/v1/vendor/agreements/${current!.document.id}/accept`).set(as(vendor.accessToken)).send({}).expect(400);
+    expect(unsigned.body.fieldErrors).toEqual({ signature: ["Sign the agreement to accept it."] });
+    await test
+      .http()
+      .post(`/v1/vendor/agreements/${current!.document.id}/accept`)
+      .set(as(vendor.accessToken))
+      .send({ signature: { ...testSignature("Amara Obi", "DRAWN"), image: "data:text/html;base64,PHNjcmlwdD4=" } })
+      .expect(400);
+    const accepted = await test
+      .http()
+      .post(`/v1/vendor/agreements/${current!.document.id}/accept`)
+      .set(as(vendor.accessToken))
+      .send({ signature: testSignature("Amara Obi", "DRAWN") })
+      .expect(200);
     expect(accepted.body).toEqual({ vendorActive: true });
+    const [signedAgreement] = (await test.http().get("/v1/vendor/agreements").set(as(vendor.accessToken)).expect(200)).body as Array<{ certificate: Record<string, unknown> | null }>;
+    expect(signedAgreement!.certificate).toEqual({
+      reference: expect.stringMatching(/^PSG-[A-Z2-9]{10}$/),
+      documentTitle: expect.any(String),
+      documentVersion: "1.1",
+      documentSha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+      signerName: "Amara Obi",
+      signerEmail: expect.any(String),
+      method: "DRAWN",
+      image: expect.stringMatching(/^data:image\/png;base64,/),
+      signedAt: expect.any(String),
+      ip: expect.any(String),
+    });
     const [row] = await query<{ status: string }>("SELECT status FROM vendors WHERE id = $1", [vendor.vendorId]);
     expect(row!.status).toBe("ACTIVE");
     await expect(query("UPDATE legal_documents SET body = 'changed'")).rejects.toThrow(/append-only/);
@@ -189,11 +219,11 @@ describe("vendor onboarding", () => {
     await test.http().get("/v1/vendor/team").set(member).expect(200);
 
     const memberView = await test.http().get("/v1/vendor/verification").set(member).expect(200);
-    expect(memberView.body).toMatchObject({ status: "APPROVED", draft: {}, idNumberLast4: null, documents: [] });
+    expect(memberView.body).toMatchObject({ status: "APPROVED", draft: {}, idNumberLast4: null, identityCheck: null, documents: [] });
     const ownerView = await test.http().get("/v1/vendor/verification").set(as(vendor.accessToken)).expect(200);
-    const idFront = (ownerView.body.documents as Array<{ slot: string; fileId: string }>).find((document) => document.slot === "idFront")!.fileId;
-    await test.http().get(`/v1/files/${idFront}/download-url`).set(member).expect(404);
-    await test.http().get(`/v1/files/${idFront}/download-url`).set(as(vendor.accessToken)).expect(200);
+    const businessDocument = (ownerView.body.documents as Array<{ slot: string; fileId: string }>).find((document) => document.slot === "businessDocument")!.fileId;
+    await test.http().get(`/v1/files/${businessDocument}/download-url`).set(member).expect(404);
+    await test.http().get(`/v1/files/${businessDocument}/download-url`).set(as(vendor.accessToken)).expect(200);
     await test.http().post("/v1/files/uploads").set(member).send({ purpose: "KYC_DOCUMENT", contentType: "image/png", sizeBytes: 100 }).expect(404);
 
     await test.http().post("/v1/vendor/team/invitations").set(member).send({ email: "x@y.example" }).expect(404);

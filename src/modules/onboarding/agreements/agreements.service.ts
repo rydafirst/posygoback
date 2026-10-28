@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { type CreateLegalDocumentInput, type LegalDocumentKind, type LegalDocumentView, type RequiredAgreementView, VENDOR_LEGAL_KINDS } from "../../../shared";
+import { type AcceptAgreementInput, type CreateLegalDocumentInput, type LegalDocumentKind, type LegalDocumentView, type RequiredAgreementView, VENDOR_LEGAL_KINDS } from "../../../shared";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
 import { Errors } from "../../../common/http/app-exception";
@@ -10,6 +10,9 @@ import { ActivationNoticesService } from "../activation/activation-notices.servi
 import { vendorIdOf } from "../scope";
 import { VendorActivationService } from "../vendor-activation.service";
 import { LegalDocumentsRepository, toLegalView } from "./legal-documents.repository";
+import { signatureColumns, toCertificate } from "./signatures";
+
+const SIGNED_KINDS: readonly LegalDocumentKind[] = ["VENDOR_AGREEMENT"];
 
 @Injectable()
 export class AgreementsService {
@@ -29,10 +32,17 @@ export class AgreementsService {
       vendorId,
       documents.map((document) => document.id),
     );
-    return documents.map((document) => ({ document: toLegalView(document), acceptedAt: accepted.get(document.id)?.toISOString() ?? null }));
+    return documents.map((document) => {
+      const acceptance = accepted.get(document.id);
+      return {
+        document: toLegalView(document),
+        acceptedAt: acceptance?.acceptedAt.toISOString() ?? null,
+        certificate: acceptance ? toCertificate(acceptance, document, acceptance.acceptor.email) : null,
+      };
+    });
   }
 
-  async accept(principal: AuthPrincipal, documentId: string, meta: RequestMeta): Promise<{ vendorActive: boolean }> {
+  async accept(principal: AuthPrincipal, documentId: string, input: AcceptAgreementInput, meta: RequestMeta): Promise<{ vendorActive: boolean }> {
     const vendorId = vendorIdOf(principal);
     const document = await this.legal.findById(documentId);
     if (!document || document.countryCode !== principal.countryCode || !VENDOR_LEGAL_KINDS.includes(document.kind)) {
@@ -42,8 +52,12 @@ export class AgreementsService {
     if (latest?.id !== document.id) {
       throw Errors.invalidTransition("A newer version of this document has been published. Review the latest version.");
     }
+    if (SIGNED_KINDS.includes(document.kind) && !input.signature) {
+      throw Errors.validation({ signature: ["Sign the agreement to accept it."] });
+    }
+    const signature = input.signature ? signatureColumns(input.signature, document.body) : {};
     const result = await this.prisma.$transaction(async (tx) => {
-      await this.legal.accept({ vendorId, legalDocumentId: document.id, acceptedBy: principal.userId, ip: meta.ip, userAgent: meta.userAgent }, tx);
+      await this.legal.accept({ vendorId, legalDocumentId: document.id, acceptedBy: principal.userId, ip: meta.ip, userAgent: meta.userAgent, ...signature }, tx);
       await this.audit.record(
         {
           actor: { userId: principal.userId, role: principal.role },
@@ -52,7 +66,7 @@ export class AgreementsService {
           resourceId: document.id,
           vendorId,
           countryCode: document.countryCode,
-          after: { kind: document.kind, version: document.version },
+          after: { kind: document.kind, version: document.version, signed: Boolean(input.signature), method: input.signature?.method ?? null },
           meta,
         },
         tx,

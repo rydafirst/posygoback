@@ -31,6 +31,7 @@ import { PartnerStatementService } from "../ledger/partner-statement.service";
 import { partnerIdOf } from "../portal/partner-access.service";
 import { PartnerPayoutAccountService } from "../portal/partner-payout-account.service";
 import { PartnerPortalService } from "../portal/partner-portal.service";
+import { PartnerIdentityService } from "../portal/partner-identity.service";
 import { PartnerVerificationService } from "../portal/partner-verification.service";
 import { PartnerScorecardService } from "../trust/partner-scorecard.service";
 import { StockCountsService } from "../trust/stock-counts.service";
@@ -43,6 +44,7 @@ export class PartnerPortalController {
   constructor(
     private readonly portal: PartnerPortalService,
     private readonly verification: PartnerVerificationService,
+    private readonly identity: PartnerIdentityService,
     private readonly payouts: PartnerPayoutAccountService,
     private readonly statements: PartnerStatementService,
     private readonly scorecards: PartnerScorecardService,
@@ -79,14 +81,14 @@ export class PartnerPortalController {
   @Post("identity/session")
   @HttpCode(HttpStatus.OK)
   startIdentity(@CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
-    return this.verification.startIdentity(principal, meta);
+    return this.identity.start(principal, meta);
   }
 
   @RequirePermission("partner.profile.manage")
   @Post("identity/refresh")
   @HttpCode(HttpStatus.OK)
   async refreshIdentity(@CurrentPrincipal() principal: AuthPrincipal) {
-    await this.verification.refreshIdentity(principal);
+    await this.identity.refresh(principal);
     return this.portal.overview(principal);
   }
 

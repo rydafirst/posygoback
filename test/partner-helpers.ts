@@ -2,7 +2,7 @@ import { Pool } from "pg";
 
 import { loadConfig } from "../src/config/config.schema";
 import type { PartnerDetailView } from "../src/shared";
-import { acceptStaffInvitation, flushRateLimits, type TestApp, uploadVerifiedFile } from "./harness";
+import { acceptStaffInvitation, flushRateLimits, type TestApp, testSignature, uploadVerifiedFile } from "./harness";
 
 export const as = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -79,7 +79,12 @@ export class PartnerFlow {
     await this.test.http().put("/v1/partner/verification/storage-space").set(as(token)).send({ description: "Spare room with metal shelving and a lockable door.", fileIds: photos }).expect(200);
     await this.test.http().put("/v1/partner/verification/work-status").set(as(token)).send({ declaration: true, taxId }).expect(200);
     const { agreements } = await this.overview(token);
-    await this.test.http().post("/v1/partner/agreement/sign").set(as(token)).send({ documentId: agreements[0]!.documentId, signatureName: fullName, consent: true }).expect(200);
+    await this.test
+      .http()
+      .post("/v1/partner/agreement/sign")
+      .set(as(token))
+      .send({ documentId: agreements[0]!.documentId, signature: testSignature(fullName) })
+      .expect(200);
     await this.test.http().post("/v1/partner/payouts/setup").set(as(token)).expect(200);
     await this.test.http().post("/v1/partner/payouts/refresh").set(as(token)).expect(200);
     await this.test.http().post("/v1/partner/submit").set(as(token)).expect(200);

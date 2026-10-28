@@ -91,6 +91,29 @@ const partnerServices = z
 
 export type PaymentAccount = z.infer<typeof paymentAccountSchema>;
 
+export const IDENTITY_PROVIDERS = ["didit", "stripe", "practice"] as const;
+export type IdentityProviderName = (typeof IDENTITY_PROVIDERS)[number];
+
+interface IdentitySettings {
+  IDENTITY_PROVIDER: IdentityProviderName | "";
+  DIDIT_API_KEY: string;
+  DIDIT_WORKFLOW_ID: string;
+  DIDIT_WEBHOOK_SECRET: string;
+  PARTNER_SERVICES: PartnerServicesConfig;
+}
+
+export function diditConfigured(config: IdentitySettings): boolean {
+  return Boolean(config.DIDIT_API_KEY && config.DIDIT_WORKFLOW_ID && config.DIDIT_WEBHOOK_SECRET);
+}
+
+export function identityProviderOf(config: IdentitySettings): IdentityProviderName {
+  const available: Record<IdentityProviderName, boolean> = { didit: diditConfigured(config), stripe: config.PARTNER_SERVICES.provider === "STRIPE", practice: true };
+  if (config.IDENTITY_PROVIDER) {
+    return available[config.IDENTITY_PROVIDER] ? config.IDENTITY_PROVIDER : "practice";
+  }
+  return IDENTITY_PROVIDERS.find((name) => available[name]) ?? "practice";
+}
+
 export const configSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]),
@@ -147,6 +170,11 @@ export const configSchema = z
     PAYMENT_ACCOUNTS: paymentAccounts,
     CARRIER_ACCOUNTS: carrierAccounts,
     PARTNER_SERVICES: partnerServices,
+    IDENTITY_PROVIDER: z.union([z.literal(""), z.enum(IDENTITY_PROVIDERS)]).default(""),
+    DIDIT_API_KEY: z.string().trim().default(""),
+    DIDIT_WORKFLOW_ID: z.union([z.literal(""), z.string().trim().uuid("Use the workflow ID from the Didit console")]).default(""),
+    DIDIT_WEBHOOK_SECRET: z.string().trim().default(""),
+    DIDIT_API_URL: z.string().trim().url().default("https://verification.didit.me"),
     JOBS_ENABLED: z
       .enum(["true", "false"])
       .default("true")
@@ -182,6 +210,14 @@ export const configSchema = z
   .refine((config) => config.NODE_ENV !== "production" || (config.PARTNER_SERVICES.provider === "STRIPE" && config.PARTNER_SERVICES.secretKey.includes("_live_")), {
     message: "Partner identity checks and payouts need a live Stripe key in production",
     path: ["PARTNER_SERVICES"],
+  })
+  .refine((config) => config.NODE_ENV !== "production" || config.IDENTITY_PROVIDER !== "didit" || diditConfigured(config), {
+    message: "IDENTITY_PROVIDER is didit, so DIDIT_API_KEY, DIDIT_WORKFLOW_ID and DIDIT_WEBHOOK_SECRET are required in production",
+    path: ["IDENTITY_PROVIDER"],
+  })
+  .refine((config) => config.NODE_ENV !== "production" || identityProviderOf(config) !== "practice", {
+    message: "Production needs a real identity provider: set IDENTITY_PROVIDER to didit or stripe",
+    path: ["IDENTITY_PROVIDER"],
   })
   .refine((config) => config.NODE_ENV !== "production" || config.API_PUBLIC_URL.startsWith("https://"), { message: "Production must be served over HTTPS", path: ["API_PUBLIC_URL"] });
 

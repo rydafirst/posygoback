@@ -3,6 +3,7 @@ import { activationFeeOf, canTransitionCountry, type ChangeCountryStatusInput, t
 
 import type { AuthPrincipal, RequestMeta } from "../../common/auth/auth-principal";
 import { Errors } from "../../common/http/app-exception";
+import { standardAgreementsFor } from "../../database/agreements/standard-agreements";
 import { PrismaService } from "../../database/prisma.service";
 import { AuditService } from "../../infrastructure/audit/audit.service";
 import { type CountryRecord, CountriesRepository } from "./countries.repository";
@@ -38,6 +39,7 @@ export class CountriesService {
       if (!created) {
         throw Errors.countryExists();
       }
+      await tx.legalDocument.createMany({ data: standardAgreementsFor(created.code).map((agreement) => ({ ...agreement, createdBy: actor.userId })), skipDuplicates: true });
       await this.audit.record(
         { actor: { userId: actor.userId, role: actor.role }, action: "country.created", resourceType: "country", resourceId: created.code, countryCode: created.code, after: created, meta },
         tx,

@@ -9,8 +9,9 @@ import { Errors } from "../../../common/http/app-exception";
 import { ZodValidationPipe } from "../../../common/http/zod-validation.pipe";
 import { THROTTLE } from "../../../infrastructure/rate-limit/rate-limit.module";
 import { type PartnerApplicationInput, partnerApplicationSchema } from "../../../shared";
+import { IdentityChecksService } from "../../identity/identity-checks.service";
+import { receiveIdentityWebhook } from "../../identity/identity-webhooks.controller";
 import { PartnerPayoutAccountService } from "../portal/partner-payout-account.service";
-import { PartnerVerificationService } from "../portal/partner-verification.service";
 import { WebhookRejected } from "../providers/partner-services.port";
 import { PartnerApplicationsService } from "../public/partner-applications.service";
 import { PartnerPublicService } from "../public/partner-public.service";
@@ -49,7 +50,7 @@ export class PartnerPublicController {
 @Controller({ path: "webhooks", version: "1" })
 export class PartnerWebhooksController {
   constructor(
-    private readonly verification: PartnerVerificationService,
+    private readonly identityChecks: IdentityChecksService,
     private readonly payouts: PartnerPayoutAccountService,
   ) {}
 
@@ -57,8 +58,8 @@ export class PartnerWebhooksController {
   @Throttle({ default: { limit: 600, ttl: 60_000 } })
   @Post("stripe-identity")
   @HttpCode(HttpStatus.OK)
-  async identity(@Req() request: RawBodyRequest<Request>, @Headers("stripe-signature") signature?: string) {
-    await this.verified(() => this.verification.identityWebhook(this.body(request), signature ?? ""));
+  async identity(@Req() request: RawBodyRequest<Request>) {
+    await receiveIdentityWebhook(this.identityChecks, "STRIPE_IDENTITY", request);
     return { received: true };
   }
 

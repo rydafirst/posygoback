@@ -10,6 +10,7 @@ import { AuditService } from "../../../infrastructure/audit/audit.service";
 import { EMAIL_SENDER, type EmailSender } from "../../../infrastructure/email/email.port";
 import { UsersRepository } from "../../auth/users.repository";
 import { FilesService } from "../../files/files.service";
+import { IdentityChecksService } from "../../identity/identity-checks.service";
 import { OnboardingEmails } from "../onboarding-emails";
 import { reviewerCountryScope } from "../scope";
 import { ActivationNoticesService } from "../activation/activation-notices.service";
@@ -32,6 +33,7 @@ export class VerificationReviewService {
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly identityChecks: IdentityChecksService,
   ) {}
 
   async queue(principal: AuthPrincipal, status?: VerificationStatus) {
@@ -57,6 +59,7 @@ export class VerificationReviewService {
       status: record.status,
       answers: record.answers,
       idNumberLast4: record.idNumberLast4,
+      identityCheck: await this.identityChecks.latest("VENDOR", vendorId),
       provider: record.provider,
       submittedAt: record.submittedAt?.toISOString() ?? null,
       decidedAt: record.decidedAt?.toISOString() ?? null,

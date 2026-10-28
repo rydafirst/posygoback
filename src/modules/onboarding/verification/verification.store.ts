@@ -33,7 +33,6 @@ export interface VerificationRecord {
   status: VerificationStatus;
   answers: VerificationAnswers;
   idNumberLast4: string | null;
-  hasIdNumber: boolean;
   provider: string | null;
   submittedAt: Date | null;
   decidedAt: Date | null;
@@ -67,13 +66,12 @@ export class VerificationStore {
     return (await lockRow(tx, "vendorVerifications", vendorId)) ? this.find(vendorId, tx) : null;
   }
 
-  async save(record: Pick<VerificationRecord, "vendorId" | "countryCode" | "status" | "answers">, idNumber: string | undefined, client: DatabaseClient): Promise<void> {
+  async save(record: Pick<VerificationRecord, "vendorId" | "countryCode" | "status" | "answers">, client: DatabaseClient): Promise<void> {
     const answersEncrypted = this.encryption.encrypt(JSON.stringify(record.answers), answersContext(record.vendorId));
-    const idColumns = idNumber === undefined ? {} : { idNumberEncrypted: this.encryption.encrypt(idNumber, idNumberContext(record.vendorId)), idNumberLast4: idNumber.replace(/[\s-]/g, "").slice(-4) };
     await client.vendorVerification.upsert({
       where: { vendorId: record.vendorId },
-      create: { vendorId: record.vendorId, countryCode: record.countryCode, status: record.status, answersEncrypted, ...idColumns },
-      update: { status: record.status, answersEncrypted, ...idColumns },
+      create: { vendorId: record.vendorId, countryCode: record.countryCode, status: record.status, answersEncrypted },
+      update: { status: record.status, answersEncrypted },
     });
   }
 
@@ -108,7 +106,6 @@ export class VerificationStore {
       status: row.status,
       answers,
       idNumberLast4: row.idNumberLast4,
-      hasIdNumber: Boolean(row.idNumberEncrypted),
       provider: row.provider,
       submittedAt: row.submittedAt,
       decidedAt: row.decidedAt,

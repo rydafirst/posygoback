@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { emailSchema, passwordSchema } from "../auth/auth.schema";
+import type { SignatureCertificateView } from "./signature.schema";
 
 export const LEGAL_DOCUMENT_KINDS = ["VENDOR_AGREEMENT", "TERMS", "PRIVACY", "PARTNER_AGREEMENT", "CUSTODY_TERMS", "NON_DIVERSION", "DATA_PROCESSING", "INSURANCE_OBLIGATION"] as const;
 export type LegalDocumentKind = (typeof LEGAL_DOCUMENT_KINDS)[number];
@@ -31,6 +32,7 @@ export interface LegalDocumentView {
 export interface RequiredAgreementView {
   document: LegalDocumentView;
   acceptedAt: string | null;
+  certificate: SignatureCertificateView | null;
 }
 
 export const inviteMemberSchema = z.object({ email: emailSchema });

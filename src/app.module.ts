@@ -23,6 +23,7 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
 import { ExportsModule } from "./modules/exports/exports.module";
 import { GrowthModule } from "./modules/growth/growth.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
+import { DraftsModule } from "./modules/drafts/drafts.module";
 import { CountriesModule } from "./modules/countries/countries.module";
 import { FilesModule } from "./modules/files/files.module";
 import { HealthController } from "./modules/health/health.controller";
@@ -103,6 +104,7 @@ function maskSecrets(url: string | undefined): string | undefined {
     ExportsModule,
     GrowthModule,
     DashboardModule,
+    DraftsModule,
     CountriesModule,
     FilesModule,
     OnboardingModule,

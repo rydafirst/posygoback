@@ -1,17 +1,14 @@
-import { createHash } from "node:crypto";
-
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
 import { addDays, startOfUtcDay } from "../../../common/dates";
 import { Errors } from "../../../common/http/app-exception";
-import { lockRow, PrismaService } from "../../../database/prisma.service";
+import { PrismaService } from "../../../database/prisma.service";
 import type { FulfilmentPartner, Prisma } from "../../../generated/prisma/client";
 import { APP_CONFIG } from "../../../config/config.module";
 import type { AppConfig } from "../../../config/config.schema";
-import { AuditService, SYSTEM_ACTOR } from "../../../infrastructure/audit/audit.service";
+import { AuditService } from "../../../infrastructure/audit/audit.service";
 import { FieldEncryptionService } from "../../../infrastructure/crypto/field-encryption.service";
-import { AttemptLimiterService } from "../../../infrastructure/rate-limit/attempt-limiter.service";
 import {
   type PartnerCheckKind,
   type PartnerProfileInput,
@@ -30,10 +27,9 @@ import { sameName } from "../partner-names";
 import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { PartnerNotifierService } from "../partner-notifier.service";
 import { PartnersRepository, type StoredProfile } from "../partners.repository";
-import { IDENTITY_VERIFIER, type IdentityOutcome, type IdentityVerifier } from "../providers/partner-services.port";
 import { OPEN_PARTNER_STATUSES, PartnerAccessService, partnerIdOf } from "./partner-access.service";
+import { signatureColumns } from "../../onboarding/agreements/signatures";
 
-const IDENTITY_STARTS_PER_DAY = { name: "partner-identity-starts", limit: 5, windowSeconds: 24 * 60 * 60 };
 const VERIFYING = ["VERIFYING"] as const;
 
 function addressOf(profile: Partial<Pick<PartnerProfileInput, "addressLines" | "city" | "postalCode">>): string {
@@ -47,17 +43,13 @@ export function taxIdContext(partnerId: string): string {
 
 @Injectable()
 export class PartnerVerificationService {
-  private readonly logger = new Logger(PartnerVerificationService.name);
-
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
-    @Inject(IDENTITY_VERIFIER) private readonly identity: IdentityVerifier,
     private readonly prisma: PrismaService,
     private readonly access: PartnerAccessService,
     private readonly partners: PartnersRepository,
     private readonly files: FilesService,
     private readonly encryption: FieldEncryptionService,
-    private readonly limiter: AttemptLimiterService,
     private readonly notifier: PartnerNotifierService,
     private readonly audit: AuditService,
     private readonly staffAlerts: StaffAlertsService,
@@ -109,72 +101,6 @@ export class PartnerVerificationService {
     });
   }
 
-  async startIdentity(principal: AuthPrincipal, meta: RequestMeta): Promise<{ url: string }> {
-    const partnerId = partnerIdOf(principal);
-    await this.limiter.consume(IDENTITY_STARTS_PER_DAY, partnerId);
-    const session = await this.identity.startSession({ partnerId, returnUrl: `${this.config.WEB_PUBLIC_URL}/admin/partnership?identity=returned` });
-    await this.access.mutate(principal, VERIFYING, "Identity checks happen before review.", async (tx, partner) => {
-      await this.submit(tx, partner.id, "IDENTITY", principal, { details: { provider: this.identity.provider, sessionId: session.sessionId } });
-      await this.record(tx, principal, partner, "partner.identity_started", { provider: this.identity.provider }, meta);
-    });
-    return { url: session.url };
-  }
-
-  async refreshIdentity(principal: AuthPrincipal): Promise<void> {
-    const check = await this.prisma.partnerCheck.findUnique({ where: { partnerId_kind: { partnerId: partnerIdOf(principal), kind: "IDENTITY" } } });
-    const sessionId = (check?.details as { sessionId?: string } | null)?.sessionId;
-    if (check?.status === "SUBMITTED" && sessionId) {
-      await this.applyIdentityOutcome(sessionId);
-    }
-  }
-
-  identityWebhook(rawBody: Buffer, signature: string): Promise<void> {
-    const sessionId = this.identity.parseWebhook(rawBody, signature);
-    return sessionId ? this.applyIdentityOutcome(sessionId) : Promise.resolve();
-  }
-
-  async applyIdentityOutcome(sessionId: string): Promise<void> {
-    const fetched = await this.identity.fetchOutcome(sessionId);
-    if (fetched.status === "PENDING") {
-      return;
-    }
-    let outcome: IdentityOutcome = fetched;
-    await this.prisma.$transaction(async (tx) => {
-      const check = await tx.partnerCheck.findFirst({ where: { kind: "IDENTITY", status: "SUBMITTED", details: { path: ["sessionId"], equals: sessionId } } });
-      if (!check) {
-        return;
-      }
-      await lockRow(tx, "fulfilmentPartners", check.partnerId);
-      const partner = await tx.fulfilmentPartner.findUniqueOrThrow({ where: { id: check.partnerId }, select: { legalName: true } });
-      if (fetched.status === "VERIFIED" && fetched.verifiedName && !sameName(fetched.verifiedName, partner.legalName)) {
-        outcome = { status: "FAILED", reason: "the name on your ID doesn't match the name on your application" };
-      }
-      const details = { ...(check.details as Record<string, unknown>), verifiedAt: new Date().toISOString(), ...(outcome.status === "FAILED" ? { failureReason: outcome.reason } : {}) };
-      const updated = await tx.partnerCheck.updateMany({
-        where: { id: check.id, status: "SUBMITTED" },
-        data: {
-          status: outcome.status === "VERIFIED" ? "ACCEPTED" : "REJECTED",
-          details,
-          reviewedAt: new Date(),
-          reviewNote: outcome.status === "FAILED" ? `The identity check didn't pass: ${outcome.reason}` : null,
-        },
-      });
-      if (updated.count > 0) {
-        await this.audit.record(
-          {
-            actor: SYSTEM_ACTOR,
-            action: `partner.identity_${outcome.status.toLowerCase()}`,
-            resourceType: "fulfilment_partner",
-            resourceId: check.partnerId,
-            after: { provider: this.identity.provider },
-          },
-          tx,
-        );
-      }
-    });
-    this.logger.log(`Identity session ${sessionId}: ${outcome.status}`);
-  }
-
   async submitProofOfAddress(principal: AuthPrincipal, input: ProofOfAddressInput, meta: RequestMeta): Promise<void> {
     const issued = new Date(`${input.issuedOn}T00:00:00Z`);
     const today = startOfUtcDay(new Date());
@@ -224,8 +150,8 @@ export class PartnerVerificationService {
       if (!document || document.id !== input.documentId) {
         throw Errors.invalidTransition("A newer version of the agreement has been published. Read the latest version.");
       }
-      if (!sameName(input.signatureName, partner.legalName)) {
-        throw Errors.validation({ signatureName: [`Type your full name exactly as it appears on your application: ${partner.legalName}`] });
+      if (!sameName(input.signature.name, partner.legalName)) {
+        throw Errors.validation({ "signature.name": [`Sign with your full name exactly as it appears on your application: ${partner.legalName}`] });
       }
       await tx.partnerAgreementAcceptance.createMany({
         data: [
@@ -235,13 +161,12 @@ export class PartnerVerificationService {
             acceptedBy: principal.userId,
             ip: meta.ip,
             userAgent: meta.userAgent?.slice(0, 512) ?? null,
-            signatureName: input.signatureName.trim(),
-            documentSha256: createHash("sha256").update(document.body).digest("hex"),
+            ...signatureColumns(input.signature, document.body),
           },
         ],
         skipDuplicates: true,
       });
-      await this.record(tx, principal, partner, "partner.agreement_signed", { documentId: document.id, version: document.version }, meta);
+      await this.record(tx, principal, partner, "partner.agreement_signed", { documentId: document.id, version: document.version, method: input.signature.method }, meta);
     });
   }
 

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { isoCountryCode } from "../country/country.schema";
+import { signatureSchema } from "../onboarding/signature.schema";
 import { recipientSchema } from "../orders/recipient";
 
 export const PARTNER_KINDS = ["INDIVIDUAL", "COMPANY"] as const;
@@ -70,7 +71,7 @@ export type ReviewCheckInput = z.infer<typeof reviewCheckSchema>;
 export const scheduleCallSchema = z.object({ scheduledAt: z.string().datetime({ offset: true }) });
 export const recordCallSchema = z.object({ outcome: text(10, 1000) });
 
-export const signAgreementSchema = z.object({ documentId: z.string().uuid(), signatureName: text(2, 160), consent: z.literal(true, { message: "Confirm you agree to sign" }) });
+export const signAgreementSchema = z.object({ documentId: z.string().uuid(), signature: signatureSchema });
 export type SignAgreementInput = z.infer<typeof signAgreementSchema>;
 
 export const partnerDecisionSchema = z.object({ reason: text(10, 1000) });

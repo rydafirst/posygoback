@@ -1,4 +1,5 @@
 import { type CreateCountryInput, DEFAULT_PARTNER_TIERS } from "./country.schema";
+import { MAJOR_COUNTRIES } from "./major-countries";
 
 export const SEED_COUNTRIES: CreateCountryInput[] = [
   {
@@ -154,4 +155,5 @@ export const SEED_COUNTRIES: CreateCountryInput[] = [
       activationFeeMinor: 0,
     },
   },
+  ...MAJOR_COUNTRIES,
 ];

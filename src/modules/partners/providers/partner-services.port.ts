@@ -1,11 +1,4 @@
-export type IdentityOutcome = { status: "VERIFIED"; verifiedName: string | null } | { status: "PENDING" } | { status: "FAILED"; reason: string };
-
-export interface IdentityVerifier {
-  readonly provider: string;
-  startSession(request: { partnerId: string; returnUrl: string }): Promise<{ sessionId: string; url: string }>;
-  fetchOutcome(sessionId: string): Promise<IdentityOutcome>;
-  parseWebhook(rawBody: Buffer, signature: string): string | null;
-}
+export { WebhookRejected } from "../../identity/providers/identity-check.port";
 
 export interface PayoutAccountSnapshot {
   payoutsEnabled: boolean;
@@ -38,7 +31,4 @@ export interface PayoutGateway {
   parseWebhook(rawBody: Buffer, signature: string): string | null;
 }
 
-export class WebhookRejected extends Error {}
-
-export const IDENTITY_VERIFIER = Symbol("IDENTITY_VERIFIER");
 export const PAYOUT_GATEWAY = Symbol("PAYOUT_GATEWAY");

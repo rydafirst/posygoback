@@ -74,9 +74,14 @@ describe("staff alerts for operations work", () => {
     await makeVendorTrade(vendorId);
     await fundWallet(vendorId, 50_000);
     warehouseId = (
-      await post(superAdmin, "/v1/warehouse/warehouses", { countryCode: "GB", code: "MAN-1", name: "Manchester", addressLines: ["Unit 4, Trafford Park"], city: "Manchester", postalCode: "M17 1AA" }).expect(
-        201,
-      )
+      await post(superAdmin, "/v1/warehouse/warehouses", {
+        countryCode: "GB",
+        code: "MAN-1",
+        name: "Manchester",
+        addressLines: ["Unit 4, Trafford Park"],
+        city: "Manchester",
+        postalCode: "M17 1AA",
+      }).expect(201)
     ).body.id;
     productId = (
       await post(owner, "/v1/vendor/products", {

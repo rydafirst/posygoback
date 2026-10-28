@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Query } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
-import { type CreateLegalDocumentInput, createLegalDocumentSchema, LEGAL_DOCUMENT_KINDS, type LegalDocumentKind } from "../../../shared";
+import { type AcceptAgreementInput, acceptAgreementSchema, type CreateLegalDocumentInput, createLegalDocumentSchema, LEGAL_DOCUMENT_KINDS, type LegalDocumentKind } from "../../../shared";
 import { z } from "zod";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
@@ -17,6 +17,7 @@ const optionalCountry = new ZodValidationPipe(
     .optional(),
 );
 const kindParam = new ZodValidationPipe(z.enum(LEGAL_DOCUMENT_KINDS));
+const acceptPipe = new ZodValidationPipe(acceptAgreementSchema);
 
 @Controller({ path: "vendor/agreements", version: "1" })
 export class VendorAgreementsController {
@@ -31,8 +32,13 @@ export class VendorAgreementsController {
   @RequirePermission("vendor.verification.manage")
   @Post(":documentId/accept")
   @HttpCode(HttpStatus.OK)
-  accept(@Param("documentId", new ParseUUIDPipe({ version: "4" })) documentId: string, @CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
-    return this.agreements.accept(principal, documentId, meta);
+  accept(
+    @Param("documentId", new ParseUUIDPipe({ version: "4" })) documentId: string,
+    @Body(acceptPipe) input: AcceptAgreementInput,
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Meta() meta: RequestMeta,
+  ) {
+    return this.agreements.accept(principal, documentId, input, meta);
   }
 }
 

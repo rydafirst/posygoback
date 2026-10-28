@@ -1,10 +1,11 @@
 import { Injectable } from "@nestjs/common";
 
 import { type DatabaseClient, PrismaService } from "../../../database/prisma.service";
-import type { LegalDocument, Prisma } from "../../../generated/prisma/client";
+import type { AgreementAcceptance, LegalDocument, Prisma } from "../../../generated/prisma/client";
 import type { LegalDocumentKind, LegalDocumentView } from "../../../shared";
 
 type LegalDocumentRow = LegalDocument;
+export type AcceptanceRow = AgreementAcceptance & { acceptor: { email: string } };
 
 const NEWEST_FIRST = [{ publishedAt: "desc" }, { id: "desc" }] satisfies Prisma.LegalDocumentOrderByWithRelationInput[];
 
@@ -37,12 +38,12 @@ export class LegalDocumentsRepository {
     return row;
   }
 
-  async acceptances(vendorId: string, documentIds: readonly string[], client: DatabaseClient = this.prisma): Promise<Map<string, Date>> {
+  async acceptances(vendorId: string, documentIds: readonly string[], client: DatabaseClient = this.prisma): Promise<Map<string, AcceptanceRow>> {
     if (documentIds.length === 0) {
       return new Map();
     }
-    const rows = await client.agreementAcceptance.findMany({ where: { vendorId, legalDocumentId: { in: [...documentIds] } }, select: { legalDocumentId: true, acceptedAt: true } });
-    return new Map(rows.map((row) => [row.legalDocumentId, row.acceptedAt]));
+    const rows = await client.agreementAcceptance.findMany({ where: { vendorId, legalDocumentId: { in: [...documentIds] } }, include: { acceptor: { select: { email: true } } } });
+    return new Map(rows.map((row) => [row.legalDocumentId, row]));
   }
 
   async accept(values: Prisma.AgreementAcceptanceUncheckedCreateInput, client: DatabaseClient): Promise<void> {

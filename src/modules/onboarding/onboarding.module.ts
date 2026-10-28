@@ -3,6 +3,7 @@ import { Module } from "@nestjs/common";
 import { CountriesModule } from "../countries/countries.module";
 import { FinanceModule } from "../finance/finance.module";
 import { FilesModule } from "../files/files.module";
+import { IdentityModule } from "../identity/identity.module";
 import { ActivationFeesService } from "./activation/activation-fees.service";
 import { ActivationNoticesService } from "./activation/activation-notices.service";
 import { ActivationPaymentsService } from "./activation/activation-payments.service";
@@ -18,13 +19,14 @@ import { TeamService } from "./team/team.service";
 import { VendorActivationService } from "./vendor-activation.service";
 import { VendorStandingService } from "./vendor-standing.service";
 import { IdentityProviderRegistry } from "./verification/identity-provider";
+import { VendorIdentityService } from "./verification/vendor-identity.service";
 import { VendorVerificationService } from "./verification/vendor-verification.service";
 import { AdminVerificationsController, VendorVerificationController } from "./verification/verification.controllers";
 import { VerificationReviewService } from "./verification/verification-review.service";
 import { VerificationStore } from "./verification/verification.store";
 
 @Module({
-  imports: [CountriesModule, FilesModule, FinanceModule],
+  imports: [CountriesModule, FilesModule, FinanceModule, IdentityModule],
   controllers: [
     VendorVerificationController,
     AdminVerificationsController,
@@ -41,6 +43,7 @@ import { VerificationStore } from "./verification/verification.store";
     VerificationStore,
     IdentityProviderRegistry,
     VendorVerificationService,
+    VendorIdentityService,
     VerificationReviewService,
     VendorActivationService,
     LegalDocumentsRepository,

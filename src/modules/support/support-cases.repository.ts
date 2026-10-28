@@ -3,7 +3,7 @@ import { Injectable } from "@nestjs/common";
 import { Errors } from "../../common/http/app-exception";
 import { PrismaService } from "../../database/prisma.service";
 import type { SupportCase } from "../../generated/prisma/client";
-import type { SupportCaseDetailView, SupportCaseStatus, SupportCaseView } from "../../shared";
+import type { SupportCaseDetailView, SupportCaseKind, SupportCaseSource, SupportCaseStatus, SupportCaseView } from "../../shared";
 
 const PAGE_SIZE = 100;
 const REPORTS_SHOWN = 50;
@@ -13,6 +13,7 @@ function view(row: SupportCase): SupportCaseView {
     id: row.id,
     reference: row.reference,
     kind: row.kind,
+    source: row.source as SupportCaseSource,
     status: row.status,
     page: row.page,
     errorCode: row.errorCode,
@@ -41,8 +42,8 @@ function trailOf(value: unknown): Step[] {
 export class SupportCasesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(status: SupportCaseStatus | undefined): Promise<SupportCaseView[]> {
-    const rows = await this.prisma.supportCase.findMany({ where: status ? { status } : {}, orderBy: { lastSeenAt: "desc" }, take: PAGE_SIZE });
+  async list(status: SupportCaseStatus | undefined, kind?: SupportCaseKind): Promise<SupportCaseView[]> {
+    const rows = await this.prisma.supportCase.findMany({ where: { ...(status ? { status } : {}), ...(kind ? { kind } : {}) }, orderBy: { lastSeenAt: "desc" }, take: PAGE_SIZE });
     return rows.map(view);
   }
 

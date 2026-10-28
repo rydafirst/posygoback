@@ -7,6 +7,7 @@ import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-princ
 import { CurrentPrincipal, Meta, RequirePermission } from "../../../common/auth/decorators";
 import { ZodValidationPipe } from "../../../common/http/zod-validation.pipe";
 import { THROTTLE } from "../../../infrastructure/rate-limit/rate-limit.module";
+import { VendorIdentityService } from "./vendor-identity.service";
 import { VendorVerificationService } from "./vendor-verification.service";
 import { VerificationReviewService } from "./verification-review.service";
 
@@ -16,7 +17,10 @@ const slotParam = new ZodValidationPipe(z.enum(DOCUMENT_SLOTS));
 
 @Controller({ path: "vendor/verification", version: "1" })
 export class VendorVerificationController {
-  constructor(private readonly verification: VendorVerificationService) {}
+  constructor(
+    private readonly verification: VendorVerificationService,
+    private readonly identity: VendorIdentityService,
+  ) {}
 
   @RequirePermission("vendor.portal.access")
   @Get()
@@ -36,6 +40,22 @@ export class VendorVerificationController {
   @HttpCode(HttpStatus.OK)
   submit(@CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
     return this.verification.submit(principal, meta);
+  }
+
+  @RequirePermission("vendor.verification.manage")
+  @Throttle(THROTTLE.authStrict)
+  @Post("identity/session")
+  @HttpCode(HttpStatus.OK)
+  startIdentity(@CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
+    return this.identity.start(principal, meta);
+  }
+
+  @RequirePermission("vendor.verification.manage")
+  @Post("identity/refresh")
+  @HttpCode(HttpStatus.OK)
+  async refreshIdentity(@CurrentPrincipal() principal: AuthPrincipal) {
+    await this.identity.refresh(principal);
+    return this.verification.view(principal);
   }
 }
 

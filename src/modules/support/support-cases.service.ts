@@ -11,7 +11,7 @@ import type { Prisma } from "../../generated/prisma/client";
 import { type AuditActor, AuditService } from "../../infrastructure/audit/audit.service";
 import { EMAIL_SENDER, type EmailSender } from "../../infrastructure/email/email.port";
 import { AttemptLimiterService } from "../../infrastructure/rate-limit/attempt-limiter.service";
-import { scrubSensitive, type SupportReport, type SupportReportResult } from "../../shared";
+import { hasPermission, scrubSensitive, type SupportReport, type SupportReportResult } from "../../shared";
 import { randomCode } from "../stock/inbound/references";
 import { NotificationsService } from "../notifications/notifications.service";
 import { StaffAlertsService } from "../notifications/staff-alerts.service";
@@ -34,6 +34,18 @@ function fingerprintOf(report: SupportReport): string | null {
   return createHash("sha256")
     .update(`${code}|${status}|${normalisePath(endpoint)}|${normalisePath(report.page)}`)
     .digest("hex");
+}
+
+export interface ServerFault {
+  method: string;
+  path: string;
+  status: number;
+  errorName: string;
+  message: string;
+  correlationId: string | null;
+  userId: string | null;
+  countryCode: string | null;
+  userAgent: string | null;
 }
 
 @Injectable()
@@ -65,6 +77,12 @@ export class SupportCasesService {
       userAgent: meta.userAgent,
     };
     const result = await this.prisma.$transaction(async (tx) => {
+      const serverCase = await this.caseForCorrelation(tx, details.correlationId);
+      if (serverCase) {
+        await tx.supportCase.update({ where: { id: serverCase.id }, data: { lastSeenAt: new Date() } });
+        await tx.supportReport.create({ data: { ...details, caseId: serverCase.id } });
+        return { reference: serverCase.reference, alreadyKnown: true };
+      }
       if (fingerprint) {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${fingerprint}))`;
         const open = await tx.supportCase.findFirst({ where: { fingerprint, status: "OPEN" } });
@@ -100,6 +118,49 @@ export class SupportCasesService {
     return result;
   }
 
+  async captureServerFault(fault: ServerFault): Promise<void> {
+    try {
+      const fingerprint = createHash("sha256").update(`server|${fault.errorName}|${fault.method} ${normalisePath(fault.path)}`).digest("hex");
+      const report = {
+        userId: fault.userId,
+        message: scrubSensitive(`${fault.errorName}: ${fault.message}`).slice(0, 1000),
+        correlationId: fault.correlationId,
+        trail: [] as Prisma.InputJsonValue,
+        userAgent: fault.userAgent?.slice(0, 512) ?? null,
+      };
+      const opened = await this.prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${fingerprint}))`;
+        const open = await tx.supportCase.findFirst({ where: { fingerprint, status: "OPEN" } });
+        if (open) {
+          await tx.supportCase.update({ where: { id: open.id }, data: { reportCount: { increment: 1 }, lastSeenAt: new Date() } });
+          await tx.supportReport.create({ data: { ...report, caseId: open.id } });
+          return null;
+        }
+        const created = await tx.supportCase.create({
+          data: {
+            reference: `CASE-${randomCode(8)}`,
+            kind: "ERROR",
+            source: "SERVER",
+            fingerprint,
+            page: normalisePath(fault.path).slice(0, 300),
+            errorCode: "internal_error",
+            errorStatus: fault.status,
+            endpoint: `${fault.method} ${fault.path}`.slice(0, 200),
+            reports: { create: report },
+          },
+        });
+        return created.reference;
+      });
+      if (opened) {
+        const what = `${fault.errorName} on ${fault.method} ${normalisePath(fault.path)}`;
+        await this.tellTeam(opened, "the system failed before anyone reported it", what, normalisePath(fault.path), report.message);
+        await this.staffAlerts.raise("support", { countryCode: fault.countryCode, title: `${opened}: the system failed`, body: `${what}. Nobody has reported it yet.` });
+      }
+    } catch (error) {
+      this.logger.error(`Couldn't record a server fault: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   async resolve(caseId: string, note: string, actor: AuditActor, meta: RequestMeta): Promise<void> {
     const reporters = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.supportCase.updateMany({ where: { id: caseId, status: "OPEN" }, data: { status: "RESOLVED", resolvedAt: new Date(), resolvedBy: actor.userId, resolutionNote: note } });
@@ -133,15 +194,35 @@ export class SupportCasesService {
     }
   }
 
+  private async caseForCorrelation(tx: Prisma.TransactionClient, correlationId: string | null): Promise<{ id: string; reference: string } | null> {
+    if (!correlationId) {
+      return null;
+    }
+    const match = await tx.supportReport.findFirst({ where: { correlationId, supportCase: { source: "SERVER", status: "OPEN" } }, select: { supportCase: { select: { id: true, reference: true } } } });
+    return match?.supportCase ?? null;
+  }
+
   private async tellSupport(reference: string, input: SupportReport): Promise<void> {
-    if (!this.config.SUPPORT_EMAIL) {
-      return;
-    }
     const what = input.error ? `Error ${input.error.code} (${input.error.status}) on ${input.error.endpoint}` : "A question from a user";
-    try {
-      await this.email.send(SupportEmails.newCase(this.config.SUPPORT_EMAIL, reference, input.kind === "ERROR", what, input.page, scrubSensitive(input.message), this.config.WEB_PUBLIC_URL));
-    } catch (error) {
-      this.logger.warn(`Couldn't email support about ${reference}: ${error instanceof Error ? error.message : String(error)}`);
+    await this.tellTeam(reference, input.kind === "ERROR" ? "a user hit an error" : "a user needs help", what, input.page, scrubSensitive(input.message));
+  }
+
+  private async tellTeam(reference: string, headline: string, what: string, page: string, message: string): Promise<void> {
+    const recipients = new Set<string>(this.config.SUPPORT_EMAIL ? [this.config.SUPPORT_EMAIL] : []);
+    if (headline !== "a user needs help") {
+      for (const email of await this.supportStaffEmails()) {
+        recipients.add(email);
+      }
     }
+    for (const to of recipients) {
+      await this.email
+        .send(SupportEmails.newCase(to, reference, headline, what, page, message, this.config.WEB_PUBLIC_URL))
+        .catch((error: unknown) => this.logger.warn(`Couldn't email ${to} about ${reference}: ${error instanceof Error ? error.message : String(error)}`));
+    }
+  }
+
+  private async supportStaffEmails(): Promise<string[]> {
+    const staff = await this.prisma.user.findMany({ where: { status: "ACTIVE", vendorId: null, partnerId: null }, select: { email: true, role: true } });
+    return staff.filter((person) => hasPermission(person.role, "support.manage")).map((person) => person.email);
   }
 }

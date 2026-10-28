@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import type { AddressRules, KycRuleset } from "../country/country.schema";
 import { isIsoCountryCode } from "../country/iso-countries";
+import type { IdentityCheckView } from "../identity/identity-check.views";
 
 export const VERIFICATION_STATUSES = ["NOT_STARTED", "IN_PROGRESS", "SUBMITTED", "APPROVED", "REJECTED", "RESUBMISSION_REQUIRED"] as const;
 export type VerificationStatus = (typeof VERIFICATION_STATUSES)[number];
@@ -52,14 +53,12 @@ function buildShape(market: VerificationMarket) {
       .string()
       .trim()
       .regex(/^\+[1-9]\d{6,14}$/, "Use international format, e.g. +447700900123"),
-    idType: z.enum(codesOf(market.kyc.idTypes), { message: "Choose an ID type" }),
-    idNumber: z
+    idType: z.enum(codesOf(market.kyc.idTypes), { message: "Choose an ID type" }).optional(),
+    idExpiry: z
       .string()
-      .trim()
-      .toUpperCase()
-      .regex(/^[A-Z0-9 -]{5,40}$/, "Enter the number exactly as it appears on the document"),
-    idExpiry: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use the date picker"),
-    documents: z.object({ idFront: fileId, idBack: fileId.optional(), selfie: fileId, businessDocument: fileId }),
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Use the date picker")
+      .optional(),
+    documents: z.object({ idFront: fileId.optional(), idBack: fileId.optional(), selfie: fileId.optional(), businessDocument: fileId }),
     productsDescription: text(10, 1000),
     monthlyUnits: z.enum(MONTHLY_UNIT_BANDS),
     monthlyOrders: z.enum(MONTHLY_ORDER_BANDS),
@@ -71,7 +70,7 @@ function matches(pattern: string | undefined, value: string): boolean {
   return !pattern || new RegExp(pattern).test(value.replace(/\s/g, ""));
 }
 
-export function buildVerificationSchemas(market: VerificationMarket, today: string) {
+export function buildVerificationSchemas(market: VerificationMarket) {
   const base = z.object(buildShape(market));
   const draft = base.partial().extend({ registeredAddress: base.shape.registeredAddress.partial().optional(), documents: base.shape.documents.partial().optional() });
   const submission = base.superRefine((value, context) => {
@@ -91,12 +90,6 @@ export function buildVerificationSchemas(market: VerificationMarket, today: stri
     }
     if (domestic && market.address.regionRequired && !value.registeredAddress.region) {
       context.addIssue({ code: "custom", path: ["registeredAddress", "region"], message: `Enter the ${market.address.regionLabel}` });
-    }
-    if (value.idExpiry <= today) {
-      context.addIssue({ code: "custom", path: ["idExpiry"], message: "This ID has expired" });
-    }
-    if (value.idType !== "PASSPORT" && !value.documents.idBack) {
-      context.addIssue({ code: "custom", path: ["documents", "idBack"], message: "Upload the back of your ID" });
     }
     if (value.hazards.includes("NONE") && value.hazards.length > 1) {
       context.addIssue({ code: "custom", path: ["hazards"], message: "None can't be combined with other hazards" });
@@ -124,6 +117,7 @@ export interface VerificationView {
   market: VerificationMarket;
   draft: VerificationDraft;
   idNumberLast4: string | null;
+  identityCheck: IdentityCheckView | null;
   documents: VerificationDocumentView[];
   submittedAt: string | null;
   decisionReason: string | null;

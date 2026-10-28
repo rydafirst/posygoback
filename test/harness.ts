@@ -20,6 +20,7 @@ import { OBJECT_STORAGE } from "../src/modules/files/storage/object-storage.port
 
 export const WEB_ORIGIN = "http://localhost:3000";
 const MIGRATIONS = join(__dirname, "../prisma/migrations");
+const TEST_COUNTRIES = new Set(["GB", "US"]);
 export const CARRIER_WEBHOOK_TOKEN = "gfnTestWebhookToken0123456789abcdefABCDEF";
 export const SUPER_ADMIN = { email: "root@gfn.test", password: "correct horse battery staple" };
 
@@ -33,6 +34,7 @@ Object.assign(process.env, parseEnv(readFileSync(join(__dirname, "../.env"), "ut
   PASSWORD_BREACH_CHECK: "off",
   WEB_PUBLIC_URL: WEB_ORIGIN,
   JOBS_ENABLED: "false",
+  IDENTITY_PROVIDER: "practice",
   PAYMENT_ACCOUNTS: JSON.stringify({
     GB: { processor: "SANDBOX", feePercentBps: 450, fixedFeeMinor: 30 },
     US: { processor: "STRIPE", secretKey: "sk_test_gfnTestOnly", webhookSecret: "whsec_gfnTestOnly", feePercentBps: 290, fixedFeeMinor: 30 },
@@ -53,10 +55,10 @@ export async function resetDatabase(): Promise<void> {
       .sort()) {
       await pool.query(readFileSync(join(MIGRATIONS, migration, "migration.sql"), "utf8"));
     }
-    for (const country of SEED_COUNTRIES) {
+    for (const country of SEED_COUNTRIES.filter((entry) => TEST_COUNTRIES.has(entry.code))) {
       await pool.query("INSERT INTO countries (code, name, currency, status, config) VALUES ($1, $2, $3, 'LIVE', $4)", [country.code, country.name, country.currency, JSON.stringify(country.config)]);
     }
-    for (const [countryCode, schedule] of Object.entries(SEED_FEE_SCHEDULES)) {
+    for (const [countryCode, schedule] of Object.entries(SEED_FEE_SCHEDULES).filter(([code]) => TEST_COUNTRIES.has(code))) {
       await pool.query("INSERT INTO fee_schedules (country_code, version, status, schedule, note) VALUES ($1, 1, 'ACTIVE', $2, 'Test prices')", [countryCode, JSON.stringify(schedule)]);
     }
     await pool.query("INSERT INTO users (email, password_hash, role, status, email_verified_at) VALUES ($1, $2, 'SUPER_ADMIN', 'ACTIVE', now())", [
@@ -251,4 +253,10 @@ export async function acceptStaffInvitation(test: TestApp, email: string, passwo
     .send({ token: invitationToken(test, email), password })
     .expect(200);
   return enrolMfa(test, email, accepted.body.accessToken as string);
+}
+
+const SIGNATURE_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+export function testSignature(name = "Test Signer", method: "DRAWN" | "TYPED" = "TYPED") {
+  return { method, name, image: SIGNATURE_PNG, consent: true as const };
 }

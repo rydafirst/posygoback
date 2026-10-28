@@ -3,6 +3,9 @@ import { z } from "zod";
 export const SUPPORT_CASE_KINDS = ["ERROR", "QUESTION"] as const;
 export type SupportCaseKind = (typeof SUPPORT_CASE_KINDS)[number];
 
+export const SUPPORT_CASE_SOURCES = ["HELPER", "SERVER"] as const;
+export type SupportCaseSource = (typeof SUPPORT_CASE_SOURCES)[number];
+
 export const SUPPORT_CASE_STATUSES = ["OPEN", "RESOLVED"] as const;
 export type SupportCaseStatus = (typeof SUPPORT_CASE_STATUSES)[number];
 
@@ -63,6 +66,7 @@ export interface SupportCaseView {
   id: string;
   reference: string;
   kind: SupportCaseKind;
+  source: SupportCaseSource;
   status: SupportCaseStatus;
   page: string;
   errorCode: string | null;

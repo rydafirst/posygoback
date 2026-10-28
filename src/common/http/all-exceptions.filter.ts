@@ -1,9 +1,12 @@
-import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException, HttpStatus, Logger } from "@nestjs/common";
+import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException, HttpStatus, Logger, Optional } from "@nestjs/common";
 import { ThrottlerException } from "@nestjs/throttler";
 import { type ApiErrorBody, ERROR_CODES } from "../../shared";
 import type { Request, Response } from "express";
 
+import { SupportCasesService } from "../../modules/support/support-cases.service";
 import { AppException } from "./app-exception";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const STATUS_CODES: Partial<Record<number, string>> = {
   [HttpStatus.UNAUTHORIZED]: ERROR_CODES.unauthenticated,
@@ -16,6 +19,8 @@ const STATUS_CODES: Partial<Record<number, string>> = {
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
 
+  constructor(@Optional() private readonly support?: SupportCasesService) {}
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const http = host.switchToHttp();
     const request = http.getRequest<Request>();
@@ -25,6 +30,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     if (body.statusCode >= 500) {
       this.logger.error({ err: exception, correlationId: request.correlationId }, `Unhandled error on ${request.method} ${request.path}: ${describe(exception)}`);
+      void this.support?.captureServerFault({
+        method: request.method,
+        path: request.path,
+        status: body.statusCode,
+        errorName: exception instanceof Error ? exception.name : "Error",
+        message: exception instanceof Error ? exception.message : String(exception),
+        correlationId: request.correlationId && UUID.test(request.correlationId) ? request.correlationId : null,
+        userId: request.principal?.userId ?? null,
+        countryCode: request.principal?.countryCode ?? null,
+        userAgent: request.get("user-agent") ?? null,
+      });
     }
     response.status(body.statusCode).json(body);
   }

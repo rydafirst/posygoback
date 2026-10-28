@@ -20,4 +20,6 @@ const STANDARD: FeeSchedule = {
   shopping: DEFAULT_SHOPPING_RATES,
 };
 
-export const SEED_FEE_SCHEDULES: Readonly<Record<string, FeeSchedule>> = { GB: STANDARD, US: STANDARD };
+const SEEDED_COUNTRIES = ["GB", "US", "AU", "CA", "IE", "DE", "FR", "NL", "ES", "IT"] as const;
+
+export const SEED_FEE_SCHEDULES: Readonly<Record<string, FeeSchedule>> = Object.fromEntries(SEEDED_COUNTRIES.map((code) => [code, STANDARD]));

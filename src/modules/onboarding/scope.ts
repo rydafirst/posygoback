@@ -17,7 +17,3 @@ export function reviewerCountryScope(principal: AuthPrincipal): string | null {
   }
   return principal.countryCode;
 }
-
-export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}

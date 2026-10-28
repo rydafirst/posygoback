@@ -1,9 +1,19 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { buildVerificationSchemas, DOCUMENT_SLOTS, EDITABLE_VERIFICATION_STATUSES, hasPermission, type VerificationMarket, type VerificationView } from "../../../shared";
+import {
+  buildVerificationSchemas,
+  DOCUMENT_SLOTS,
+  EDITABLE_VERIFICATION_STATUSES,
+  hasPermission,
+  type IdentityCheckView,
+  PASSING_IDENTITY_STATUSES,
+  type VerificationMarket,
+  type VerificationView,
+} from "../../../shared";
 import type { ZodError } from "zod";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
 import { Errors } from "../../../common/http/app-exception";
+import { sameName } from "../../../common/names";
 import { APP_CONFIG } from "../../../config/config.module";
 import type { AppConfig } from "../../../config/config.schema";
 import { PrismaService } from "../../../database/prisma.service";
@@ -11,10 +21,11 @@ import { AuditService } from "../../../infrastructure/audit/audit.service";
 import { EMAIL_SENDER, type EmailSender } from "../../../infrastructure/email/email.port";
 import { UsersRepository } from "../../auth/users.repository";
 import { CountriesRepository } from "../../countries/countries.repository";
+import { IdentityChecksService } from "../../identity/identity-checks.service";
 import { FilesService } from "../../files/files.service";
 import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { OnboardingEmails } from "../onboarding-emails";
-import { todayIso, vendorIdOf } from "../scope";
+import { vendorIdOf } from "../scope";
 import { IdentityProviderRegistry } from "./identity-provider";
 import { type VerificationAnswers, type VerificationRecord, VerificationStore } from "./verification.store";
 
@@ -25,6 +36,13 @@ function fieldErrorsOf(error: ZodError): Record<string, string[]> {
     result[key] = [...(result[key] ?? []), issue.message];
   }
   return result;
+}
+
+function identityProblem(check: IdentityCheckView | null): string | null {
+  if (!check || check.status === "PENDING") {
+    return "Verify your identity first";
+  }
+  return PASSING_IDENTITY_STATUSES.includes(check.status) ? null : "Your identity check didn't pass. Try it again.";
 }
 
 function documentIds(answers: VerificationAnswers): string[] {
@@ -44,6 +62,7 @@ export class VendorVerificationService {
     private readonly audit: AuditService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly staffAlerts: StaffAlertsService,
+    private readonly identityChecks: IdentityChecksService,
   ) {}
 
   async view(principal: AuthPrincipal): Promise<VerificationView> {
@@ -51,17 +70,17 @@ export class VendorVerificationService {
     const market = await this.marketOf(principal);
     const record = await this.store.find(vendorId);
     const view = await this.toView(vendorId, market, record);
-    return hasPermission(principal.role, "vendor.verification.manage") ? view : { ...view, draft: {}, idNumberLast4: null, documents: [] };
+    return hasPermission(principal.role, "vendor.verification.manage") ? view : { ...view, draft: {}, idNumberLast4: null, identityCheck: null, documents: [] };
   }
 
   async saveDraft(principal: AuthPrincipal, input: unknown, meta: RequestMeta): Promise<VerificationView> {
     const vendorId = vendorIdOf(principal);
     const market = await this.marketOf(principal);
-    const parsed = buildVerificationSchemas(market, todayIso()).draft.safeParse(input);
+    const parsed = buildVerificationSchemas(market).draft.safeParse(input);
     if (!parsed.success) {
       throw Errors.validation(fieldErrorsOf(parsed.error));
     }
-    const { idNumber, ...answers } = parsed.data;
+    const answers = parsed.data;
     await this.assertOwnFiles(vendorId, answers);
     await this.prisma.$transaction(async (tx) => {
       const existing = await this.store.findLocked(vendorId, tx);
@@ -70,7 +89,10 @@ export class VendorVerificationService {
         throw Errors.invalidTransition("Your verification is with our reviewers and can't be changed right now.");
       }
       const merged = mergeAnswers(existing?.answers ?? {}, answers);
-      await this.store.save({ vendorId, countryCode: market.countryCode, status: status === "RESUBMISSION_REQUIRED" ? status : "IN_PROGRESS", answers: merged }, idNumber, tx);
+      if (existing?.answers.contactFullName && !sameName(existing.answers.contactFullName, merged.contactFullName)) {
+        await this.identityChecks.supersede("VENDOR", vendorId, tx);
+      }
+      await this.store.save({ vendorId, countryCode: market.countryCode, status: status === "RESUBMISSION_REQUIRED" ? status : "IN_PROGRESS", answers: merged }, tx);
       await this.audit.record(
         {
           actor: { userId: principal.userId, role: principal.role },
@@ -95,10 +117,10 @@ export class VendorVerificationService {
       if (!record || !EDITABLE_VERIFICATION_STATUSES.includes(record.status)) {
         throw Errors.invalidTransition("There's nothing to submit right now.");
       }
-      const idNumber = record.hasIdNumber ? await this.store.revealIdNumber(vendorId) : undefined;
-      const parsed = buildVerificationSchemas(market, todayIso()).submission.safeParse({ ...record.answers, idNumber });
-      if (!parsed.success) {
-        throw Errors.validation(fieldErrorsOf(parsed.error));
+      const parsed = buildVerificationSchemas(market).submission.safeParse(record.answers);
+      const identity = identityProblem(await this.identityChecks.latest("VENDOR", vendorId, tx));
+      if (!parsed.success || identity) {
+        throw Errors.validation({ ...(parsed.success ? {} : fieldErrorsOf(parsed.error)), ...(identity ? { identity: [identity] } : {}) });
       }
       const statuses = await this.files.vendorFiles(vendorId, documentIds(record.answers), "KYC_DOCUMENT");
       const missing = documentIds(record.answers).filter((id) => statuses.get(id) !== "VERIFIED");
@@ -158,6 +180,7 @@ export class VendorVerificationService {
       market,
       draft: answers as VerificationView["draft"],
       idNumberLast4: record?.idNumberLast4 ?? null,
+      identityCheck: await this.identityChecks.latest("VENDOR", vendorId),
       documents: DOCUMENT_SLOTS.flatMap((slot) => {
         const fileId = answers.documents?.[slot];
         const status = fileId ? statuses.get(fileId) : undefined;

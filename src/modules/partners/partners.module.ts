@@ -3,6 +3,7 @@ import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
 import { FilesModule } from "../files/files.module";
 import { FinanceModule } from "../finance/finance.module";
+import { IdentityModule } from "../identity/identity.module";
 import { OnboardingModule } from "../onboarding/onboarding.module";
 import { OrdersModule } from "../orders/orders.module";
 import { StockModule } from "../stock/stock.module";
@@ -40,6 +41,7 @@ import { PartnerNotifierService } from "./partner-notifier.service";
 import { PartnerReadinessService } from "./partner-readiness.service";
 import { PartnersRepository } from "./partners.repository";
 import { PartnerAccessService } from "./portal/partner-access.service";
+import { PartnerIdentityService } from "./portal/partner-identity.service";
 import { PartnerPayoutAccountService } from "./portal/partner-payout-account.service";
 import { PartnerPortalService } from "./portal/partner-portal.service";
 import { PartnerVerificationService } from "./portal/partner-verification.service";
@@ -55,7 +57,7 @@ import { StockCountsService } from "./trust/stock-counts.service";
 import { TrustService } from "./trust/trust.service";
 
 @Module({
-  imports: [AuthModule, FilesModule, FinanceModule, OnboardingModule, OrdersModule, StaffModule, PartnerOperationsModule, StockModule],
+  imports: [AuthModule, FilesModule, FinanceModule, IdentityModule, OnboardingModule, OrdersModule, StaffModule, PartnerOperationsModule, StockModule],
   controllers: [
     PartnerPublicController,
     PartnerWebhooksController,
@@ -87,6 +89,7 @@ import { TrustService } from "./trust/trust.service";
     PartnerSecuritiesService,
     PartnerPortalService,
     PartnerVerificationService,
+    PartnerIdentityService,
     PartnerPayoutAccountService,
     PartnerApplicationsService,
     PartnerPublicService,

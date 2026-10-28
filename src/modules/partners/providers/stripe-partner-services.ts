@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 
-import { type IdentityOutcome, type IdentityVerifier, type PayoutAccountRequest, type PayoutAccountSnapshot, type PayoutGateway, TransferError, WebhookRejected } from "./partner-services.port";
+import { type PayoutAccountRequest, type PayoutAccountSnapshot, type PayoutGateway, TransferError, WebhookRejected } from "./partner-services.port";
 
 const TOLERANCE_SECONDS = 300;
 
@@ -13,49 +13,6 @@ function verifiedEvent(stripe: Stripe, rawBody: Buffer, signature: string, secre
     return stripe.webhooks.constructEvent(rawBody, signature, secret, TOLERANCE_SECONDS);
   } catch {
     throw new WebhookRejected();
-  }
-}
-
-export class StripeIdentityVerifier implements IdentityVerifier {
-  readonly provider = "STRIPE_IDENTITY";
-  private readonly stripe: Stripe;
-
-  constructor(
-    secretKey: string,
-    private readonly webhookSecret: string,
-  ) {
-    this.stripe = client(secretKey);
-  }
-
-  async startSession(request: { partnerId: string; returnUrl: string }): Promise<{ sessionId: string; url: string }> {
-    const session = await this.stripe.identity.verificationSessions.create({
-      type: "document",
-      options: { document: { require_matching_selfie: true, require_live_capture: true } },
-      metadata: { partnerId: request.partnerId },
-      return_url: request.returnUrl,
-    });
-    if (!session.url) {
-      throw new Error("Stripe did not return a verification link");
-    }
-    return { sessionId: session.id, url: session.url };
-  }
-
-  async fetchOutcome(sessionId: string): Promise<IdentityOutcome> {
-    const session = await this.stripe.identity.verificationSessions.retrieve(sessionId, { expand: ["verified_outputs"] });
-    if (session.status === "verified") {
-      const outputs = session.verified_outputs;
-      const verifiedName = [outputs?.first_name, outputs?.last_name].filter(Boolean).join(" ");
-      return { status: "VERIFIED", verifiedName: verifiedName || null };
-    }
-    if (session.status === "canceled" || (session.status === "requires_input" && session.last_error)) {
-      return { status: "FAILED", reason: session.last_error?.reason ?? "The check was cancelled" };
-    }
-    return { status: "PENDING" };
-  }
-
-  parseWebhook(rawBody: Buffer, signature: string): string | null {
-    const event = verifiedEvent(this.stripe, rawBody, signature, this.webhookSecret);
-    return event.type.startsWith("identity.verification_session.") ? (event.data.object as Stripe.Identity.VerificationSession).id : null;
   }
 }
 

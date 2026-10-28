@@ -4,6 +4,7 @@ import { loadConfig } from "../config/config.schema";
 import { loadEnvironmentFile } from "../config/load-env";
 import { PrismaClient } from "../generated/prisma/client";
 import { SEED_COUNTRIES, SEED_FEE_SCHEDULES } from "../shared";
+import { standardAgreementsFor } from "./agreements/standard-agreements";
 import { createAdapter } from "./prisma.service";
 
 const PLACEHOLDER_BODY =
@@ -11,7 +12,6 @@ const PLACEHOLDER_BODY =
   "It exists only so the acceptance flow can be exercised locally.";
 
 const LEGAL_KINDS = [
-  ["VENDOR_AGREEMENT", "Vendor agreement"],
   ["TERMS", "Terms of service"],
   ["PRIVACY", "Privacy policy"],
 ] as const;
@@ -37,6 +37,8 @@ async function seed(prisma: PrismaClient): Promise<void> {
     data: SEED_COUNTRIES.flatMap((country) => LEGAL_KINDS.map(([kind, title]) => ({ countryCode: country.code, kind, version: "dev-1", title: `${title} (${country.name})`, body: PLACEHOLDER_BODY }))),
     skipDuplicates: true,
   });
+  const countries = await prisma.country.findMany({ select: { code: true } });
+  await prisma.legalDocument.createMany({ data: countries.flatMap((country) => standardAgreementsFor(country.code)), skipDuplicates: true });
   for (const [countryCode, schedule] of Object.entries(SEED_FEE_SCHEDULES)) {
     if (!(await prisma.feeSchedule.findFirst({ where: { countryCode } }))) {
       await prisma.feeSchedule.create({ data: { countryCode, version: 1, status: "ACTIVE", schedule, note: "Development starting prices — replace before launch" } });

@@ -402,6 +402,7 @@ model User {
 
   verificationCodes       VerificationCode[]
   sessions                Session[]
+  formDrafts              FormDraft[]
   recoveryCodes           RecoveryCode[]
   files                   StoredFile[]
   acceptances             AgreementAcceptance[]
@@ -640,6 +641,11 @@ model AgreementAcceptance {
   acceptedAt      DateTime @default(now()) @map("accepted_at") @db.Timestamptz(6)
   ip              String?  @db.VarChar(64)
   userAgent       String?  @map("user_agent") @db.VarChar(512)
+  signatureName   String?  @map("signature_name") @db.VarChar(160)
+  signatureMethod String?  @map("signature_method") @db.VarChar(10)
+  signatureImage  String?  @map("signature_image")
+  documentSha256  String?  @map("document_sha256") @db.Char(64)
+  reference       String?  @unique(map: "agreement_acceptances_reference_unique") @db.VarChar(24)
 
   vendor   Vendor        @relation(fields: [vendorId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "agreement_acceptances_vendor_id_vendors_id_fk")
   document LegalDocument @relation(fields: [legalDocumentId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "agreement_acceptances_legal_document_id_legal_documents_id_fk")
@@ -1676,6 +1682,9 @@ model PartnerAgreementAcceptance {
   signatureName   String?  @map("signature_name") @db.VarChar(160)
   documentSha256  String?  @map("document_sha256") @db.Char(64)
   userAgent       String?  @map("user_agent") @db.VarChar(512)
+  signatureMethod String?  @map("signature_method") @db.VarChar(10)
+  signatureImage  String?  @map("signature_image")
+  reference       String?  @unique(map: "partner_agreement_acceptances_reference_unique") @db.VarChar(24)
 
   partner  FulfilmentPartner @relation(fields: [partnerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   document LegalDocument     @relation(fields: [legalDocumentId], references: [id], onDelete: Restrict, onUpdate: NoAction)
@@ -2676,6 +2685,7 @@ model SupportCase {
   errorStatus    Int?              @map("error_status")
   endpoint       String?           @db.VarChar(200)
   reportCount    Int               @default(1) @map("report_count")
+  source         String            @default("HELPER") @db.VarChar(10)
   firstSeenAt    DateTime          @default(now()) @map("first_seen_at") @db.Timestamptz(6)
   lastSeenAt     DateTime          @default(now()) @map("last_seen_at") @db.Timestamptz(6)
   resolvedAt     DateTime?         @map("resolved_at") @db.Timestamptz(6)
@@ -2706,6 +2716,7 @@ model SupportReport {
 
   @@index([caseId, createdAt], map: "support_reports_case_idx")
   @@index([userId], map: "support_reports_user_idx")
+  @@index([correlationId], map: "support_reports_correlation_idx")
   @@map("support_reports")
 }
 
@@ -2755,4 +2766,66 @@ model EmailLogEntry {
   @@index([toAddress, createdAt], map: "email_log_to_idx")
   @@index([createdAt], map: "email_log_created_idx")
   @@map("email_log")
+}
+
+model FormDraft {
+  userId    String   @map("user_id") @db.Uuid
+  formKey   String   @map("form_key") @db.VarChar(80)
+  data      Json
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "form_drafts_user_id_users_id_fk")
+
+  @@id([userId, formKey], map: "form_drafts_pkey")
+  @@index([updatedAt], map: "form_drafts_updated_idx")
+  @@map("form_drafts")
+}
+
+enum IdentityCheckStatus {
+  PENDING
+  IN_REVIEW
+  APPROVED
+  DECLINED
+  ABANDONED
+  EXPIRED
+
+  @@map("identity_check_status")
+}
+
+enum IdentitySubjectType {
+  VENDOR
+  PARTNER
+
+  @@map("identity_subject_type")
+}
+
+model IdentityCheck {
+  id             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subjectType    IdentitySubjectType @map("subject_type")
+  subjectId      String              @map("subject_id") @db.Uuid
+  provider       String              @db.VarChar(32)
+  sessionId      String              @map("session_id") @db.VarChar(120)
+  status         IdentityCheckStatus @default(PENDING)
+  documentType   String?             @map("document_type") @db.VarChar(60)
+  issuingCountry String?             @map("issuing_country") @db.VarChar(3)
+  documentExpiry DateTime?           @map("document_expiry") @db.Date
+  nameMatches    Boolean?            @map("name_matches")
+  reason         String?             @db.VarChar(300)
+  decidedAt      DateTime?           @map("decided_at") @db.Timestamptz(6)
+  supersededAt   DateTime?           @map("superseded_at") @db.Timestamptz(6)
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([provider, sessionId], map: "identity_checks_session_unique")
+  @@index([subjectType, subjectId, createdAt], map: "identity_checks_subject_idx")
+  @@map("identity_checks")
+}
+
+model IdentityWebhookEvent {
+  provider   String   @db.VarChar(32)
+  eventId    String   @map("event_id") @db.VarChar(120)
+  receivedAt DateTime @default(now()) @map("received_at") @db.Timestamptz(6)
+
+  @@id([provider, eventId], map: "identity_webhook_events_pkey")
+  @@index([receivedAt], map: "identity_webhook_events_received_idx")
+  @@map("identity_webhook_events")
 }

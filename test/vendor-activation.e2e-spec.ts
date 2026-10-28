@@ -1,5 +1,5 @@
 import type { VendorActivationView } from "../src/shared";
-import { createStaff, flushRateLimits, insertLegalDocument, resetDatabase, signUpAndVerify, startApp, type TestApp, uploadVerifiedFile } from "./harness";
+import { createStaff, flushRateLimits, insertLegalDocument, resetDatabase, signUpAndVerify, startApp, type TestApp, testSignature, uploadVerifiedFile } from "./harness";
 import { as, query } from "./partner-helpers";
 
 const ANSWERS = {
@@ -11,9 +11,6 @@ const ANSWERS = {
   contactFullName: "Ada Activation",
   contactRole: "Director",
   contactPhone: "+447700900123",
-  idType: "PASSPORT",
-  idNumber: "533401872",
-  idExpiry: "2031-06-30",
   productsDescription: "Human hair wigs and extensions",
   monthlyUnits: "UP_TO_1000",
   monthlyOrders: "UP_TO_500",
@@ -56,19 +53,21 @@ describe("vendor activation fee", () => {
   }
 
   async function verify(vendor: Vendor): Promise<void> {
-    const documents = { idFront: await uploadVerifiedFile(test, vendor.token), selfie: await uploadVerifiedFile(test, vendor.token), businessDocument: await uploadVerifiedFile(test, vendor.token) };
+    const documents = { businessDocument: await uploadVerifiedFile(test, vendor.token) };
     await http()
       .put("/v1/vendor/verification")
       .set(as(vendor.token))
       .send({ ...ANSWERS, documents })
       .expect(200);
+    await http().post("/v1/vendor/verification/identity/session").set(as(vendor.token)).expect(200);
+    await http().post("/v1/vendor/verification/identity/refresh").set(as(vendor.token)).expect(200);
     await http().post("/v1/vendor/verification/submit").set(as(vendor.token)).expect(200);
     await http().post(`/v1/admin/verifications/${vendor.vendorId}/decision`).set(as(compliance)).send({ decision: "APPROVE" }).expect(200);
   }
 
   async function acceptAgreement(vendor: Vendor): Promise<{ vendorActive: boolean }> {
     const [current] = (await http().get("/v1/vendor/agreements").set(as(vendor.token)).expect(200)).body as Array<{ document: { id: string } }>;
-    return (await http().post(`/v1/vendor/agreements/${current!.document.id}/accept`).set(as(vendor.token)).expect(200)).body as { vendorActive: boolean };
+    return (await http().post(`/v1/vendor/agreements/${current!.document.id}/accept`).set(as(vendor.token)).send({ signature: testSignature() }).expect(200)).body as { vendorActive: boolean };
   }
 
   async function awaitingActivation(email: string): Promise<Vendor> {

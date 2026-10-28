@@ -141,14 +141,39 @@ Vendors sign in with their old email and password and are asked to accept the US
 
 Partners are people who run a hub from home. They apply on the public partner page with a referee; nobody is invited by staff.
 
-- **Providers.** `PARTNER_SERVICES` picks identity checks and payouts. `{"provider":"PRACTICE"}` passes every identity check and opens a pretend payout account, for development only. Production needs `{"provider":"STRIPE","secretKey":"sk_live_…","identityWebhookSecret":"whsec_…","connectWebhookSecret":"whsec_…"}` and refuses anything else.
-- **Stripe webhooks.** Add `identity.verification_session.*` events pointing at `https://<api host>/v1/webhooks/stripe-identity`, and `account.updated` (Connect) pointing at `https://<api host>/v1/webhooks/stripe-connect`. Signatures are checked on the raw body and the state is always re-read from Stripe.
+- **Providers.** `PARTNER_SERVICES` picks payouts, and the Stripe Identity fallback for identity checks (see Identity checks below). `{"provider":"PRACTICE"}` opens a pretend payout account, for development only. Production needs `{"provider":"STRIPE","secretKey":"sk_live_…","identityWebhookSecret":"whsec_…","connectWebhookSecret":"whsec_…"}` and refuses anything else.
+- **Stripe webhooks.** Add `account.updated` (Connect) pointing at `https://<api host>/v1/webhooks/stripe-connect`. If Stripe Identity is the identity provider, also add `identity.verification_session.*` events pointing at `https://<api host>/v1/webhooks/stripe-identity`. Signatures are checked on the raw body and the state is always re-read from Stripe.
 - **Per-country settings** live under Countries → Partner settings: whether applications are open, the tax reference and its format, the work declaration, the platform's stock cover shown to vendors, optional deposit and partner insurance (zero means none), how long proof of address is kept after the decision (default 90 days), the tiers, and the test vendor for test orders.
 - **Test vendor.** Test orders charge and ship from one internal vendor account per country. Mark it with `UPDATE vendors SET is_test_account = true WHERE id = '<id>'` (there's deliberately no screen for this), give it an ordinary business name, keep a little stock at each hub, then pick it in the country's partner settings.
 - **What partners earn** — their share of receiving, storage and pick-and-pack fees, the founding bonus and places, the holdback percentage and days — is part of each market's price list and goes through the same approval as vendor prices. Postage and packaging are passed to vendors at cost and aren't shared.
 - **Custody rules** per country (same screen): how often routine counts run, the loss rate that raises an alert, the trust score that pauses a hub and the score needed for a tier raise, the parcel value that needs a tamper seal, and how long a handed-off parcel can go without a carrier scan.
 - **Claims and transfers.** Country ops and compliance assess claims; finance or a super admin decides them, never the same person. Country ops request transfers between hubs; the sending hub seals and photographs, the receiving hub counts blind.
 - Publish the partner agreement for the country under Legal before opening applications. Partners sign it by typing their name; the version, time, IP and a fingerprint of the text are kept.
+
+## Identity checks
+
+Sellers and partners verify their identity (ID document, live selfie and face match) through one provider. The seller verification wizard and the partner identity step both use it, and we keep only the outcome: status, document type, issuing country, expiry and whether the name matches. ID photos are never stored.
+
+| Variable | Meaning |
+| --- | --- |
+| `IDENTITY_PROVIDER` | `didit`, `stripe` or `practice`. Left empty, Didit is used when its three keys are set, then Stripe Identity when `PARTNER_SERVICES` is Stripe, then practice. If the chosen provider has no settings outside production, the API logs a warning and uses practice. |
+| `DIDIT_API_KEY` | API key from the Didit console. |
+| `DIDIT_WORKFLOW_ID` | ID of the Didit workflow to run. |
+| `DIDIT_WEBHOOK_SECRET` | The webhook destination's shared secret. |
+| `DIDIT_API_URL` | Optional. Defaults to `https://verification.didit.me`. |
+
+Production refuses to start with `IDENTITY_PROVIDER=didit` and any Didit key missing, and refuses practice checks.
+
+Setting up Didit:
+
+1. In the Didit console, create a workflow with ID verification, liveness and face match, and copy its ID into `DIDIT_WORKFLOW_ID`.
+2. Create an API key and put it in `DIDIT_API_KEY`.
+3. Add a webhook destination for the `status.updated` event at `https://api.posygo.com/v1/webhooks/didit`, and copy its secret into `DIDIT_WEBHOOK_SECRET`.
+4. Set `IDENTITY_PROVIDER=didit` and redeploy.
+
+Webhooks are checked against `X-Signature-V2` (or `X-Signature` on the raw body) and `X-Timestamp` (5 minutes either way). Each `event_id` is handled once, and the decision is always fetched from Didit rather than read from the payload. If someone comes back from the check before the webhook arrives, the page asks for the result itself (`POST /v1/vendor/verification/identity/refresh` or `POST /v1/partner/identity/refresh`). Older seller cases keep their typed ID number, which reviewers can still reveal.
+
+To fall back to Stripe Identity, set `IDENTITY_PROVIDER=stripe` with a Stripe `PARTNER_SERVICES`; the `/v1/webhooks/stripe-identity` endpoint then takes over, and events sent to the other provider's endpoint are ignored.
 
 ## Scheduled jobs
 

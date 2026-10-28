@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { SupportCaseDetailView, SupportCaseView, SupportReportInput } from "../src/shared";
 import { createStaff, flushRateLimits, resetDatabase, signUpAndVerify, startApp, type TestApp } from "./harness";
+import { NotificationsService } from "../src/modules/notifications/notifications.service";
 import { as, query } from "./partner-helpers";
 
 const now = () => new Date().toISOString();
@@ -111,5 +112,49 @@ describe("support cases from the in-app helper", () => {
       status = (await test.http().post("/v1/public/support-cases").set("x-test-client-ip", "203.0.113.9").send({ kind: "QUESTION", page: "/", message: "Is anyone there?" })).status;
     }
     expect(status).toBe(429);
+  });
+
+  it("records a system failure before anyone reports it, emails the team, and joins the helper's report to it", async () => {
+    const failing = jest.spyOn(test.app.get(NotificationsService), "feed").mockRejectedValueOnce(new TypeError("Cannot read properties of undefined (reading 'id')"));
+    const failed = await test.http().get("/v1/notifications").set(as(vendor)).expect(500);
+    failing.mockRestore();
+    const correlationId = (failed.body as { correlationId: string }).correlationId;
+
+    let open: SupportCaseView | undefined;
+    for (let attempt = 0; attempt < 20 && !open; attempt += 1) {
+      const listed = (await test.http().get("/v1/admin/support-cases?status=OPEN&kind=ERROR").set(as(admin)).expect(200)).body as SupportCaseView[];
+      open = listed.find((entry) => entry.source === "SERVER" && entry.endpoint === "GET /v1/notifications");
+      if (!open) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    }
+    expect(open).toMatchObject({ kind: "ERROR", source: "SERVER", errorStatus: 500, reports: 1 });
+    for (let attempt = 0; attempt < 20 && !test.email.lastTo("admin@gfn.test")?.subject.includes(open!.reference); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    expect(test.email.lastTo("admin@gfn.test")?.subject).toBe(`${open!.reference}: the system failed before anyone reported it`);
+    expect(test.email.lastTo("finance@gfn.test")?.subject ?? "").not.toContain(open!.reference);
+
+    const joined = await test
+      .http()
+      .post("/v1/support-cases")
+      .set(as(vendor))
+      .send(errorReport({ error: { code: "internal_error", status: 500, endpoint: "/v1/notifications", correlationId } }))
+      .expect(201);
+    expect(joined.body).toEqual({ reference: open!.reference, alreadyKnown: true });
+    const detail = (await test.http().get(`/v1/admin/support-cases/${open!.id}`).set(as(admin)).expect(200)).body as SupportCaseDetailView;
+    expect(detail.reportDetails).toHaveLength(2);
+    expect(detail.reportDetails.some((report) => report.message.includes("TypeError"))).toBe(true);
+
+    const questions = (await test.http().get("/v1/admin/support-cases?kind=QUESTION").set(as(admin)).expect(200)).body as SupportCaseView[];
+    expect(questions.every((entry) => entry.kind === "QUESTION")).toBe(true);
+  });
+
+  it("leaves people's own mistakes out", async () => {
+    const before = ((await test.http().get("/v1/admin/support-cases?status=OPEN&kind=ERROR").set(as(admin)).expect(200)).body as SupportCaseView[]).length;
+    await test.http().post("/v1/vendor/products").set(as(vendor)).send({ name: "" }).expect(400);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const after = ((await test.http().get("/v1/admin/support-cases?status=OPEN&kind=ERROR").set(as(admin)).expect(200)).body as SupportCaseView[]).length;
+    expect(after).toBe(before);
   });
 });
