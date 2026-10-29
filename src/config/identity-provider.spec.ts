@@ -1,6 +1,6 @@
 import { identityProviderOf } from "./config.schema";
 
-const STRIPE = { provider: "STRIPE" as const, secretKey: "sk_test_x", identityWebhookSecret: "whsec_x", connectWebhookSecret: "whsec_y" };
+const STRIPE = { provider: "STRIPE" as const, secretKey: "sk_test_x", identityWebhookSecret: "whsec_x", connectWebhookSecret: "whsec_y", testMode: true };
 const DIDIT = { DIDIT_API_KEY: "key", DIDIT_WORKFLOW_ID: "4f0bde3c-1f6e-4c56-9e70-0c5f8b6f1a11", DIDIT_WEBHOOK_SECRET: "secret" };
 const NO_DIDIT = { DIDIT_API_KEY: "", DIDIT_WORKFLOW_ID: "", DIDIT_WEBHOOK_SECRET: "" };
 

@@ -28,6 +28,7 @@ const paymentAccountSchema = z.discriminatedUnion("processor", [
     webhookSecret: z.string().regex(/^whsec_[A-Za-z0-9]+$/, "Use the endpoint's webhook signing secret"),
     feePercentBps: z.number().int().min(0).max(1000),
     fixedFeeMinor: z.number().int().min(0).max(1000),
+    testMode: z.boolean().default(false),
   }),
   z.object({ processor: z.literal("SANDBOX"), feePercentBps: z.number().int().min(0).max(1000), fixedFeeMinor: z.number().int().min(0).max(1000) }),
 ]);
@@ -75,6 +76,7 @@ const partnerServicesSchema = z.discriminatedUnion("provider", [
     secretKey: z.string().regex(/^(sk|rk)_(live|test)_[A-Za-z0-9]+$/, "Use a Stripe secret key"),
     identityWebhookSecret: z.string().startsWith("whsec_"),
     connectWebhookSecret: z.string().startsWith("whsec_"),
+    testMode: z.boolean().default(false),
   }),
   z.object({ provider: z.literal("PRACTICE") }),
 ]);
@@ -204,7 +206,7 @@ export const configSchema = z
     message: "The sandbox payment processor can't be used in production",
     path: ["PAYMENT_ACCOUNTS"],
   })
-  .refine((config) => config.NODE_ENV !== "production" || Object.values(config.PAYMENT_ACCOUNTS).every((account) => account.processor !== "STRIPE" || account.secretKey.includes("_live_")), {
+  .refine((config) => config.NODE_ENV !== "production" || Object.values(config.PAYMENT_ACCOUNTS).every((account) => account.processor !== "STRIPE" || account.secretKey.includes("_live_") || account.testMode), {
     message: "Production needs live Stripe keys",
     path: ["PAYMENT_ACCOUNTS"],
   })
@@ -212,7 +214,7 @@ export const configSchema = z
     message: 'Production needs Shippo accounts with live tokens. To try Shippo\'s test tokens on a live site, add "testMode": true to that country',
     path: ["CARRIER_ACCOUNTS"],
   })
-  .refine((config) => config.NODE_ENV !== "production" || (config.PARTNER_SERVICES.provider === "STRIPE" && config.PARTNER_SERVICES.secretKey.includes("_live_")), {
+  .refine((config) => config.NODE_ENV !== "production" || (config.PARTNER_SERVICES.provider === "STRIPE" && (config.PARTNER_SERVICES.secretKey.includes("_live_") || config.PARTNER_SERVICES.testMode)), {
     message: "Partner identity checks and payouts need a live Stripe key in production",
     path: ["PARTNER_SERVICES"],
   })
