@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { type AcceptInvitationInput, type InvitableStaffRole, type InviteStaffInput, isVendorRole, type Role, type StaffDirectoryView, type StaffInvitationPreview } from "../../shared";
+import { type AcceptInvitationInput, type ChangeStaffRoleInput, INVITABLE_STAFF_ROLES, type InvitableStaffRole, type InviteStaffInput, isVendorRole, type Role, type StaffDirectoryView, type StaffInvitationPreview } from "../../shared";
 
 import type { AuthPrincipal, RequestMeta } from "../../common/auth/auth-principal";
 import { Errors } from "../../common/http/app-exception";
@@ -82,12 +82,47 @@ export class StaffService {
     };
   }
 
-  async invite(principal: AuthPrincipal, input: InviteStaffInput, meta: RequestMeta): Promise<void> {
-    if (input.countryCode) {
-      if (!(await this.prisma.country.findUnique({ where: { code: input.countryCode } }))) {
-        throw Errors.validation({ countryCode: ["Choose a country on the platform"] });
-      }
+  async changeRole(principal: AuthPrincipal, userId: string, input: ChangeStaffRoleInput, meta: RequestMeta): Promise<void> {
+    if (userId === principal.userId) {
+      throw Errors.invalidTransition("You can't change your own role.");
     }
+    const target = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!target || target.partnerId !== null || !(INVITABLE_STAFF_ROLES as readonly Role[]).includes(target.role)) {
+      throw Errors.notFound();
+    }
+    const countryCode = input.countryCode ?? null;
+    if (target.role === input.role && target.countryCode === countryCode) {
+      throw Errors.invalidTransition("They already have this role.");
+    }
+    await this.assertCountryExists(countryCode);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { role: input.role, countryCode } });
+      await this.audit.record(
+        {
+          actor: { userId: principal.userId, role: principal.role },
+          action: "staff.role_changed",
+          resourceType: "user",
+          resourceId: userId,
+          countryCode: countryCode ?? target.countryCode,
+          before: { role: target.role, countryCode: target.countryCode },
+          after: { role: input.role, countryCode },
+          meta,
+        },
+        tx,
+      );
+      await this.sessions.revokeAllForUser(userId, "role_changed", tx);
+    });
+    await this.email.send(StaffEmails.roleChanged(target.email, ROLE_LABELS[input.role]));
+  }
+
+  private async assertCountryExists(countryCode: string | null): Promise<void> {
+    if (countryCode && !(await this.prisma.country.findUnique({ where: { code: countryCode } }))) {
+      throw Errors.validation({ countryCode: ["Choose a country on the platform"] });
+    }
+  }
+
+  async invite(principal: AuthPrincipal, input: InviteStaffInput, meta: RequestMeta): Promise<void> {
+    await this.assertCountryExists(input.countryCode ?? null);
     await this.issueInvitation(principal, { email: input.email, role: input.role, countryCode: input.countryCode ?? null, partnerId: null }, meta);
   }
 

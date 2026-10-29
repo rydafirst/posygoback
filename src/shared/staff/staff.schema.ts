@@ -8,25 +8,37 @@ export type InvitableStaffRole = (typeof INVITABLE_STAFF_ROLES)[number];
 
 export const COUNTRY_BOUND_ROLES: readonly Role[] = ["WAREHOUSE_OPERATOR", "COUNTRY_OPS"];
 
+const staffCountryCode = z
+  .string()
+  .regex(/^[A-Z]{2}$/)
+  .optional();
+
+function requireCountryForBoundRoles(input: { role: InvitableStaffRole; countryCode?: string }, context: z.RefinementCtx): void {
+  const needsCountry = COUNTRY_BOUND_ROLES.includes(input.role);
+  if (needsCountry && !input.countryCode) {
+    context.addIssue({ code: "custom", path: ["countryCode"], message: "Choose the country this person works in" });
+  }
+  if (!needsCountry && input.countryCode) {
+    context.addIssue({ code: "custom", path: ["countryCode"], message: "This role covers every country" });
+  }
+}
+
 export const inviteStaffSchema = z
   .object({
     email: emailSchema,
     role: z.enum(INVITABLE_STAFF_ROLES),
-    countryCode: z
-      .string()
-      .regex(/^[A-Z]{2}$/)
-      .optional(),
+    countryCode: staffCountryCode,
   })
-  .superRefine((input, context) => {
-    const needsCountry = COUNTRY_BOUND_ROLES.includes(input.role);
-    if (needsCountry && !input.countryCode) {
-      context.addIssue({ code: "custom", path: ["countryCode"], message: "Choose the country this person works in" });
-    }
-    if (!needsCountry && input.countryCode) {
-      context.addIssue({ code: "custom", path: ["countryCode"], message: "This role covers every country" });
-    }
-  });
+  .superRefine(requireCountryForBoundRoles);
 export type InviteStaffInput = z.infer<typeof inviteStaffSchema>;
+
+export const changeStaffRoleSchema = z
+  .object({
+    role: z.enum(INVITABLE_STAFF_ROLES),
+    countryCode: staffCountryCode,
+  })
+  .superRefine(requireCountryForBoundRoles);
+export type ChangeStaffRoleInput = z.infer<typeof changeStaffRoleSchema>;
 
 export interface StaffMemberView {
   userId: string;

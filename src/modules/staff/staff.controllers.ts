@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post, Res } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post, Put, Res } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
-import { type AcceptInvitationInput, acceptInvitationSchema, type AuthenticatedResult, invitationTokenSchema, type InviteStaffInput, inviteStaffSchema } from "../../shared";
+import { type AcceptInvitationInput, acceptInvitationSchema, type AuthenticatedResult, type ChangeStaffRoleInput, changeStaffRoleSchema, invitationTokenSchema, type InviteStaffInput, inviteStaffSchema } from "../../shared";
 import type { Response } from "express";
 
 import type { AuthPrincipal, RequestMeta } from "../../common/auth/auth-principal";
@@ -45,6 +45,18 @@ export class AdminStaffController {
   @HttpCode(HttpStatus.NO_CONTENT)
   suspend(@Param("userId", uuid) userId: string, @CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
     return this.staff.suspend(principal, userId, meta);
+  }
+
+  @RequirePermission("staff.manage")
+  @Put("members/:userId/role")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  changeRole(
+    @Param("userId", uuid) userId: string,
+    @Body(new ZodValidationPipe(changeStaffRoleSchema)) input: ChangeStaffRoleInput,
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Meta() meta: RequestMeta,
+  ) {
+    return this.staff.changeRole(principal, userId, input, meta);
   }
 }
 

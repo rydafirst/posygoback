@@ -83,6 +83,38 @@ describe("catalogue, inbound and inventory", () => {
       const directory = await test.http().get("/v1/admin/staff").set(as(superAdmin)).expect(200);
       expect((directory.body.members as Array<{ email: string }>).map((member) => member.email)).toContain("new-operator@gfn.test");
     });
+
+    it("changes a staff member's role and signs them out", async () => {
+      await test.http().post("/v1/admin/staff/invitations").set(as(superAdmin)).send({ email: "new-admin@gfn.test", role: "ADMIN" }).expect(202);
+      const token = decodeURIComponent(/#token=([^\s]+)/.exec(test.email.lastTo("new-admin@gfn.test")!.text)![1]!);
+      const accepted = await test.http().post("/v1/staff-invitations/accept").send({ token, password: "an admin's own password" }).expect(200);
+      const userId: string = accepted.body.user.id;
+      const path = `/v1/admin/staff/members/${userId}/role`;
+
+      await test.http().put(path).set(as(countryOps)).send({ role: "COMPLIANCE" }).expect(404);
+      await test.http().put(path).set(as(superAdmin)).send({ role: "SUPER_ADMIN" }).expect(400);
+      await test.http().put(path).set(as(superAdmin)).send({ role: "COUNTRY_OPS" }).expect(400);
+      await test.http().put(path).set(as(superAdmin)).send({ role: "ADMIN" }).expect(409);
+      await test.http().put(path).set(as(superAdmin)).send({ role: "COMPLIANCE" }).expect(204);
+
+      const [user] = await query<{ role: string; country_code: string | null }>("SELECT role, country_code FROM users WHERE id = $1", [userId]);
+      expect(user).toEqual({ role: "COMPLIANCE", country_code: null });
+      const open = await query("SELECT 1 FROM sessions WHERE user_id = $1 AND revoked_at IS NULL", [userId]);
+      expect(open).toHaveLength(0);
+      expect(test.email.lastTo("new-admin@gfn.test")!.subject).toContain("role has changed");
+      const [audit] = await query<{ action: string }>("SELECT action FROM audit_log_entries WHERE resource_id = $1 AND action = 'staff.role_changed'", [userId]);
+      expect(audit).toBeDefined();
+    });
+
+    it("never changes a super admin's role", async () => {
+      const directory = await test.http().get("/v1/admin/staff").set(as(superAdmin)).expect(200);
+      const superAdmins = (directory.body.members as Array<{ userId: string; role: string }>).filter((member) => member.role === "SUPER_ADMIN");
+      for (const member of superAdmins) {
+        await test.http().put(`/v1/admin/staff/members/${member.userId}/role`).set(as(superAdmin)).send({ role: "ADMIN" }).expect((response) => expect([404, 409]).toContain(response.status));
+      }
+      const [stillSuper] = await query<{ count: string }>("SELECT count(*) FROM users WHERE role = 'SUPER_ADMIN'");
+      expect(Number(stillSuper!.count)).toBe(superAdmins.length);
+    });
   });
 
   describe("warehouses", () => {

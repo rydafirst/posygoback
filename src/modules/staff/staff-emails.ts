@@ -16,6 +16,12 @@ export const StaffEmails = {
     text: `Thanks for applying to become a fulfilment partner. Set a password and turn on two-factor sign-in to continue with your verification steps (the link lasts 3 days):\n${link}\n\nIf you didn't apply, ignore this email and nothing will happen.${EMAIL_SIGN_OFF}`,
     action: { label: "Set up your account", url: link },
   }),
+  roleChanged: (to: string, roleLabel: string): EmailMessage => ({
+    to,
+    kind: "staff.role_changed",
+    subject: `Your ${PLATFORM_NAME} role has changed`,
+    text: `You now work on the ${PLATFORM_NAME} platform team as ${roleLabel}. Sign in again to see what you can do now.${EMAIL_SIGN_OFF}`,
+  }),
   suspended: (to: string, partnerName?: string): EmailMessage => ({
     to,
     kind: "staff.account_suspended",
