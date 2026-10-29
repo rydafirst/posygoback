@@ -1,3 +1,4 @@
+import "./http/plain-messages";
 export * from "./money/currency";
 export * from "./money/money";
 export * from "./country/country.schema";
