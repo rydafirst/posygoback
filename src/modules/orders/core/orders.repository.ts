@@ -129,8 +129,9 @@ export class OrdersRepository {
   private rates(row: OrderDetailRow, staff: boolean): RateView[] {
     const shown = row.rates.filter((rate) => staff || rate.id === row.selectedRateId);
     const ranking = rankRates(
-      shown.map((rate) => ({ id: rate.id, chargeMinor: Number(rate.chargeMinor), estimatedDays: rate.estimatedDays })),
+      shown.map((rate) => ({ id: rate.id, chargeMinor: Number(rate.chargeMinor), estimatedDays: rate.estimatedDays, carrier: rate.carrier, service: rate.service })),
       row.deliveryPreference,
+      row.preferredService,
     );
     const byId = new Map(shown.map((rate) => [rate.id, rate]));
     return ranking.order.map((id) => {
@@ -171,6 +172,7 @@ export class OrdersRepository {
       createdAt: row.createdAt.toISOString(),
       cancellationPending: row.cancellations.length > 0,
       deliveryPreference: row.deliveryPreference,
+      preferredService: row.preferredService,
     };
   }
 }

@@ -1,7 +1,7 @@
 import { CarrierAccountsService } from "../src/modules/orders/carriers/carrier-accounts.service";
 import { SandboxCarrier } from "../src/modules/orders/carriers/sandbox.carrier";
 import { PartnerUpkeepService } from "../src/modules/partners/jobs/partner-upkeep.service";
-import type { MysteryOrderView, OrderDetailView, PartnerStatementView, ScorecardView, StockCountView } from "../src/shared";
+import { type MysteryOrderView, type OrderDetailView, type PartnerStatementView, type ScorecardView, serviceKey, type StockCountView } from "../src/shared";
 import {
   acceptStaffInvitation,
   createStaff,
@@ -17,6 +17,8 @@ import {
   uploadVerifiedFile,
 } from "./harness";
 import { as, GB_RECIPIENT, inDays, PartnerFlow, query } from "./partner-helpers";
+
+const SANDBOX_EXPRESS = serviceKey("Sandbox Post", "Express");
 
 describe("partner hubs at work", () => {
   let test: TestApp;
@@ -198,10 +200,16 @@ describe("partner hubs at work", () => {
         .http()
         .post("/v1/vendor/orders")
         .set(as(owner))
-        .send({ warehouseId: a.hubId, deliveries: [{ recipient: GB_RECIPIENT, lines: [{ productId, quantity: 2 }] }] })
+        .send({ warehouseId: a.hubId, deliveries: [{ recipient: GB_RECIPIENT, lines: [{ productId, quantity: 2 }], preferredService: SANDBOX_EXPRESS }] })
         .expect(201);
+      const toPack = test.email.sent.filter((message) => message.kind === "order.to_pack").at(-1)!;
+      expect(toPack.subject).toMatch(/^New order to pack: ORD-GB-/);
+      expect(toPack.action?.url).toContain(`/admin/orders/${placed.body[0].id as string}`);
+      expect(test.email.sent.filter((message) => message.kind === "order.placed").at(-1)!.subject).toBe(toPack.subject.replace("New order to pack: ", "").concat(" is placed"));
       const orderId = await packAndRate(a.token, placed.body[0].id as string, "WIG-1", 2);
       const rated = (await test.http().get(`/v1/warehouse/orders/${orderId}`).set(as(a.token)).expect(200)).body as OrderDetailView;
+      expect(rated.preferredService).toBe(SANDBOX_EXPRESS);
+      expect(rated.rates[0]).toMatchObject({ service: "Express", preferred: true });
       expect(rated.charges).toBeNull();
       expect(rated.rates.every((rate) => rate.chargeMinor === null)).toBe(true);
       await test.http().post(`/v1/warehouse/orders/${orderId}/actions`).set(as(a.token)).send({ action: "HAND_OFF" }).expect(400);

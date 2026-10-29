@@ -37,7 +37,6 @@ import { PartnerJobs } from "./jobs/partner.jobs";
 import { PartnerUpkeepService } from "./jobs/partner-upkeep.service";
 import { PartnerStatementService } from "./ledger/partner-statement.service";
 import { PartnerOperationsModule } from "./operations/partner-operations.module";
-import { PartnerNotifierService } from "./partner-notifier.service";
 import { PartnerReadinessService } from "./partner-readiness.service";
 import { PartnersRepository } from "./partners.repository";
 import { PartnerAccessService } from "./portal/partner-access.service";
@@ -82,7 +81,6 @@ import { TrustService } from "./trust/trust.service";
     ConnectAccountEvents,
     PartnersRepository,
     PartnerReadinessService,
-    PartnerNotifierService,
     PartnerAccessService,
     AdminPartnersService,
     PartnerReviewsService,

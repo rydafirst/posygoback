@@ -1,4 +1,4 @@
-import { rankRates } from "./delivery-preference";
+import { deliveryTimeLabel, rankRates, serviceKey } from "./delivery-preference";
 
 const RATES = [
   { id: "economy", chargeMinor: 399, estimatedDays: 4 },
@@ -30,5 +30,24 @@ describe("ranking shipping rates", () => {
 
   it("falls back to the cheapest when no carrier gives a delivery time", () => {
     expect(rankRates([{ id: "a", chargeMinor: 500, estimatedDays: null }, { id: "b", chargeMinor: 400, estimatedDays: null }], "FASTEST").preferredId).toBe("b");
+  });
+
+  it("puts the seller's chosen service first, and falls back when the hub isn't offered it", () => {
+    const rates = [
+      { id: "post", chargeMinor: 266, estimatedDays: null, carrier: "Hermes UK", service: "Postable" },
+      { id: "next", chargeMinor: 326, estimatedDays: null, carrier: "Hermes UK", service: "Postable Next Day" },
+    ];
+    const chosen = rankRates(rates, "CHEAPEST", serviceKey("Hermes UK", "Postable Next Day"));
+    expect(chosen.preferredId).toBe("next");
+    expect(chosen.order[0]).toBe("next");
+    expect(chosen.tags.get("next")).toEqual(["FASTEST"]);
+    expect(rankRates(rates, "CHEAPEST", serviceKey("DPD UK", "Next Day")).preferredId).toBe("post");
+  });
+
+  it("describes delivery time, reading next day from the service name when the carrier gives none", () => {
+    expect(deliveryTimeLabel(3, "Standard")).toBe("About 3 days");
+    expect(deliveryTimeLabel(1, "Express")).toBe("Next day");
+    expect(deliveryTimeLabel(null, "ParcelShop Drop-Off Next Day")).toBe("Next day");
+    expect(deliveryTimeLabel(null, "Postable")).toBeNull();
   });
 });

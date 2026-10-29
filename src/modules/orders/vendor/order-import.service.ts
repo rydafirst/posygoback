@@ -10,6 +10,7 @@ import { CsvFormatError, type CsvOrder, csvRecipient, groupOrderRows, type Impor
 import { JobLockService } from "../../finance/jobs/job-lock.service";
 import { type TradingVendor, VendorStandingService } from "../../onboarding/vendor-standing.service";
 import { OrderCreationService } from "../core/order-creation.service";
+import { OrderPlacedNoticesService } from "../core/order-placed-notices.service";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const IMPORT_LOCK_MS = 10 * 60 * 1000;
@@ -35,6 +36,7 @@ export class OrderImportService {
     private readonly standing: VendorStandingService,
     private readonly audit: AuditService,
     private readonly locks: JobLockService,
+    private readonly notices: OrderPlacedNoticesService,
   ) {}
 
   async history(country: SellerCountry): Promise<ImportResultView[]> {
@@ -108,6 +110,14 @@ export class OrderImportService {
       after: { created, failed: results.length - created },
       meta,
     });
+    const references = results.map((result) => result.orderReference).filter((reference): reference is string => Boolean(reference));
+    if (references.length > 0) {
+      const placed = await this.prisma.order.findMany({ where: { vendorId: vendor.vendorId, reference: { in: references } }, select: { id: true } });
+      await this.notices.placed(
+        placed.map((order) => order.id),
+        "CSV",
+      );
+    }
     return this.view(batch);
   }
 

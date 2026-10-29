@@ -14,7 +14,31 @@ export interface ShipmentTracking {
 
 const openOrder = (webUrl: string, order: OrderLink): EmailAction => ({ label: "Open the order", url: `${webUrl}/orders/${order.id}` });
 
+function placedList(orders: readonly OrderLink[]): string {
+  return orders.map((order) => `• ${order.reference}`).join("\n");
+}
+
 export const OrderEmails = {
+  placed: (to: string, orders: readonly OrderLink[], hubName: string, webUrl: string): EmailMessage => {
+    const single = orders.length === 1 ? orders[0] : undefined;
+    return {
+      to,
+      kind: "order.placed",
+      subject: single ? `${single.reference} is placed` : `${orders.length} orders placed`,
+      text: `${single ? `Order ${single.reference} is` : `These orders are`} with ${hubName} to be packed.${single ? "" : `\n\n${placedList(orders)}`}\n\nWe'll email you again when ${single ? "it's" : "each one is"} on its way.${EMAIL_SIGN_OFF}`,
+      action: single ? openOrder(webUrl, single) : { label: "Open your orders", url: `${webUrl}/orders` },
+    };
+  },
+  toPack: (to: string, orders: readonly OrderLink[], seller: string, hubName: string, webUrl: string): EmailMessage => {
+    const single = orders.length === 1 ? orders[0] : undefined;
+    return {
+      to,
+      kind: "order.to_pack",
+      subject: single ? `New order to pack: ${single.reference}` : `${orders.length} new orders to pack`,
+      text: `${seller} has sent ${single ? `order ${single.reference}` : `${orders.length} orders`} to ${hubName}.${single ? "" : `\n\n${placedList(orders)}`}\n\nOpen ${single ? "it" : "each one"} in Orders, scan the items, pack the parcel and buy the label.${EMAIL_SIGN_OFF}`,
+      action: single ? { label: "Pack the order", url: `${webUrl}/admin/orders/${single.id}` } : { label: "Open orders", url: `${webUrl}/admin/orders` },
+    };
+  },
   awaitingFunds: (to: string, order: OrderLink, amount: string, webUrl: string): EmailMessage => ({
     to,
     kind: "order.awaiting_funds",

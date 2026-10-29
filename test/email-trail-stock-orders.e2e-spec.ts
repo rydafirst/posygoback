@@ -162,7 +162,7 @@ describe("email trail: stock shipments, orders and returns", () => {
     expect(last().text).toContain("nobody home");
     await carrierUpdate(id, "DELIVERED", "Delivered to front door");
 
-    expect(kindsSince(start)).toEqual(["order.on_hold", "order.released", "order.shipped", "order.carrier_problem"]);
+    expect(kindsSince(start)).toEqual(["order.placed", "order.on_hold", "order.released", "order.shipped", "order.carrier_problem"]);
   });
 
   it("emails once when the carrier picks up a parcel that was never handed over, and when it comes back", async () => {
@@ -171,7 +171,7 @@ describe("email trail: stock shipments, orders and returns", () => {
     await labelled(id);
     await carrierUpdate(id, "IN_TRANSIT", "Collected from sender");
     await carrierUpdate(id, "RETURNED", "Returned to sender");
-    expect(kindsSince(start)).toEqual(["order.shipped", "order.returned_to_hub"]);
+    expect(kindsSince(start)).toEqual(["order.placed", "order.shipped", "order.returned_to_hub"]);
   });
 
   it("emails when a cancellation request is declined and when staff cancel the order", async () => {
@@ -182,7 +182,7 @@ describe("email trail: stock shipments, orders and returns", () => {
     await http().post(`/v1/vendor/orders/${id}/actions`).set(as(owner)).send({ action: "REQUEST_CANCELLATION", reason: "WRONG_ITEMS" }).expect(200);
     await order(id, "cancellation-decision", { approve: false, note: "Already sealed for collection" }, countryOps);
     await order(id, "actions", { action: "CANCEL", reason: "ADDRESS_PROBLEM", note: "Recipient moved away" }, countryOps);
-    expect(kindsSince(start)).toEqual(["order.cancellation_declined", "order.cancelled"]);
+    expect(kindsSince(start)).toEqual(["order.placed", "order.cancellation_declined", "order.cancelled"]);
     expect(last().text).toContain("returned to your wallet");
   });
 

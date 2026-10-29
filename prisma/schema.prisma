@@ -1305,6 +1305,7 @@ model Order {
   source                 OrderSource
   externalReference      String?             @map("external_reference") @db.VarChar(64)
   deliveryPreference     DeliveryPreference  @default(CHEAPEST) @map("delivery_preference")
+  preferredService       String?                 @map("preferred_service") @db.VarChar(200)
   groupId                String              @map("group_id") @db.Uuid
   recipientEncrypted     String              @map("recipient_encrypted")
   recipientName          String              @map("recipient_name") @db.VarChar(100)

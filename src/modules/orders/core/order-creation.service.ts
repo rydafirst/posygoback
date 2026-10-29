@@ -12,6 +12,7 @@ import { WalletAlertsService } from "../../finance/wallets/wallet-alerts.service
 import type { PostingResult } from "../../finance/wallets/wallet-ledger.service";
 import type { TradingVendor } from "../../onboarding/vendor-standing.service";
 import { OrderChargesService } from "./order-charges.service";
+import { OrderPlacedNoticesService } from "./order-placed-notices.service";
 import { orderReference } from "./order-references";
 import { OrderTimelineService } from "./order-timeline.service";
 import { OrdersRepository } from "./orders.repository";
@@ -27,6 +28,7 @@ export interface OrderActor {
 export interface NewDelivery {
   externalReference?: string;
   deliveryPreference?: DeliveryPreference;
+  preferredService?: string;
   recipient: OrderRecipient;
   lines: Array<{ productId: string; quantity: number }>;
 }
@@ -55,6 +57,7 @@ export class OrderCreationService {
     private readonly timeline: OrderTimelineService,
     private readonly alerts: WalletAlertsService,
     private readonly audit: AuditService,
+    private readonly notices: OrderPlacedNoticesService,
   ) {}
 
   async create(vendor: TradingVendor, countryCode: string, actor: OrderActor, source: OrderSource, deliveries: NewDelivery[], requestedWarehouseId?: string): Promise<string[]> {
@@ -85,6 +88,7 @@ export class OrderCreationService {
               source,
               externalReference: delivery.externalReference ?? null,
               deliveryPreference: delivery.deliveryPreference ?? "CHEAPEST",
+              preferredService: delivery.preferredService ?? null,
               groupId: deliveries.length > 1 ? (created.length === 0 ? id : created[0]!) : id,
               recipientEncrypted: this.orders.encryptRecipient(id, recipient),
               recipientName: recipient.name,
@@ -150,6 +154,9 @@ export class OrderCreationService {
     );
     for (const posting of postings) {
       await this.alerts.afterPosting(posting);
+    }
+    if (source !== "CSV") {
+      await this.notices.placed(ids, source);
     }
     return ids;
   }

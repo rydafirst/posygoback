@@ -10,6 +10,7 @@ import { OrderAlertsService } from "./core/order-alerts.service";
 import { OrderCancellationService } from "./core/order-cancellation.service";
 import { OrderChargesService } from "./core/order-charges.service";
 import { OrderCreationService } from "./core/order-creation.service";
+import { OrderPlacedNoticesService } from "./core/order-placed-notices.service";
 import { WarehouseChooserService } from "./core/warehouse-chooser.service";
 import { LabelRecordsService } from "./core/label-records.service";
 import { OrderShippingService } from "./core/order-shipping.service";
@@ -41,6 +42,7 @@ import { FulfilmentService } from "./warehouse/fulfilment.service";
     StockAllocationService,
     OrderChargesService,
     OrderCreationService,
+    OrderPlacedNoticesService,
     WarehouseChooserService,
     OrderShippingService,
     LabelRecordsService,

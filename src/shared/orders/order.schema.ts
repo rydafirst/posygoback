@@ -27,6 +27,7 @@ export const deliverySchema = z
     recipient: orderRecipientSchema,
     lines: z.array(orderLineSchema).min(1, "Add at least one product").max(50),
     deliveryPreference: z.enum(DELIVERY_PREFERENCES).optional(),
+    preferredService: z.string().trim().min(3).max(200).optional(),
   })
   .superRefine(uniqueProducts);
 export type DeliveryInput = z.infer<typeof deliverySchema>;
@@ -145,6 +146,7 @@ export interface OrderSummaryView {
   createdAt: string;
   cancellationPending: boolean;
   deliveryPreference: DeliveryPreference;
+  preferredService: string | null;
 }
 
 export interface OrderLineView {
