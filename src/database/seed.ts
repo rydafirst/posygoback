@@ -7,11 +7,6 @@ import { SEED_COUNTRIES, SEED_FEE_SCHEDULES } from "../shared";
 import { standardAgreementsFor } from "./agreements/standard-agreements";
 import { createAdapter } from "./prisma.service";
 
-const DEV_WAREHOUSES = [
-  { countryCode: "GB", code: "GB-DEV-1", name: "Manchester (development)", addressLines: ["Development warehouse"], city: "Manchester", postalCode: "M1 1AA" },
-  { countryCode: "US", code: "US-DEV-1", name: "New Jersey (development)", addressLines: ["Development warehouse"], city: "Newark", postalCode: "07102" },
-];
-
 const DEV_PACKAGING = [
   { code: "MAILER-S", label: "Small mailer", kind: "MAILER" as const, lengthMm: 250, widthMm: 180, heightMm: 20 },
   { code: "MAILER-L", label: "Large mailer", kind: "MAILER" as const, lengthMm: 400, widthMm: 300, heightMm: 30 },
@@ -29,11 +24,6 @@ async function seed(prisma: PrismaClient): Promise<void> {
   for (const [countryCode, schedule] of Object.entries(SEED_FEE_SCHEDULES)) {
     if (!(await prisma.feeSchedule.findFirst({ where: { countryCode } }))) {
       await prisma.feeSchedule.create({ data: { countryCode, version: 1, status: "ACTIVE", schedule, note: "Development starting prices — replace before launch" } });
-    }
-  }
-  for (const warehouse of DEV_WAREHOUSES) {
-    if (!(await prisma.warehouse.findUnique({ where: { code: warehouse.code } }))) {
-      await prisma.warehouse.create({ data: { ...warehouse, locations: { create: ["A-01", "A-02", "B-01"].map((code) => ({ code, label: `Shelf ${code}` })) } } });
     }
   }
   await prisma.packagingPreset.createMany({ data: SEED_COUNTRIES.flatMap((country) => DEV_PACKAGING.map((preset) => ({ countryCode: country.code, ...preset }))), skipDuplicates: true });

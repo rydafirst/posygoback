@@ -130,6 +130,8 @@ export const countryConfigSchema = z.object({
   activationFeeMinor: amountMinor.default(0),
 });
 
+export const STANDARD_ACTIVATION_FEE_MINOR = 1_000;
+
 export const activationFeeSchema = z.object({ activationFeeMinor: amountMinor });
 export type ActivationFeeInput = z.infer<typeof activationFeeSchema>;
 

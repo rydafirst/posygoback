@@ -1,4 +1,4 @@
-import { type CreateCountryInput, DEFAULT_PARTNER_TIERS } from "./country.schema";
+import { type CreateCountryInput, DEFAULT_PARTNER_TIERS, STANDARD_ACTIVATION_FEE_MINOR } from "./country.schema";
 import { MAJOR_COUNTRIES } from "./major-countries";
 
 export const SEED_COUNTRIES: CreateCountryInput[] = [
@@ -47,7 +47,7 @@ export const SEED_COUNTRIES: CreateCountryInput[] = [
         noScanAlertHours: 48,
         tiers: DEFAULT_PARTNER_TIERS,
       },
-      activationFeeMinor: 0,
+      activationFeeMinor: STANDARD_ACTIVATION_FEE_MINOR,
     },
   },
   {
@@ -152,7 +152,7 @@ export const SEED_COUNTRIES: CreateCountryInput[] = [
         noScanAlertHours: 48,
         tiers: DEFAULT_PARTNER_TIERS,
       },
-      activationFeeMinor: 0,
+      activationFeeMinor: STANDARD_ACTIVATION_FEE_MINOR,
     },
   },
   ...MAJOR_COUNTRIES,

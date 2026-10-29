@@ -36,6 +36,27 @@ describe("email", () => {
     expect(plainText({ ...MESSAGE, text })).toContain(url);
   });
 
+  it("renders an account details table and a signature, and keeps both in the plain-text version", () => {
+    const message = {
+      ...MESSAGE,
+      text: "Dear Ada,\n\nYour account is active.\n\nPosygo",
+      heading: "Welcome to Posygo",
+      eyebrow: "Seller account activated",
+      details: { title: "Account details", rows: [["Seller number", "PSG-1234ABCD"]] as const },
+      signature: { name: "The Posygo team", title: "Seller onboarding" },
+    };
+    const html = renderHtml(message, SETTINGS.siteUrl);
+    expect(html).toContain("Welcome to Posygo</h1>");
+    expect(html).toContain("Seller account activated");
+    expect(html).toContain("PSG-1234ABCD");
+    expect(html).toContain("https://posygo.com/brand/email-mark.png");
+    expect(html).toContain("Kind regards,");
+    const text = plainText(message);
+    expect(text).toContain("Account details\nSeller number: PSG-1234ABCD");
+    expect(text).toContain("Kind regards,\nThe Posygo team\nSeller onboarding");
+    expect(text).not.toMatch(/\n\nPosygo\n\nAccount/);
+  });
+
   it("sends through Resend with the sender, reply address, both versions and a tag for the kind of email", async () => {
     const fetchMock = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: "re_123" }) });
     global.fetch = fetchMock;

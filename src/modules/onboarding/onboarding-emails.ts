@@ -5,8 +5,15 @@ const verificationPage = (webUrl: string) => `${webUrl}/verification`;
 
 export interface ActivationReceipt {
   amount: string;
-  paidOn: string;
   reference: string;
+}
+
+export interface SellerWelcome {
+  businessName: string;
+  sellerNumber: string;
+  country: string;
+  activeFrom: string;
+  receipt: ActivationReceipt | null;
 }
 
 export const OnboardingEmails = {
@@ -23,8 +30,8 @@ export const OnboardingEmails = {
     subject: "Your business is verified",
     text: readyToTrade
       ? `Good news: your verification is approved and you can start sending stock.${EMAIL_SIGN_OFF}`
-      : `Good news: your verification is approved. Once the vendor agreement is accepted you can start sending stock.${EMAIL_SIGN_OFF}`,
-    action: readyToTrade ? { label: "Open your dashboard", url: `${webUrl}/overview` } : { label: "Accept the vendor agreement", url: verificationPage(webUrl) },
+      : `Good news: your verification is approved. Next, sign the vendor agreement and accept the terms to finish setting up your account.${EMAIL_SIGN_OFF}`,
+    action: readyToTrade ? { label: "Open your dashboard", url: `${webUrl}/overview` } : { label: "Review the agreements", url: verificationPage(webUrl) },
   }),
   activationDue: (to: string, fee: string, webUrl: string): EmailMessage => ({
     to,
@@ -33,14 +40,31 @@ export const OnboardingEmails = {
     text: `Your business is verified and the agreement is accepted. The last step is a one-off activation fee of ${fee}. Once it's paid your account goes live and you can start sending stock. The activation fee isn't refundable.${EMAIL_SIGN_OFF}`,
     action: { label: "Activate your account", url: verificationPage(webUrl) },
   }),
-  accountLive: (to: string, receipt: ActivationReceipt | null, webUrl: string): EmailMessage => ({
+  sellerWelcome: (to: string, welcome: SellerWelcome, webUrl: string): EmailMessage => ({
     to,
     kind: "onboarding.account_live",
-    subject: "Your account is live",
-    text: receipt
-      ? `Thanks, we've received your activation fee.\n\nActivation fee: ${receipt.amount}\nPaid on: ${receipt.paidOn}\nReference: ${receipt.reference}\n\nYour account is live and you can start sending stock.${EMAIL_SIGN_OFF}`
-      : `Your account is live and you can start sending stock.${EMAIL_SIGN_OFF}`,
+    subject: `Welcome to ${PLATFORM_NAME}: your seller account is active`,
+    eyebrow: "Seller account activated",
+    heading: `Welcome to ${PLATFORM_NAME}`,
+    preheader: `${welcome.businessName} is now an active ${PLATFORM_NAME} seller.`,
+    text: `Dear ${welcome.businessName},\n\nYour business is verified, your agreements are signed and your seller account is now active. You can add your products and send your first stock shipment today.\n\nKeep this email for your records. Quote your seller number whenever you contact us.${EMAIL_SIGN_OFF}`,
+    details: {
+      title: "Account details",
+      rows: [
+        ["Business", welcome.businessName],
+        ["Seller number", welcome.sellerNumber],
+        ["Country", welcome.country],
+        ["Active from", welcome.activeFrom],
+        ...(welcome.receipt
+          ? ([
+              ["Activation fee", `${welcome.receipt.amount} paid`],
+              ["Payment reference", welcome.receipt.reference],
+            ] as const)
+          : []),
+      ],
+    },
     action: { label: "Open your dashboard", url: `${webUrl}/overview` },
+    signature: { name: `The ${PLATFORM_NAME} team`, title: "Seller onboarding" },
   }),
   verificationNeedsChanges: (to: string, reason: string, webUrl: string): EmailMessage => ({
     to,

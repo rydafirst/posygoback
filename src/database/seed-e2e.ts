@@ -9,6 +9,7 @@ import { SecretHasherService } from "../infrastructure/crypto/secret-hasher.serv
 import { mfaSecretContext } from "../modules/auth/flows/login.service";
 import { WalletLedgerService } from "../modules/finance/wallets/wallet-ledger.service";
 import { createAdapter } from "./prisma.service";
+import { VENDOR_LEGAL_KINDS } from "../shared";
 
 const DEFAULT_PASSWORD = "e2e local password 2026";
 const DEFAULT_TOTP_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
@@ -50,6 +51,14 @@ async function vendorId(prisma: PrismaClient): Promise<string> {
     return owner.vendorId;
   }
   return (await prisma.vendor.create({ data: { businessName: "E2E Hair Co", countryCode: COUNTRY, status: "ACTIVE" } })).id;
+}
+
+async function platformHub(prisma: PrismaClient): Promise<void> {
+  await prisma.warehouse.upsert({
+    where: { code: "E2E-MAN-1" },
+    update: { active: true },
+    create: { countryCode: COUNTRY, code: "E2E-MAN-1", name: "Manchester test hub", addressLines: ["2 Test Street"], city: "Manchester", postalCode: "M1 1AA" },
+  });
 }
 
 async function partner(prisma: PrismaClient): Promise<{ id: string; hubId: string }> {
@@ -110,10 +119,8 @@ async function user(
 async function vendorTrading(prisma: PrismaClient, vendor: string): Promise<void> {
   await prisma.vendor.update({ where: { id: vendor }, data: { status: "ACTIVE" } });
   const owner = await prisma.user.findUniqueOrThrow({ where: { email: e2eEmail("vendor-owner") }, select: { id: true } });
-  const agreement = await prisma.legalDocument.findFirst({ where: { countryCode: COUNTRY, kind: "VENDOR_AGREEMENT" }, orderBy: { publishedAt: "desc" }, select: { id: true } });
-  if (agreement) {
-    await prisma.agreementAcceptance.createMany({ data: [{ vendorId: vendor, legalDocumentId: agreement.id, acceptedBy: owner.id }], skipDuplicates: true });
-  }
+  const documents = await prisma.legalDocument.findMany({ where: { countryCode: COUNTRY, kind: { in: [...VENDOR_LEGAL_KINDS] } }, distinct: ["kind"], orderBy: [{ kind: "asc" }, { publishedAt: "desc" }], select: { id: true } });
+  await prisma.agreementAcceptance.createMany({ data: documents.map((document) => ({ vendorId: vendor, legalDocumentId: document.id, acceptedBy: owner.id })), skipDuplicates: true });
   const ledger = new WalletLedgerService();
   await prisma.$transaction(async (tx) => {
     const wallet = await ledger.walletFor(tx, vendor, "GBP");
@@ -219,8 +226,14 @@ async function main(): Promise<void> {
   const deliver = option("--deliver-store-order");
   const handOff = option("--hand-off-order");
   const confirmFor = option("--shopping-confirm");
-  if (linkFor || deliver || handOff || confirmFor) {
+  const awaitingActivation = process.argv.includes("--awaiting-activation");
+  if (linkFor || deliver || handOff || confirmFor || awaitingActivation) {
     try {
+      if (awaitingActivation) {
+        const vendor = await vendorId(prisma);
+        await prisma.vendorActivationPayment.deleteMany({ where: { vendorId: vendor } });
+        await prisma.vendor.update({ where: { id: vendor }, data: { status: "PENDING_VERIFICATION", activationDueAt: new Date() } });
+      }
       if (linkFor) {
         process.stdout.write(`${await buyerLink(prisma, config, linkFor.toLowerCase())}\n`);
       }
@@ -246,6 +259,8 @@ async function main(): Promise<void> {
     const secret = process.env.E2E_TOTP_SECRET ?? DEFAULT_TOTP_SECRET;
     const vendor = await vendorId(prisma);
     const { id: partnerId, hubId } = await partner(prisma);
+    await platformHub(prisma);
+    await prisma.stockTransfer.updateMany({ where: { fromWarehouseId: hubId, status: "REQUESTED" }, data: { status: "CANCELLED" } });
     for (const member of CAST) {
       await user(prisma, encryption, member, { vendorId: vendor, partnerId }, passwordHash, secret);
     }

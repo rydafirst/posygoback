@@ -3,12 +3,27 @@ export interface EmailAction {
   url: string;
 }
 
+export interface EmailDetails {
+  title: string;
+  rows: ReadonlyArray<readonly [label: string, value: string]>;
+}
+
+export interface EmailSignature {
+  name: string;
+  title: string;
+}
+
 export interface EmailMessage {
   to: string;
   subject: string;
   text: string;
   kind?: string;
   action?: EmailAction;
+  heading?: string;
+  eyebrow?: string;
+  preheader?: string;
+  details?: EmailDetails;
+  signature?: EmailSignature;
 }
 
 export interface EmailSender {

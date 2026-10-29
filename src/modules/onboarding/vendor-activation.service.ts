@@ -3,7 +3,7 @@ import { Injectable } from "@nestjs/common";
 import { lockRow } from "../../database/prisma.service";
 import type { Prisma } from "../../generated/prisma/client";
 import { AuditService, SYSTEM_ACTOR } from "../../infrastructure/audit/audit.service";
-import { activationFeeOf } from "../../shared";
+import { activationFeeOf, VENDOR_LEGAL_KINDS } from "../../shared";
 import { CountriesRepository } from "../countries/countries.repository";
 import { LegalDocumentsRepository } from "./agreements/legal-documents.repository";
 import { VerificationStore } from "./verification/verification.store";
@@ -54,11 +54,15 @@ export class VendorActivationService {
     if (verification?.status !== "APPROVED") {
       return false;
     }
-    const agreement = await this.legal.latest(countryCode, "VENDOR_AGREEMENT", executor);
-    if (!agreement) {
+    const documents = await this.legal.latestPerKind(countryCode, VENDOR_LEGAL_KINDS, executor);
+    if (!documents.some((document) => document.kind === "VENDOR_AGREEMENT")) {
       return false;
     }
-    const accepted = await this.legal.acceptances(vendorId, [agreement.id], executor);
-    return accepted.has(agreement.id);
+    const accepted = await this.legal.acceptances(
+      vendorId,
+      documents.map((document) => document.id),
+      executor,
+    );
+    return documents.every((document) => accepted.has(document.id));
   }
 }

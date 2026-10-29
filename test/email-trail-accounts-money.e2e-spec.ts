@@ -120,7 +120,7 @@ describe("email trail: accounts and money", () => {
         "onboarding.verification_submitted",
         "onboarding.verification_approved",
       ]);
-      expect(test.email.lastTo("owner@verify.example")!.action).toEqual({ label: "Accept the vendor agreement", url: "http://localhost:3000/verification" });
+      expect(test.email.lastTo("owner@verify.example")!.action).toEqual({ label: "Review the agreements", url: "http://localhost:3000/verification" });
     });
 
     it("tells a vendor who already accepted the agreement they can start sending stock", async () => {

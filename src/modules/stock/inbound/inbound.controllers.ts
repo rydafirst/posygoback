@@ -20,6 +20,7 @@ import { CurrentPrincipal, Meta, RequirePermission } from "../../../common/auth/
 import { type SellerCountry, SelectedCountry } from "../../../common/auth/selected-country";
 import { ZodValidationPipe } from "../../../common/http/zod-validation.pipe";
 import { THROTTLE } from "../../../infrastructure/rate-limit/rate-limit.module";
+import { ReceivingHubsService } from "./receiving-hubs.service";
 import { VendorInboundService } from "./vendor-inbound.service";
 import { type OperatorAction, WarehouseInboundService } from "./warehouse-inbound.service";
 
@@ -36,12 +37,21 @@ const vendorActionBody = new ZodValidationPipe(z.object({ action: z.enum(["SUBMI
 
 @Controller({ path: "vendor/inbound", version: "1" })
 export class VendorInboundController {
-  constructor(private readonly inbound: VendorInboundService) {}
+  constructor(
+    private readonly inbound: VendorInboundService,
+    private readonly receivingHubs: ReceivingHubsService,
+  ) {}
 
   @RequirePermission("vendor.stock.read")
   @Get()
   list(@SelectedCountry() country: SellerCountry) {
     return this.inbound.list(country);
+  }
+
+  @RequirePermission("vendor.stock.read")
+  @Get("hubs")
+  hubs(@SelectedCountry() country: SellerCountry) {
+    return this.receivingHubs.forVendor(country);
   }
 
   @RequirePermission("vendor.stock.read")

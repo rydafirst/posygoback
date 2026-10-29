@@ -7,6 +7,10 @@ export const LEGAL_DOCUMENT_KINDS = ["VENDOR_AGREEMENT", "TERMS", "PRIVACY", "PA
 export type LegalDocumentKind = (typeof LEGAL_DOCUMENT_KINDS)[number];
 export const VENDOR_LEGAL_KINDS: readonly LegalDocumentKind[] = ["VENDOR_AGREEMENT", "TERMS", "PRIVACY"];
 
+export function sellerNumber(vendorId: string): string {
+  return `PSG-${vendorId.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+}
+
 export const createLegalDocumentSchema = z.object({
   countryCode: z.string().regex(/^[A-Z]{2}$/),
   kind: z.enum(LEGAL_DOCUMENT_KINDS),

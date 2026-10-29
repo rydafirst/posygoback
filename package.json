@@ -14,6 +14,7 @@
     "seed:e2e": "ts-node src/database/seed-e2e.ts",
     "seed:e2e:limits": "ts-node src/database/seed-e2e.ts --limits-only",
     "seed:e2e:buyer-link": "ts-node src/database/seed-e2e.ts --buyer-link",
+    "seed:e2e:awaiting-activation": "ts-node src/database/seed-e2e.ts --awaiting-activation",
     "seed:e2e:deliver": "ts-node src/database/seed-e2e.ts --deliver-store-order",
     "seed:e2e:hand-off": "ts-node src/database/seed-e2e.ts --hand-off-order",
     "migrate:us": "node dist/migration/migrate-us.js",

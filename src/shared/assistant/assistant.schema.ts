@@ -1,6 +1,21 @@
 import { z } from "zod";
 
 export const ASSISTANT_HISTORY_LIMIT = 6;
+export const ASSISTANT_SCREEN_LIMITS = { fields: 30, label: 120, value: 200, alerts: 5, alert: 300 } as const;
+
+const screenText = (max: number) => z.string().trim().min(1).max(max);
+
+export const assistantScreenSchema = z.object({
+  title: screenText(160).optional(),
+  focused: screenText(ASSISTANT_SCREEN_LIMITS.label).optional(),
+  fields: z
+    .array(z.object({ label: screenText(ASSISTANT_SCREEN_LIMITS.label), value: z.string().trim().max(ASSISTANT_SCREEN_LIMITS.value) }))
+    .max(ASSISTANT_SCREEN_LIMITS.fields)
+    .default([]),
+  alerts: z.array(screenText(ASSISTANT_SCREEN_LIMITS.alert)).max(ASSISTANT_SCREEN_LIMITS.alerts).default([]),
+});
+export type AssistantScreenInput = z.input<typeof assistantScreenSchema>;
+export type AssistantScreen = z.output<typeof assistantScreenSchema>;
 
 export const askAssistantSchema = z.object({
   page: z
@@ -14,6 +29,7 @@ export const askAssistantSchema = z.object({
     .array(z.object({ from: z.enum(["helper", "person"]), text: z.string().trim().min(1).max(1000) }))
     .max(ASSISTANT_HISTORY_LIMIT)
     .default([]),
+  screen: assistantScreenSchema.optional(),
 });
 export type AskAssistantInput = z.input<typeof askAssistantSchema>;
 export type AskAssistant = z.output<typeof askAssistantSchema>;

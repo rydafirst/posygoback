@@ -223,6 +223,11 @@ describe("catalogue, inbound and inventory", () => {
       await test.http().post("/v1/vendor/inbound").set(as(otherVendor)).send(shipment()).expect(400);
     });
 
+    it("lists the hubs a vendor can send stock to, named by city", async () => {
+      const hubs = await test.http().get("/v1/vendor/inbound/hubs").set(as(owner)).expect(200);
+      expect(hubs.body).toEqual([{ warehouseId: expect.any(String), label: "Manchester", city: "Manchester", area: "M17", unitsHeld: 0 }]);
+    });
+
     it("drafts, edits and submits, then locks the declaration", async () => {
       const draft = await test.http().post("/v1/vendor/inbound").set(as(owner)).send(shipment()).expect(201);
       inboundId = draft.body.id;

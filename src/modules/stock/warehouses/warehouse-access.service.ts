@@ -20,11 +20,15 @@ export class WarehouseAccessService {
     return warehouse;
   }
 
+  openForReceiving(countryCode: string): Promise<WarehouseRow[]> {
+    return this.prisma.warehouse.findMany({ where: { countryCode, active: true, OR: [{ partnerId: null }, { partner: { status: "ACTIVE" } }] }, orderBy: [{ city: "asc" }, { postalCode: "asc" }, { code: "asc" }] });
+  }
+
   async receivingWarehouseFor(countryCode: string, requestedId?: string): Promise<WarehouseRow> {
-    const open = await this.prisma.warehouse.findMany({ where: { countryCode, active: true, OR: [{ partnerId: null }, { partner: { status: "ACTIVE" } }] } });
+    const open = await this.openForReceiving(countryCode);
     const chosen = requestedId ? open.find((warehouse) => warehouse.id === requestedId) : open.length === 1 ? open[0] : undefined;
     if (!chosen) {
-      throw Errors.validation({ warehouseId: [open.length === 0 ? "No warehouse is open in your market yet." : "Choose a warehouse."] });
+      throw Errors.validation({ warehouseId: [open.length === 0 ? "No hub is open in this country yet." : "Choose the hub to send your stock to."] });
     }
     return chosen;
   }

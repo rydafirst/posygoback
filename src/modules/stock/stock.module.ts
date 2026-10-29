@@ -11,6 +11,7 @@ import { InboundAlertsService } from "./inbound/inbound-alerts.service";
 import { InboundChargesService } from "./inbound/inbound-charges.service";
 import { InboundRepository } from "./inbound/inbound.repository";
 import { ReceivingService } from "./inbound/receiving.service";
+import { ReceivingHubsService } from "./inbound/receiving-hubs.service";
 import { VendorInboundService } from "./inbound/vendor-inbound.service";
 import { WarehouseInboundService } from "./inbound/warehouse-inbound.service";
 import { VendorInventoryController, WarehouseInventoryController } from "./inventory/inventory.controllers";
@@ -31,6 +32,7 @@ import { WarehousesService } from "./warehouses/warehouses.service";
     InboundChargesService,
     InboundAlertsService,
     VendorInboundService,
+    ReceivingHubsService,
     WarehouseInboundService,
     ReceivingService,
     InventoryLedgerService,

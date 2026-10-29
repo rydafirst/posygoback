@@ -72,6 +72,7 @@ describe("answers from the helper", () => {
     const request = model.requests.at(-1)!;
     expect(request.system).toContain("Page: Wallet (/wallet)");
     expect(request.system).toContain("- £42.00 (status ACTIVE");
+    expect(request.system).toContain("Call them by their business name, Acme Goods.");
     expect(request.system).toContain("Prices in United Kingdom (GBP)");
     expect(request.system).not.toContain("Prices in United States");
     expect(request.turns).toEqual([{ role: "user", content: "How much is packing? My card is [number removed]" }]);
@@ -82,7 +83,7 @@ describe("answers from the helper", () => {
   it("gives visitors general answers without any account details", async () => {
     await test.http().post("/v1/public/assistant/answers").send({ page: "/signup", question: "What does storage cost?" }).expect(200);
     const request = model.requests.at(-1)!;
-    expect(request.system).toContain("The person isn't signed in.");
+    expect(request.system).toContain("a visitor who isn't signed in");
     expect(request.system).toContain("Prices in United States");
   });
 
@@ -100,6 +101,38 @@ describe("answers from the helper", () => {
     ]);
     const usage = (await test.http().get("/v1/admin/assistant/usage?days=1").set(as(admin)).expect(200)).body as AssistantUsageView;
     expect(usage).toMatchObject({ questions: 4, answered: 2, unsure: 1, inputTokens: 3600, outputTokens: 120 });
+  });
+
+  it("knows a team member's role and what is waiting for them", async () => {
+    const compliance = await createStaff(test, "compliance@gfn.test", "COMPLIANCE");
+    await test.http().post("/v1/assistant/answers").set(as(compliance)).send({ page: "/admin", question: "What should I do first today?" }).expect(200);
+    const request = model.requests.at(-1)!;
+    expect(request.system).toContain("working as compliance (compliance@gfn.test), covering every country");
+    expect(request.system).not.toContain("You have no account details");
+  });
+
+  it("sees what's on the person's screen, without card numbers", async () => {
+    await test
+      .http()
+      .post("/v1/assistant/answers")
+      .set(as(vendor))
+      .send({
+        page: "/wallet",
+        question: "Is this right?",
+        screen: { title: "Wallet", focused: "Amount to add", fields: [{ label: "Amount to add", value: "50" }, { label: "Note", value: "card 4111 1111 1111 1111" }], alerts: ["Enter at least £10."] },
+      })
+      .expect(200);
+    const request = model.requests.at(-1)!;
+    expect(request.system).toContain("They are on the field: Amount to add");
+    expect(request.system).toContain('- Amount to add: "50"');
+    expect(request.system).toContain('- Note: "card [number removed]"');
+    expect(request.system).toContain("- Enter at least £10.");
+    await test
+      .http()
+      .post("/v1/assistant/answers")
+      .set(as(vendor))
+      .send({ page: "/wallet", question: "Is this right?", screen: { fields: Array.from({ length: 31 }, (_, index) => ({ label: `Field ${index}`, value: "x" })) } })
+      .expect(400);
   });
 
   it("refuses badly shaped questions and stops at the daily budget", async () => {

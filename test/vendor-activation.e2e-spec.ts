@@ -176,8 +176,14 @@ describe("vendor activation fee", () => {
 
     const receipt = test.email.lastTo(vendor.email)!;
     expect(receipt.kind).toBe("onboarding.account_live");
-    expect(receipt.subject).toBe("Your account is live");
-    expect(receipt.text).toContain("£8.00");
+    expect(receipt.subject).toBe("Welcome to Posygo: your seller account is active");
+    expect(receipt.details?.rows).toEqual(
+      expect.arrayContaining([
+        ["Seller number", expect.stringMatching(/^PSG-[0-9A-F]{8}$/)],
+        ["Activation fee", "£8.00 paid"],
+        ["Payment reference", expect.stringMatching(/^PSG-PAY-[0-9A-F]{10}$/)],
+      ]),
+    );
 
     const [complianceUser] = await query<{ id: string }>("SELECT id FROM users WHERE email = 'compliance@gfn.test'");
     const alerts = await query<{ title: string; body: string; href: string }>("SELECT title, body, href FROM notifications WHERE user_id = $1 AND title LIKE '%is live'", [complianceUser!.id]);
@@ -223,5 +229,29 @@ describe("vendor activation fee", () => {
     await verify(vendor);
     expect(await vendorStatus(vendor.vendorId)).toBe("ACTIVE");
     expect(kinds(vendor.email)).not.toContain("onboarding.activation_due");
+  });
+
+  it("asks for the fee only once every agreement is accepted", async () => {
+    await setFee(superAdmin, "GB", 1000).expect(200);
+    await insertLegalDocument("GB", "TERMS", "1.0");
+    await insertLegalDocument("GB", "PRIVACY", "1.0");
+    const vendor = await signUp("owner@every-term.example");
+    await verify(vendor);
+    const documents = (await http().get("/v1/vendor/agreements").set(as(vendor.token)).expect(200)).body as Array<{ document: { id: string; kind: string } }>;
+    const accept = (kind: string) =>
+      http()
+        .post(`/v1/vendor/agreements/${documents.find((entry) => entry.document.kind === kind)!.document.id}/accept`)
+        .set(as(vendor.token))
+        .send(kind === "VENDOR_AGREEMENT" ? { signature: testSignature() } : {})
+        .expect(200);
+
+    await accept("VENDOR_AGREEMENT");
+    await accept("TERMS");
+    expect((await activation(vendor)).state).toBe("NOT_READY");
+    expect(kinds(vendor.email)).not.toContain("onboarding.activation_due");
+
+    await accept("PRIVACY");
+    expect(await activation(vendor)).toMatchObject({ state: "DUE", feeMinor: 1000 });
+    expect(test.email.lastTo(vendor.email)!.kind).toBe("onboarding.activation_due");
   });
 });

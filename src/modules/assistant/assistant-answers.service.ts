@@ -7,7 +7,7 @@ import type { AppConfig } from "../../config/config.schema";
 import { PrismaService } from "../../database/prisma.service";
 import type { AssistantOutcome } from "../../generated/prisma/client";
 import { AttemptLimiterService } from "../../infrastructure/rate-limit/attempt-limiter.service";
-import { type AskAssistant, type AssistantAnswerView, type PublicPriceListView, scrubSensitive } from "../../shared";
+import { type AskAssistant, type AssistantAnswerView, type AssistantScreen, type PublicPriceListView, scrubSensitive } from "../../shared";
 import { PublicPricesService } from "../finance/fees/public-prices.service";
 import { AccountSummaryService } from "./account-summary.service";
 import { ANSWER_MODEL, type AnswerModel, type AnswerTurn } from "./answer-model.port";
@@ -18,6 +18,14 @@ const PER_IP = { name: "assistant-ip", limit: 30, windowSeconds: 60 * 60 };
 const PER_USER = { name: "assistant-user", limit: 60, windowSeconds: 24 * 60 * 60 };
 const MAX_TOKENS = 400;
 const HANDOFF: AssistantAnswerView = { answer: null, handoff: true };
+
+function scrubScreen(screen: AssistantScreen): AssistantScreen {
+  return {
+    ...screen,
+    fields: screen.fields.map((field) => ({ label: field.label, value: scrubSensitive(field.value) })),
+    alerts: screen.alerts.map(scrubSensitive),
+  };
+}
 
 function startOfToday(): Date {
   const now = new Date();
@@ -79,7 +87,8 @@ export class AssistantAnswersService {
     }
     const [pack, account, prices] = await Promise.all([this.knowledge.current(), this.accounts.describe(principal), this.priceLists(principal)]);
     try {
-      const reply = await this.model.answer({ system: buildSystemPrompt({ pack, path: input.page, account, prices }), turns: conversation(input.history, question), maxTokens: MAX_TOKENS });
+      const screen = input.screen && scrubScreen(input.screen);
+      const reply = await this.model.answer({ system: buildSystemPrompt({ pack, path: input.page, account, prices, screen }), turns: conversation(input.history, question), maxTokens: MAX_TOKENS });
       const result = readReply(reply.text);
       await record(result.handoff ? "UNSURE" : "ANSWERED", { inputTokens: reply.inputTokens, outputTokens: reply.outputTokens });
       return result;

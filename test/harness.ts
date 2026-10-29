@@ -56,7 +56,7 @@ export async function resetDatabase(): Promise<void> {
       await pool.query(readFileSync(join(MIGRATIONS, migration, "migration.sql"), "utf8"));
     }
     for (const country of SEED_COUNTRIES.filter((entry) => TEST_COUNTRIES.has(entry.code))) {
-      await pool.query("INSERT INTO countries (code, name, currency, status, config) VALUES ($1, $2, $3, 'LIVE', $4)", [country.code, country.name, country.currency, JSON.stringify(country.config)]);
+      await pool.query("INSERT INTO countries (code, name, currency, status, config) VALUES ($1, $2, $3, 'LIVE', $4)", [country.code, country.name, country.currency, JSON.stringify({ ...country.config, activationFeeMinor: 0 })]);
     }
     for (const [countryCode, schedule] of Object.entries(SEED_FEE_SCHEDULES).filter(([code]) => TEST_COUNTRIES.has(code))) {
       await pool.query("INSERT INTO fee_schedules (country_code, version, status, schedule, note) VALUES ($1, 1, 'ACTIVE', $2, 'Test prices')", [countryCode, JSON.stringify(schedule)]);
