@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { OrderAction, OrderStatus, PublicTrackingStatus, TrackingStatus } from "./order-lifecycle";
+import { DELIVERY_PREFERENCES, type DeliveryPreference, type RateTag } from "./delivery-preference";
 import { orderRecipientSchema, type Recipient } from "./recipient";
 
 export const ORDER_SOURCES = ["PORTAL", "CSV", "API", "STOREFRONT"] as const;
@@ -21,7 +22,12 @@ function uniqueProducts<T extends { lines: Array<{ productId: string }> }>(deliv
 }
 
 export const deliverySchema = z
-  .object({ externalReference: externalReferenceSchema.optional(), recipient: orderRecipientSchema, lines: z.array(orderLineSchema).min(1, "Add at least one product").max(50) })
+  .object({
+    externalReference: externalReferenceSchema.optional(),
+    recipient: orderRecipientSchema,
+    lines: z.array(orderLineSchema).min(1, "Add at least one product").max(50),
+    deliveryPreference: z.enum(DELIVERY_PREFERENCES).optional(),
+  })
   .superRefine(uniqueProducts);
 export type DeliveryInput = z.infer<typeof deliverySchema>;
 
@@ -32,6 +38,31 @@ export const createOrdersSchema = z.object({ warehouseId: z.string().uuid().opti
   }
 });
 export type CreateOrdersInput = z.infer<typeof createOrdersSchema>;
+
+export const shippingEstimateSchema = z.object({
+  recipient: orderRecipientSchema,
+  lines: z.array(orderLineSchema).min(1).max(50),
+  deliveryPreference: z.enum(DELIVERY_PREFERENCES).optional(),
+});
+export type ShippingEstimateInput = z.infer<typeof shippingEstimateSchema>;
+
+export interface ShippingEstimateRateView {
+  id: string;
+  carrier: string;
+  service: string;
+  chargeMinor: number;
+  estimatedDays: number | null;
+  tags: RateTag[];
+  preferred: boolean;
+}
+
+export interface ShippingEstimateView {
+  currency: string;
+  boxLabel: string;
+  sized: boolean;
+  productsWithoutSize: string[];
+  rates: ShippingEstimateRateView[];
+}
 
 export const CANCELLATION_REASONS = ["CUSTOMER_CANCELLED", "WRONG_ITEMS", "ADDRESS_PROBLEM", "OUT_OF_STOCK", "OTHER"] as const;
 export type CancellationReason = (typeof CANCELLATION_REASONS)[number];
@@ -113,6 +144,7 @@ export interface OrderSummaryView {
   trackingNumber: string | null;
   createdAt: string;
   cancellationPending: boolean;
+  deliveryPreference: DeliveryPreference;
 }
 
 export interface OrderLineView {
@@ -152,6 +184,8 @@ export interface RateView {
   currency: string;
   estimatedDays: number | null;
   selected: boolean;
+  tags: RateTag[];
+  preferred: boolean;
 }
 
 export interface OrderLabelView {

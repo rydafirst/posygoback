@@ -15,6 +15,7 @@ import { LabelRecordsService } from "./core/label-records.service";
 import { OrderShippingService } from "./core/order-shipping.service";
 import { OrderTimelineService } from "./core/order-timeline.service";
 import { OrderTrackingService } from "./core/order-tracking.service";
+import { ShippingEstimateService } from "./core/shipping-estimate.service";
 import { OrdersRepository } from "./core/orders.repository";
 import { StockAllocationService } from "./core/stock-allocation.service";
 import { ApiKeyGuard } from "./integration/api-key.guard";
@@ -31,6 +32,7 @@ import { FulfilmentService } from "./warehouse/fulfilment.service";
   imports: [PartnerOperationsModule, FinanceModule, OnboardingModule, FilesModule],
   controllers: [VendorOrdersController, VendorApiKeysController, WarehouseOrdersController, PackagingController, IntegrationOrdersController, TrackingController],
   providers: [
+    ShippingEstimateService,
     InventoryLedgerService,
     CarrierAccountsService,
     OrdersRepository,

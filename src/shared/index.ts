@@ -26,6 +26,7 @@ export * from "./staff/staff.schema";
 export * from "./finance/fee-schedule";
 export * from "./finance/wallet.schema";
 export * from "./finance/seed-fee-schedules";
+export * from "./orders/delivery-preference";
 export * from "./orders/order-lifecycle";
 export * from "./orders/recipient";
 export * from "./orders/order.schema";

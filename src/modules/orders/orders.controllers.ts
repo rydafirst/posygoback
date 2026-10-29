@@ -16,6 +16,8 @@ import {
   cancellationDecisionSchema,
   dispatchPhotosSchema,
   type CreateOrdersInput,
+  shippingEstimateSchema,
+  type ShippingEstimateInput,
   createApiKeySchema,
   createOrdersSchema,
   type IntegrationOrderInput,
@@ -35,6 +37,7 @@ import {
 import { Inject } from "@nestjs/common";
 import type { AppConfig } from "../../config/config.schema";
 import { OrderTrackingService } from "./core/order-tracking.service";
+import { ShippingEstimateService } from "./core/shipping-estimate.service";
 import { ApiKeyGuard, CurrentApiClient } from "./integration/api-key.guard";
 import { type ApiClient, ApiKeysService } from "./integration/api-keys.service";
 import { IntegrationOrdersService } from "./integration/integration-orders.service";
@@ -60,6 +63,7 @@ export class VendorOrdersController {
   constructor(
     private readonly orders: VendorOrdersService,
     private readonly imports: OrderImportService,
+    private readonly shippingEstimates: ShippingEstimateService,
   ) {}
 
   @RequirePermission("vendor.orders.read")
@@ -72,6 +76,13 @@ export class VendorOrdersController {
   @Post()
   create(@Body(new ZodValidationPipe(createOrdersSchema)) input: CreateOrdersInput, @SelectedCountry() country: SellerCountry, @CurrentPrincipal() principal: AuthPrincipal) {
     return this.orders.create(principal, country, input);
+  }
+
+  @RequirePermission("vendor.orders.manage")
+  @Post("shipping-estimate")
+  @HttpCode(HttpStatus.OK)
+  shippingEstimate(@Body(new ZodValidationPipe(shippingEstimateSchema)) input: ShippingEstimateInput, @SelectedCountry() country: SellerCountry, @CurrentPrincipal() principal: AuthPrincipal) {
+    return this.shippingEstimates.estimate(principal, country, input);
   }
 
   @RequirePermission("vendor.orders.read")

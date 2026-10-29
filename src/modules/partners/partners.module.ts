@@ -51,6 +51,7 @@ import { PARTNER_SERVICE_PROVIDERS } from "./providers/partner-services.provider
 import { PartnerApplicationsService } from "./public/partner-applications.service";
 import { PartnerPublicService } from "./public/partner-public.service";
 import { MysteryOrdersService } from "./trust/mystery-orders.service";
+import { PartnerStockSummaryService } from "./portal/partner-stock-summary.service";
 import { PartnerScorecardService } from "./trust/partner-scorecard.service";
 import { StockCountFactoryService } from "./trust/stock-count-factory.service";
 import { StockCountsService } from "./trust/stock-counts.service";
@@ -95,6 +96,7 @@ import { TrustService } from "./trust/trust.service";
     PartnerPublicService,
     PartnerStatementService,
     PartnerScorecardService,
+    PartnerStockSummaryService,
     StockCountsService,
     MysteryOrdersService,
     PartnerUpkeepService,

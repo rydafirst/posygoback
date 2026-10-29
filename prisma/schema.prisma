@@ -1303,6 +1303,7 @@ model Order {
   status                 OrderStatus         @default(PENDING_PACKING)
   source                 OrderSource
   externalReference      String?             @map("external_reference") @db.VarChar(64)
+  deliveryPreference     DeliveryPreference  @default(CHEAPEST) @map("delivery_preference")
   groupId                String              @map("group_id") @db.Uuid
   recipientEncrypted     String              @map("recipient_encrypted")
   recipientName          String              @map("recipient_name") @db.VarChar(100)
@@ -2839,4 +2840,11 @@ model StaffEmailSetting {
   updater   User?    @relation(fields: [updatedBy], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "staff_email_settings_updated_by_users_id_fk")
 
   @@map("staff_email_settings")
+}
+
+enum DeliveryPreference {
+  CHEAPEST
+  FASTEST
+
+  @@map("delivery_preference")
 }

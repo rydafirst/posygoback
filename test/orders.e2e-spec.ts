@@ -187,12 +187,41 @@ describe("orders, packing and shipping", () => {
       expect(await lot()).toEqual({ quantity_available: 28, quantity_reserved: 2 });
       expect(await balance()).toBe(20_000 - 398);
       const detail = await test.http().get(`/v1/vendor/orders/${placed.body[0].id}`).set(as(owner)).expect(200);
-      expect(detail.body).toMatchObject({ recipient: { name: "Ada Obi", postalCode: "M1 1AA" }, charges: { currency: "GBP", fulfilmentFeeMinor: 398 }, actions: ["CANCEL"], rates: [] });
+      expect(detail.body).toMatchObject({ recipient: { name: "Ada Obi", postalCode: "M1 1AA" }, charges: { currency: "GBP", fulfilmentFeeMinor: 398 }, actions: ["CANCEL"], rates: [], deliveryPreference: "CHEAPEST" });
       expect(detail.body.lines[0].locations).toEqual([]);
       const [row] = await query<{ recipient_encrypted: string }>("SELECT recipient_encrypted FROM orders WHERE id = $1", [placed.body[0].id]);
       expect(row!.recipient_encrypted).not.toContain("High Street");
       await placeOrder([{ externalReference: "SHOP-1001", recipient: GB_RECIPIENT, lines: [{ productId: wigId, quantity: 1 }] }]).expect(400);
       await test.http().get(`/v1/vendor/orders/${placed.body[0].id}`).set(as(otherOwner)).expect(404);
+    });
+
+    it("estimates delivery prices from the products' sizes before the order is placed", async () => {
+      const estimate = (body: object) => test.http().post("/v1/vendor/orders/shipping-estimate").set(as(owner)).send(body);
+      const rough = await estimate({ recipient: GB_RECIPIENT, lines: [{ productId: wigId, quantity: 2 }] }).expect(200);
+      expect(rough.body).toMatchObject({ currency: "GBP", sized: false, productsWithoutSize: ["Body wave wig"] });
+      expect(rough.body.rates.map((rate: { chargeMinor: number; tags: string[]; preferred: boolean }) => [rate.chargeMinor, rate.tags, rate.preferred])).toEqual([
+        [704, ["CHEAPEST"], true],
+        [2199, ["FASTEST"], false],
+      ]);
+      const [product] = await query<{ weight_grams: number }>("SELECT weight_grams FROM products WHERE id = $1", [wigId]);
+      expect(carrier.quotes.at(-1)).toMatchObject({ parcel: { weightGrams: product!.weight_grams * 2 + 150 }, from: { name: "Acme Goods" }, to: { postalCode: GB_RECIPIENT.postalCode } });
+
+      await query("UPDATE products SET length_mm = 200, width_mm = 150, height_mm = 40 WHERE id = $1", [wigId]);
+      const sized = await estimate({ recipient: GB_RECIPIENT, lines: [{ productId: wigId, quantity: 1 }], deliveryPreference: "FASTEST" }).expect(200);
+      expect(sized.body).toMatchObject({ sized: true, productsWithoutSize: [], boxLabel: "Small box" });
+      expect(sized.body.rates[0]).toMatchObject({ service: "Next Day", preferred: true });
+      await query("UPDATE products SET length_mm = NULL, width_mm = NULL, height_mm = NULL WHERE id = $1", [wigId]);
+
+      await estimate({ recipient: US_RECIPIENT, lines: [{ productId: wigId, quantity: 1 }] }).expect(400);
+      expect((await estimate({ recipient: GB_RECIPIENT, lines: [{ productId: wigId, quantity: 1000 }] }).expect(409)).body.code).toBe("insufficient_stock");
+      await test.http().post("/v1/vendor/orders/shipping-estimate").set(as(otherOwner)).send({ recipient: GB_RECIPIENT, lines: [{ productId: wigId, quantity: 1 }] }).expect(400);
+    });
+
+    it("keeps the seller's delivery choice, and refuses one it doesn't know", async () => {
+      const placed = await placeOrder([{ recipient: GB_RECIPIENT, lines: [{ productId: wigId, quantity: 1 }], deliveryPreference: "FASTEST" }]).expect(201);
+      expect(placed.body[0].deliveryPreference).toBe("FASTEST");
+      await test.http().post(`/v1/vendor/orders/${placed.body[0].id}/actions`).set(as(owner)).send({ action: "CANCEL", reason: "CUSTOMER_CANCELLED" }).expect(200);
+      await placeOrder([{ recipient: GB_RECIPIENT, lines: [{ productId: wigId, quantity: 1 }], deliveryPreference: "SLOWEST" }]).expect(400);
     });
 
     it("checks the address is in the order's country, the postcode and stock", async () => {
@@ -275,8 +304,11 @@ describe("orders, packing and shipping", () => {
     it("charges shipping with the markup, then buys the label", async () => {
       const rated = await staff(`${orderId}/actions`).send({ action: "FETCH_RATES" }).expect(200);
       expect(rated.body.status).toBe("AWAITING_SHIPPING_SELECTION");
-      expect((rated.body as OrderDetailView).rates.map((rate) => rate.chargeMinor)).toEqual([704, 2199]);
-      expect(carrier.quotes.at(-1)).toMatchObject({ parcel: { lengthMm: 300, widthMm: 200, heightMm: 100, weightGrams: 900 }, customs: null, from: { city: "Manchester", phone: "+44 161 000 0000" } });
+      expect((rated.body as OrderDetailView).rates.map((rate) => [rate.chargeMinor, rate.tags, rate.preferred])).toEqual([
+        [704, ["CHEAPEST"], true],
+        [2199, ["FASTEST"], false],
+      ]);
+      expect(carrier.quotes.at(-1)).toMatchObject({ parcel: { lengthMm: 300, widthMm: 200, heightMm: 100, weightGrams: 900 }, customs: null, from: { name: "Acme Goods", city: "Manchester", phone: "+44 161 000 0000" } });
       const before = await balance();
       const ground = rated.body.rates[0].id as string;
       const labelled = await staff(`${orderId}/actions`).send({ action: "SELECT_RATE", rateId: ground }).expect(200);

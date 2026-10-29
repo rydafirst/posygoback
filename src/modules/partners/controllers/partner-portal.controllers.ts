@@ -32,6 +32,7 @@ import { partnerIdOf } from "../portal/partner-access.service";
 import { PartnerPayoutAccountService } from "../portal/partner-payout-account.service";
 import { PartnerPortalService } from "../portal/partner-portal.service";
 import { PartnerIdentityService } from "../portal/partner-identity.service";
+import { PartnerStockSummaryService } from "../portal/partner-stock-summary.service";
 import { PartnerVerificationService } from "../portal/partner-verification.service";
 import { PartnerScorecardService } from "../trust/partner-scorecard.service";
 import { StockCountsService } from "../trust/stock-counts.service";
@@ -48,12 +49,19 @@ export class PartnerPortalController {
     private readonly payouts: PartnerPayoutAccountService,
     private readonly statements: PartnerStatementService,
     private readonly scorecards: PartnerScorecardService,
+    private readonly stock: PartnerStockSummaryService,
   ) {}
 
   @RequirePermission("partner.profile.read")
   @Get()
   overview(@CurrentPrincipal() principal: AuthPrincipal) {
     return this.portal.overview(principal);
+  }
+
+  @RequirePermission("inventory.read")
+  @Get("stock")
+  stockSummary(@CurrentPrincipal() principal: AuthPrincipal) {
+    return this.stock.forPartner(partnerIdOf(principal));
   }
 
   @RequirePermission("partner.statement.read")

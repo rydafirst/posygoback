@@ -6,7 +6,7 @@ import { Errors } from "../../../common/http/app-exception";
 import { isUniqueViolation, PrismaService } from "../../../database/prisma.service";
 import type { OrderSource, Prisma } from "../../../generated/prisma/client";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
-import { type CountryConfig, fulfilmentFee, type OrderRecipient, prefixProblems, type Recipient, recipientProblems, type Role, unitsOf } from "../../../shared";
+import { type CountryConfig, type DeliveryPreference, fulfilmentFee, type OrderRecipient, prefixProblems, type Recipient, recipientProblems, type Role, unitsOf } from "../../../shared";
 import { FeeSchedulesService } from "../../finance/fees/fee-schedules.service";
 import { WalletAlertsService } from "../../finance/wallets/wallet-alerts.service";
 import type { PostingResult } from "../../finance/wallets/wallet-ledger.service";
@@ -26,6 +26,7 @@ export interface OrderActor {
 
 export interface NewDelivery {
   externalReference?: string;
+  deliveryPreference?: DeliveryPreference;
   recipient: OrderRecipient;
   lines: Array<{ productId: string; quantity: number }>;
 }
@@ -83,6 +84,7 @@ export class OrderCreationService {
               destinationCountryCode: warehouse.countryCode,
               source,
               externalReference: delivery.externalReference ?? null,
+              deliveryPreference: delivery.deliveryPreference ?? "CHEAPEST",
               groupId: deliveries.length > 1 ? (created.length === 0 ? id : created[0]!) : id,
               recipientEncrypted: this.orders.encryptRecipient(id, recipient),
               recipientName: recipient.name,

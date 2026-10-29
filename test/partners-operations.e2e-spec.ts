@@ -134,6 +134,19 @@ describe("partner hubs at work", () => {
       expect((await test.http().get("/v1/warehouse/inbound").set(as(c.token)).expect(200)).body).toEqual([]);
     });
 
+    it("sums up each hub's own stock and work, and nobody else's", async () => {
+      const summary = (token: string) => test.http().get("/v1/partner/stock").set(as(token));
+      const [held] = await query<{ units: string; lots_unshelved: string }>(
+        "SELECT COALESCE(SUM(quantity_available + quantity_reserved), 0) AS units, COUNT(*) FILTER (WHERE location_id IS NULL AND (quantity_available > 0 OR quantity_reserved > 0)) AS lots_unshelved FROM stock_lots WHERE warehouse_id = $1",
+        [a.hubId],
+      );
+      const mine = (await summary(a.token).expect(200)).body;
+      expect(mine).toMatchObject({ unitsStored: Number(held!.units), lotsWaitingToShelve: Number(held!.lots_unshelved) });
+      expect(Object.keys(mine).sort()).toEqual(["lotsWaitingToShelve", "ordersToPack", "ordersToShip", "products", "sellers", "shipmentsExpected", "unitsReserved", "unitsStored"].sort());
+      expect((await summary(c.token).expect(200)).body).toEqual({ unitsStored: 0, unitsReserved: 0, sellers: 0, products: 0, lotsWaitingToShelve: 0, shipmentsExpected: 0, ordersToPack: 0, ordersToShip: 0 });
+      await summary(owner).expect(404);
+    });
+
     it("hides what vendors pay from partners", async () => {
       const detail = await test.http().get(`/v1/warehouse/inbound/${inboundA}`).set(as(a.token)).expect(200);
       expect(detail.body.charges).toMatchObject({ onboardingFeeMinor: null, holdChargeMinor: null });

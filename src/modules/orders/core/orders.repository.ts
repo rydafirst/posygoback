@@ -4,7 +4,7 @@ import { Errors } from "../../../common/http/app-exception";
 import { type DatabaseClient, PrismaService } from "../../../database/prisma.service";
 import type { Prisma } from "../../../generated/prisma/client";
 import { FieldEncryptionService } from "../../../infrastructure/crypto/field-encryption.service";
-import { type OrderAction, type OrderDetailView, type OrderSummaryView, orderValueMinor, partnerProgramme, type Recipient } from "../../../shared";
+import { type OrderAction, type OrderDetailView, type OrderSummaryView, orderValueMinor, partnerProgramme, rankRates, type RateView, type Recipient } from "../../../shared";
 import { recipientContext } from "./order-references";
 
 export const ORDER_DETAIL_INCLUDE = {
@@ -102,17 +102,7 @@ export class OrdersRepository {
               packedAt: row.packedAt.toISOString(),
             }
           : null,
-      rates: row.rates
-        .filter((rate) => staff || rate.id === row.selectedRateId)
-        .map((rate) => ({
-          id: rate.id,
-          carrier: rate.carrier,
-          service: rate.service,
-          chargeMinor: Number(rate.chargeMinor),
-          currency: rate.currency,
-          estimatedDays: rate.estimatedDays,
-          selected: rate.id === row.selectedRateId,
-        })),
+      rates: this.rates(row, staff),
       label:
         row.trackingNumber && row.carrier && row.labelPurchasedAt
           ? {
@@ -136,6 +126,29 @@ export class OrdersRepository {
     };
   }
 
+  private rates(row: OrderDetailRow, staff: boolean): RateView[] {
+    const shown = row.rates.filter((rate) => staff || rate.id === row.selectedRateId);
+    const ranking = rankRates(
+      shown.map((rate) => ({ id: rate.id, chargeMinor: Number(rate.chargeMinor), estimatedDays: rate.estimatedDays })),
+      row.deliveryPreference,
+    );
+    const byId = new Map(shown.map((rate) => [rate.id, rate]));
+    return ranking.order.map((id) => {
+      const rate = byId.get(id)!;
+      return {
+        id: rate.id,
+        carrier: rate.carrier,
+        service: rate.service,
+        chargeMinor: Number(rate.chargeMinor),
+        currency: rate.currency,
+        estimatedDays: rate.estimatedDays,
+        selected: rate.id === row.selectedRateId,
+        tags: ranking.tags.get(id) ?? [],
+        preferred: id === ranking.preferredId,
+      };
+    });
+  }
+
   private masked(row: OrderDetailRow): Recipient {
     return { name: `${row.recipientName.slice(0, 1)}…`, line1: "Hidden", city: row.recipientCity, postalCode: "", countryCode: row.originCountryCode };
   }
@@ -157,6 +170,7 @@ export class OrdersRepository {
       trackingNumber: row.trackingNumber,
       createdAt: row.createdAt.toISOString(),
       cancellationPending: row.cancellations.length > 0,
+      deliveryPreference: row.deliveryPreference,
     };
   }
 }

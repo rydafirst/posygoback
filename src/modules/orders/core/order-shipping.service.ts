@@ -9,7 +9,8 @@ import { JobLockService } from "../../finance/jobs/job-lock.service";
 import { WalletAlertsService } from "../../finance/wallets/wallet-alerts.service";
 import type { PostingResult } from "../../finance/wallets/wallet-ledger.service";
 import { CarrierAccountsService } from "../carriers/carrier-accounts.service";
-import { CarrierError, type PurchasedLabel, type ShipmentParty } from "../carriers/carrier.port";
+import { CarrierError, type PurchasedLabel } from "../carriers/carrier.port";
+import { senderFor } from "../carriers/sender";
 import { OrderEmails } from "../order-emails";
 import { OrderAlertsService } from "./order-alerts.service";
 import type { OrderActor } from "./order-creation.service";
@@ -17,7 +18,6 @@ import { LabelRecordsService } from "./label-records.service";
 import { OrderChargesService } from "./order-charges.service";
 import { OrderTimelineService } from "./order-timeline.service";
 import { OrdersRepository } from "./orders.repository";
-import { PLATFORM_NAME } from "../../../common/brand/brand";
 
 const RATE_TTL_MS = 12 * 60 * 60 * 1000;
 const LABEL_LOCK_MS = 120_000;
@@ -44,7 +44,7 @@ export class OrderShippingService {
   ) {}
 
   async fetchRates(actor: OrderActor, orderId: string, scope: Prisma.OrderWhereInput): Promise<void> {
-    const order = await this.prisma.order.findFirst({ where: { id: orderId, ...scope }, include: { warehouse: true } });
+    const order = await this.prisma.order.findFirst({ where: { id: orderId, ...scope }, include: { warehouse: true, vendor: { select: { businessName: true } } } });
     if (!order) {
       throw Errors.notFound();
     }
@@ -52,17 +52,7 @@ export class OrderShippingService {
       throw Errors.invalidTransition("Record the packed parcel before fetching rates.");
     }
     const { account, adapter } = this.carriers.forCountry(order.originCountryCode);
-    const addressLines = order.warehouse.addressLines as string[];
-    const from: ShipmentParty = {
-      name: `${PLATFORM_NAME} ${order.warehouse.name}`.slice(0, 100),
-      line1: addressLines[0] ?? "",
-      line2: addressLines[1],
-      city: order.warehouse.city,
-      postalCode: order.warehouse.postalCode,
-      countryCode: order.warehouse.countryCode,
-      phone: account.provider === "SHIPPO" ? account.senderPhone : undefined,
-      email: account.provider === "SHIPPO" ? account.senderEmail : undefined,
-    };
+    const from = senderFor(order.warehouse, order.vendor.businessName, account);
     const rates = await this.carrierCall(() =>
       adapter.quote({
         reference: order.reference,

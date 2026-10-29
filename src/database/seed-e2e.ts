@@ -53,11 +53,13 @@ async function vendorId(prisma: PrismaClient): Promise<string> {
   return (await prisma.vendor.create({ data: { businessName: "E2E Hair Co", countryCode: COUNTRY, status: "ACTIVE" } })).id;
 }
 
+const LEFTOVER_AFTER_MS = 60 * 60 * 1000;
+
 async function platformHub(prisma: PrismaClient): Promise<void> {
   await prisma.warehouse.upsert({
     where: { code: "E2E-MAN-1" },
-    update: { active: true },
-    create: { countryCode: COUNTRY, code: "E2E-MAN-1", name: "Manchester test hub", addressLines: ["2 Test Street"], city: "Manchester", postalCode: "M1 1AA" },
+    update: { active: true, name: "Manchester test warehouse" },
+    create: { countryCode: COUNTRY, code: "E2E-MAN-1", name: "Manchester test warehouse", addressLines: ["2 Test Street"], city: "Manchester", postalCode: "M1 1AA" },
   });
 }
 
@@ -260,7 +262,9 @@ async function main(): Promise<void> {
     const vendor = await vendorId(prisma);
     const { id: partnerId, hubId } = await partner(prisma);
     await platformHub(prisma);
-    await prisma.stockTransfer.updateMany({ where: { fromWarehouseId: hubId, status: "REQUESTED" }, data: { status: "CANCELLED" } });
+    const abandoned = { lt: new Date(Date.now() - LEFTOVER_AFTER_MS) };
+    await prisma.stockTransfer.updateMany({ where: { fromWarehouseId: hubId, status: "REQUESTED", createdAt: abandoned }, data: { status: "CANCELLED" } });
+    await prisma.vendorReturn.updateMany({ where: { vendorId: vendor, status: "REQUESTED", createdAt: abandoned }, data: { status: "CANCELLED" } });
     for (const member of CAST) {
       await user(prisma, encryption, member, { vendorId: vendor, partnerId }, passwordHash, secret);
     }

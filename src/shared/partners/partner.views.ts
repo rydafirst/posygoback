@@ -232,3 +232,14 @@ export interface PartnerProgrammeView {
   holdbackDays: number;
   example: { boxesReceived: number; boxesStored: number; ordersPacked: number; monthlyMinor: number };
 }
+
+export interface PartnerStockSummaryView {
+  unitsStored: number;
+  unitsReserved: number;
+  sellers: number;
+  products: number;
+  lotsWaitingToShelve: number;
+  shipmentsExpected: number;
+  ordersToPack: number;
+  ordersToShip: number;
+}
