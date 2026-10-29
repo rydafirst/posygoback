@@ -7,6 +7,7 @@ const CARRIER_CODE = "sandbox_post";
 
 export class SandboxCarrier implements CarrierAdapter {
   readonly provider = "SANDBOX" as const;
+  readonly practice = true;
 
   quote(request: RateRequest): Promise<CarrierRate[]> {
     const crossBorder = request.from.countryCode !== request.to.countryCode;

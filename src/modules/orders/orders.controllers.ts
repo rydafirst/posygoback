@@ -7,9 +7,7 @@ import { z } from "zod";
 import type { AuthPrincipal, RequestMeta } from "../../common/auth/auth-principal";
 import { CurrentPrincipal, Meta, Public, RequirePermission } from "../../common/auth/decorators";
 import { type SellerCountry, SelectedCountry } from "../../common/auth/selected-country";
-import { Errors } from "../../common/http/app-exception";
 import { ZodValidationPipe } from "../../common/http/zod-validation.pipe";
-import { APP_CONFIG } from "../../config/config.module";
 import { THROTTLE } from "../../infrastructure/rate-limit/rate-limit.module";
 import {
   type CancellationDecisionInput,
@@ -23,6 +21,8 @@ import {
   type IntegrationOrderInput,
   integrationOrderSchema,
   isoCountryCode,
+  HUB_ORDER_STAGES,
+  type HubOrderStage,
   ORDER_STATUSES,
   type PackagingPresetInput,
   packagingPresetSchema,
@@ -34,8 +34,6 @@ import {
   type VendorOrderActionInput,
   vendorOrderActionSchema,
 } from "../../shared";
-import { Inject } from "@nestjs/common";
-import type { AppConfig } from "../../config/config.schema";
 import { OrderTrackingService } from "./core/order-tracking.service";
 import { ShippingEstimateService } from "./core/shipping-estimate.service";
 import { ApiKeyGuard, CurrentApiClient } from "./integration/api-key.guard";
@@ -48,7 +46,9 @@ import { FulfilmentService } from "./warehouse/fulfilment.service";
 import { OrderScansService } from "./warehouse/order-scans.service";
 
 const uuid = new ParseUUIDPipe({ version: "4" });
-const listQuery = new ZodValidationPipe(z.object({ status: z.enum(ORDER_STATUSES).optional(), q: z.string().trim().max(64).optional(), warehouseId: z.string().uuid().optional() }));
+const listQuery = new ZodValidationPipe(
+  z.object({ status: z.enum(ORDER_STATUSES).optional(), stage: z.enum(HUB_ORDER_STAGES).optional(), q: z.string().trim().max(64).optional(), warehouseId: z.string().uuid().optional() }),
+);
 const countryParam = new ZodValidationPipe(isoCountryCode);
 const estimateBody = new ZodValidationPipe(z.object({ units: z.number().int().min(1).max(50_000) }));
 const importBody = new ZodValidationPipe(z.object({ filename: z.string().trim().min(1).max(200), csv: z.string().min(1).max(300_000) }));
@@ -149,14 +149,13 @@ export class WarehouseOrdersController {
   constructor(
     private readonly fulfilment: FulfilmentService,
     private readonly scans: OrderScansService,
-    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   @RequirePermission("orders.read")
   @Get()
   queue(
     @Query(listQuery)
-    query: { status?: (typeof ORDER_STATUSES)[number]; q?: string; warehouseId?: string },
+    query: { status?: (typeof ORDER_STATUSES)[number]; stage?: HubOrderStage; q?: string; warehouseId?: string },
     @CurrentPrincipal() principal: AuthPrincipal,
   ) {
     return this.fulfilment.queue(principal, query);
@@ -180,14 +179,6 @@ export class WarehouseOrdersController {
   @HttpCode(HttpStatus.OK)
   scan(@Param("id", uuid) id: string, @Body(new ZodValidationPipe(scanSchema)) input: { code: string }, @CurrentPrincipal() principal: AuthPrincipal) {
     return this.scans.scan(principal, id, input.code);
-  }
-
-  @RequirePermission("orders.fulfil")
-  @Throttle({ default: { limit: 600, ttl: 60_000 } })
-  @Post(":id/lines/:lineId/confirm")
-  @HttpCode(HttpStatus.OK)
-  confirmUnit(@Param("id", uuid) id: string, @Param("lineId", uuid) lineId: string, @CurrentPrincipal() principal: AuthPrincipal) {
-    return this.scans.confirmUnit(principal, id, lineId);
   }
 
   @RequirePermission("orders.fulfil")
@@ -243,9 +234,6 @@ export class WarehouseOrdersController {
     input: { status: "IN_TRANSIT" | "DELIVERED" | "RETURNED" | "FAILURE"; description: string; location?: string },
     @CurrentPrincipal() principal: AuthPrincipal,
   ) {
-    if (this.config.NODE_ENV === "production") {
-      throw Errors.notFound();
-    }
     return this.fulfilment.simulateTracking(principal, id, { status: input.status, description: input.description, location: input.location ?? null, occurredAt: new Date().toISOString() });
   }
 }

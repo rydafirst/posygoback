@@ -1,0 +1,1 @@
+ALTER TYPE "packaging_kind" ADD VALUE IF NOT EXISTS 'BAG';

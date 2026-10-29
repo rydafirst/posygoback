@@ -66,6 +66,7 @@ export interface TrackingSnapshot {
 
 export interface CarrierAdapter {
   readonly provider: "SHIPPO" | "SANDBOX";
+  readonly practice: boolean;
   quote(request: RateRequest): Promise<CarrierRate[]>;
   buyLabel(rate: LabelRate, reference: string): Promise<PurchasedLabel>;
   findLabel(rate: LabelRate): Promise<PurchasedLabel | null>;

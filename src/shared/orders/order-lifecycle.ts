@@ -65,6 +65,15 @@ export const OPEN_ORDER_STATUSES: readonly OrderStatus[] = [
   "ON_HOLD",
 ];
 
+export const HUB_ORDER_STAGES = ["OPEN", "SENT", "DONE"] as const;
+export type HubOrderStage = (typeof HUB_ORDER_STAGES)[number];
+
+export const HUB_STAGE_STATUSES: Record<HubOrderStage, readonly OrderStatus[]> = {
+  OPEN: OPEN_ORDER_STATUSES,
+  SENT: ["HANDED_OFF", "IN_TRANSIT", "EXCEPTION"],
+  DONE: ["DELIVERED", "RETURNED", "CANCELLED"],
+};
+
 export function orderActionAllowed(action: OrderAction, status: OrderStatus): boolean {
   return ACTION_FROM[action].includes(status);
 }

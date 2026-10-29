@@ -29,7 +29,15 @@ describe("ranking shipping rates", () => {
   });
 
   it("falls back to the cheapest when no carrier gives a delivery time", () => {
-    expect(rankRates([{ id: "a", chargeMinor: 500, estimatedDays: null }, { id: "b", chargeMinor: 400, estimatedDays: null }], "FASTEST").preferredId).toBe("b");
+    expect(
+      rankRates(
+        [
+          { id: "a", chargeMinor: 500, estimatedDays: null },
+          { id: "b", chargeMinor: 400, estimatedDays: null },
+        ],
+        "FASTEST",
+      ).preferredId,
+    ).toBe("b");
   });
 
   it("puts the seller's chosen service first, and falls back when the hub isn't offered it", () => {

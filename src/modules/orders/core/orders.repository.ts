@@ -83,6 +83,7 @@ export class OrdersRepository {
         unitValueMinor: line.unitValueMinor,
         locations: staff ? [...new Set(line.allocations.map((allocation) => allocation.lot.location?.code ?? `${allocation.lot.code} (not shelved)`))] : [],
         barcodes: staff ? line.product.barcodes.map((barcode) => barcode.value) : [],
+        lotCodes: staff ? [...new Set(line.allocations.map((allocation) => allocation.lot.code))] : [],
       })),
       charges: {
         currency: row.currency,
@@ -122,6 +123,7 @@ export class OrdersRepository {
       dispatchPhotoCount: staff ? row._count.dispatchPhotos : 0,
       sealRequired: staff && orderValueMinor(row.lines) >= partnerProgramme(row.origin.config as { partners?: unknown }).highValueOrderMinor,
       sealNumber: staff ? row.sealNumber : null,
+      practiceTracking: false,
       actions,
     };
   }

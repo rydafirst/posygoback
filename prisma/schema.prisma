@@ -1233,6 +1233,7 @@ enum OrderEventSource {
 enum PackagingKind {
   BOX
   MAILER
+  BAG
 
   @@map("packaging_kind")
 }

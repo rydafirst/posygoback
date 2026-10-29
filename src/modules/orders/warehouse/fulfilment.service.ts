@@ -8,7 +8,8 @@ import { AuditService } from "../../../infrastructure/audit/audit.service";
 import {
   type CarrierTrackingEvent,
   hasPermission,
-  OPEN_ORDER_STATUSES,
+  HUB_STAGE_STATUSES,
+  type HubOrderStage,
   orderActionAllowed,
   type OrderDetailView,
   type OrderStatus,
@@ -18,6 +19,7 @@ import {
   staffOrderActions,
 } from "../../../shared";
 import { warehouseScope } from "../../stock/scope";
+import { CarrierAccountsService } from "../carriers/carrier-accounts.service";
 import { OrderAlertsService } from "../core/order-alerts.service";
 import { OrderCancellationService } from "../core/order-cancellation.service";
 import type { OrderActor } from "../core/order-creation.service";
@@ -31,9 +33,12 @@ import { OrderScansService } from "./order-scans.service";
 
 export interface StaffQueueFilters {
   status?: OrderStatus;
+  stage?: HubOrderStage;
   warehouseId?: string;
   q?: string;
 }
+
+const PRACTICE_TRACKABLE: readonly OrderStatus[] = ["LABEL_PURCHASED", "HANDED_OFF", "IN_TRANSIT", "EXCEPTION"];
 
 function actorOf(principal: AuthPrincipal): OrderActor {
   return { userId: principal.userId, role: principal.role, apiKeyId: null };
@@ -53,6 +58,7 @@ export class FulfilmentService {
     private readonly audit: AuditService,
     private readonly owners: OrderAlertsService,
     private readonly scans: OrderScansService,
+    private readonly carriers: CarrierAccountsService,
   ) {}
 
   async queue(principal: AuthPrincipal, filters: StaffQueueFilters): Promise<OrderSummaryView[]> {
@@ -61,7 +67,7 @@ export class FulfilmentService {
       {
         ...this.scope(principal),
         ...(filters.warehouseId ? { warehouseId: filters.warehouseId } : {}),
-        status: filters.status ?? { in: [...OPEN_ORDER_STATUSES] },
+        status: filters.status ?? { in: [...HUB_STAGE_STATUSES[filters.stage ?? "OPEN"]] },
         ...(search
           ? {
               OR: [
@@ -92,7 +98,7 @@ export class FulfilmentService {
   async detail(principal: AuthPrincipal, orderId: string): Promise<OrderDetailView> {
     const row = await this.orders.detailRow({ id: orderId, ...this.scope(principal) });
     const can = { fulfil: hasPermission(principal.role, "orders.fulfil"), cancel: hasPermission(principal.role, "orders.cancel") };
-    const view = this.orders.detail(row, "STAFF", staffOrderActions(row.status, can), can.fulfil || can.cancel);
+    const view = { ...this.orders.detail(row, "STAFF", staffOrderActions(row.status, can), can.fulfil || can.cancel), practiceTracking: this.practiceTracking(row) };
     return principal.partnerId ? { ...view, charges: null, rates: view.rates.map((rate) => ({ ...rate, chargeMinor: null })) } : view;
   }
 
@@ -268,6 +274,10 @@ export class FulfilmentService {
         packedAt: null,
       },
     });
+  }
+
+  private practiceTracking(order: { originCountryCode: string; trackingNumber: string | null; status: OrderStatus }): boolean {
+    return Boolean(order.trackingNumber && PRACTICE_TRACKABLE.includes(order.status) && this.carriers.find(order.originCountryCode)?.adapter.practice);
   }
 
   private scope(principal: AuthPrincipal): Prisma.OrderWhereInput {

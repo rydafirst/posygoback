@@ -10,6 +10,8 @@ import { createAdapter } from "./prisma.service";
 const DEV_PACKAGING = [
   { code: "MAILER-S", label: "Small mailer", kind: "MAILER" as const, lengthMm: 250, widthMm: 180, heightMm: 20 },
   { code: "MAILER-L", label: "Large mailer", kind: "MAILER" as const, lengthMm: 400, widthMm: 300, heightMm: 30 },
+  { code: "BAG-S", label: "Small bag", kind: "BAG" as const, lengthMm: 350, widthMm: 250, heightMm: 30 },
+  { code: "BAG-L", label: "Large bag", kind: "BAG" as const, lengthMm: 500, widthMm: 400, heightMm: 50 },
   { code: "BOX-S", label: "Small box", kind: "BOX" as const, lengthMm: 300, widthMm: 200, heightMm: 100 },
   { code: "BOX-M", label: "Medium box", kind: "BOX" as const, lengthMm: 400, widthMm: 300, heightMm: 200 },
   { code: "BOX-L", label: "Large box", kind: "BOX" as const, lengthMm: 500, widthMm: 400, heightMm: 300 },

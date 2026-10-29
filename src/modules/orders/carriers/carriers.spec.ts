@@ -1,5 +1,7 @@
 import { hashSecret, newApiKey, parseApiKey, secretMatches } from "../integration/api-key";
 import { decimalToMinor, minorToDecimal } from "./carrier-money";
+import { SandboxCarrier } from "./sandbox.carrier";
+import { ShippoCarrier } from "./shippo.carrier";
 
 describe("carrier amounts", () => {
   it("converts decimal prices to minor units, rounding half up", () => {
@@ -22,5 +24,13 @@ describe("api keys", () => {
     expect(parseApiKey("Bearer something")).toBeNull();
     expect(secretMatches(secret, hashSecret(secret))).toBe(true);
     expect(secretMatches(`${secret.slice(1)}0`, hashSecret(secret))).toBe(false);
+  });
+});
+
+describe("test carriers", () => {
+  it("treats Shippo test keys and the sandbox as test carriers, and live keys as real", () => {
+    expect(new ShippoCarrier("shippo_test_abc").practice).toBe(true);
+    expect(new ShippoCarrier("shippo_live_abc").practice).toBe(false);
+    expect(new SandboxCarrier().practice).toBe(true);
   });
 });

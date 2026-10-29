@@ -74,7 +74,7 @@ export class OrderTrackingService {
   async simulate(orderId: string, event: CarrierTrackingEvent): Promise<string> {
     const order = await this.prisma.order.findUniqueOrThrow({ where: { id: orderId } });
     const resolved = this.carriers.find(order.originCountryCode);
-    if (!resolved || resolved.adapter.provider !== "SANDBOX" || !order.trackingNumber) {
+    if (!resolved?.adapter.practice || !order.trackingNumber) {
       throw Errors.notFound();
     }
     return this.apply(orderId, [event]);

@@ -40,11 +40,7 @@ export const createOrdersSchema = z.object({ warehouseId: z.string().uuid().opti
 });
 export type CreateOrdersInput = z.infer<typeof createOrdersSchema>;
 
-export const shippingEstimateSchema = z.object({
-  recipient: orderRecipientSchema,
-  lines: z.array(orderLineSchema).min(1).max(50),
-  deliveryPreference: z.enum(DELIVERY_PREFERENCES).optional(),
-});
+export const shippingEstimateSchema = z.object({ recipient: orderRecipientSchema, lines: z.array(orderLineSchema).min(1).max(50), deliveryPreference: z.enum(DELIVERY_PREFERENCES).optional() });
 export type ShippingEstimateInput = z.infer<typeof shippingEstimateSchema>;
 
 export interface ShippingEstimateRateView {
@@ -106,7 +102,7 @@ export type StaffOrderActionInput = z.infer<typeof staffOrderActionSchema>;
 export const cancellationDecisionSchema = z.object({ approve: z.boolean(), note: z.string().trim().min(10).max(500) });
 export type CancellationDecisionInput = z.infer<typeof cancellationDecisionSchema>;
 
-export const PACKAGING_KINDS = ["BOX", "MAILER"] as const;
+export const PACKAGING_KINDS = ["BOX", "MAILER", "BAG"] as const;
 export type PackagingKind = (typeof PACKAGING_KINDS)[number];
 
 export const packagingPresetSchema = z.object({
@@ -159,6 +155,7 @@ export interface OrderLineView {
   unitValueMinor: number;
   locations: string[];
   barcodes: string[];
+  lotCodes: string[];
 }
 
 export interface OrderChargesView {
@@ -229,6 +226,7 @@ export interface OrderDetailView extends OrderSummaryView {
   cancellation: CancellationRequestView | null;
   dispatchPhotoCount: number;
   sealRequired: boolean;
+  practiceTracking: boolean;
   sealNumber: string | null;
   actions: OrderAction[];
 }

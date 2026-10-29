@@ -76,7 +76,15 @@ export class ShippingEstimateService {
       productsWithoutSize: products.filter((product) => !product.lengthMm || !product.widthMm || !product.heightMm).map((product) => product.name),
       rates: ranking.order.map((id) => {
         const rate = byRate.get(id)!;
-        return { id, carrier: rate.carrier, service: rate.service, chargeMinor: rate.chargeMinor, estimatedDays: rate.estimatedDays, tags: ranking.tags.get(id) ?? [], preferred: id === ranking.preferredId };
+        return {
+          id,
+          carrier: rate.carrier,
+          service: rate.service,
+          chargeMinor: rate.chargeMinor,
+          estimatedDays: rate.estimatedDays,
+          tags: ranking.tags.get(id) ?? [],
+          preferred: id === ranking.preferredId,
+        };
       }),
     };
   }

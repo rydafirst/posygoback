@@ -58,10 +58,15 @@ function trackingEvent(entry: ShippoTrackingEntry): CarrierTrackingEvent | null 
   return { status, description: (entry.status_details ?? status).slice(0, 500), occurredAt: new Date(entry.status_date).toISOString(), location: place ? place.slice(0, 120) : null };
 }
 
+const TEST_KEY_PREFIX = "shippo_test_";
+
 export class ShippoCarrier implements CarrierAdapter {
   readonly provider = "SHIPPO" as const;
+  readonly practice: boolean;
 
-  constructor(private readonly apiKey: string) {}
+  constructor(private readonly apiKey: string) {
+    this.practice = apiKey.startsWith(TEST_KEY_PREFIX);
+  }
 
   async quote(request: RateRequest): Promise<CarrierRate[]> {
     const shipment = await this.call<{ rates?: ShippoRate[]; messages?: Array<{ text?: string }> }>("POST", "/shipments/", {

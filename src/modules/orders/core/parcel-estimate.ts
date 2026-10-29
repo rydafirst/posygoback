@@ -45,6 +45,7 @@ export function estimateParcel(items: readonly EstimateItem[], boxes: readonly E
   const sized = sizedItems(items);
   const complete = sized.length === items.length;
   const needed = sized.reduce((total, item) => total + volume(item) * item.quantity, 0) * SPARE_ROOM;
-  const box = sized.length > 0 ? (ordered.find((candidate) => volume(candidate) >= needed && sized.every((item) => fits(candidate, item))) ?? ordered.at(-1)!) : ordered[Math.floor(ordered.length / 2)]!;
+  const box =
+    sized.length > 0 ? (ordered.find((candidate) => volume(candidate) >= needed && sized.every((item) => fits(candidate, item))) ?? ordered.at(-1)!) : ordered[Math.floor(ordered.length / 2)]!;
   return { parcel: { lengthMm: box.lengthMm, widthMm: box.widthMm, heightMm: box.heightMm, weightGrams }, boxLabel: box.label, sized: complete };
 }

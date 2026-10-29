@@ -287,22 +287,13 @@ describe("orders, packing and shipping", () => {
       expect(early.body.message).toMatch(/Still to scan: Wig cap, Body wave wig\./);
       await staff(`${orderId}/scans`).send({ code: "0000000000000" }).expect(400);
       const lines = ((await test.http().get(`/v1/warehouse/orders/${orderId}`).set(as(gbOperator)).expect(200)).body as OrderDetailView).lines;
-      const capLine = lines.find((line) => line.productCode === "CAP-1")!.id;
-      const wigLine = lines.find((line) => line.productCode === "WIG-1")!.id;
-      const barcoded = await staff(`${orderId}/lines/${wigLine}/confirm`).expect(409);
-      expect(barcoded.body.message).toMatch(/Scan the barcode on Body wave wig/);
-      const [capBarcode] = await query<{ id: string; product_id: string; vendor_id: string }>("DELETE FROM product_barcodes WHERE value = 'CAP-RED' RETURNING id, product_id, vendor_id");
-      const confirmed = await staff(`${orderId}/lines/${capLine}/confirm`).expect(200);
-      expect(confirmed.body).toMatchObject({ productName: "Wig cap", scannedQuantity: 1, complete: true });
-      const capAgain = await staff(`${orderId}/lines/${capLine}/confirm`).expect(400);
-      expect(capAgain.body.fieldErrors.lineId[0]).toMatch(/already scanned/);
-      await query("INSERT INTO product_barcodes (id, product_id, vendor_id, value, symbology) VALUES ($1, $2, $3, 'CAP-RED', 'CODE128')", [capBarcode!.id, capBarcode!.product_id, capBarcode!.vendor_id]);
-      const scannedAgain = await staff(`${orderId}/scans`).send({ code: "CAP-RED" }).expect(400);
-      expect(scannedAgain.body.fieldErrors.code[0]).toMatch(/already scanned/);
-      const timeline = ((await test.http().get(`/v1/warehouse/orders/${orderId}`).set(as(gbOperator)).expect(200)).body as OrderDetailView).events;
-      expect(timeline.some((event) => event.type === "order.unit_confirmed" && event.description === "Wig cap checked by hand (1 of 1)")).toBe(true);
+      expect(lines.every((line) => line.lotCodes.length > 0)).toBe(true);
+      await staff(`${orderId}/scans`).send({ code: "CAP-RED" }).expect(200);
+      const capAgain = await staff(`${orderId}/scans`).send({ code: "CAP-RED" }).expect(400);
+      expect(capAgain.body.fieldErrors.code[0]).toMatch(/already scanned/);
       await staff(`${orderId}/scans`).send({ code: "4006381333931" }).expect(200);
-      const last = await staff(`${orderId}/scans`).send({ code: "4006381333931" }).expect(200);
+      const wigLot = lines.find((line) => line.productCode === "WIG-1")!.lotCodes[0]!;
+      const last = await staff(`${orderId}/scans`).send({ code: wigLot.toLowerCase() }).expect(200);
       expect(last.body).toMatchObject({ productName: "Body wave wig", scannedQuantity: 2, quantity: 2, complete: true });
       await staff(`${orderId}/pack`)
         .send({ presetId, dimensions: { lengthMm: 1, widthMm: 1, heightMm: 1 }, weightGrams: 900 })
@@ -344,6 +335,9 @@ describe("orders, packing and shipping", () => {
       const handed = await staff(`${orderId}/actions`).send({ action: "HAND_OFF", sealNumber: "SEAL-0042" }).expect(200);
       await query(`UPDATE countries SET config = ${highValue} WHERE code = 'GB'`, [25_000]);
       expect(handed.body).toMatchObject({ status: "HANDED_OFF", sealRequired: true, sealNumber: "SEAL-0042" });
+      const queued = (stage: string) => test.http().get(`/v1/warehouse/orders?stage=${stage}`).set(as(gbOperator)).expect(200);
+      expect(((await queued("SENT")).body as OrderSummaryView[]).map((order) => order.id)).toContain(orderId);
+      expect(((await queued("OPEN")).body as OrderSummaryView[]).map((order) => order.id)).not.toContain(orderId);
       expect((await lot()).quantity_reserved).toBe(reserved - 2);
       const tracking = handed.body.label.trackingNumber as string;
       carrier.trackingEvents = [
@@ -362,6 +356,7 @@ describe("orders, packing and shipping", () => {
       await test.http().post(`/v1/webhooks/shippo/GB/${CARRIER_WEBHOOK_TOKEN}`).send(body).expect(200);
       const delivered = await test.http().get(`/v1/vendor/orders/${orderId}`).set(as(owner)).expect(200);
       expect(delivered.body.status).toBe("DELIVERED");
+      expect(((await test.http().get("/v1/warehouse/orders?stage=DONE").set(as(gbOperator)).expect(200)).body as OrderSummaryView[]).map((order) => order.id)).toContain(orderId);
       expect((delivered.body as OrderDetailView).events.filter((event) => event.source === "CARRIER")).toHaveLength(2);
       const publicView = await test.http().get(`/v1/track/${tracking}`).expect(200);
       expect(publicView.body).toMatchObject({ status: "DELIVERED", destination: { city: "Manchester", countryCode: "GB" } });

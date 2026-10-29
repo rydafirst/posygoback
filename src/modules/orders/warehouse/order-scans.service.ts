@@ -6,7 +6,6 @@ import { lockRow, PrismaService } from "../../../database/prisma.service";
 import type { Order, Prisma } from "../../../generated/prisma/client";
 import type { ScanResultView } from "../../../shared";
 import { warehouseScope } from "../../stock/scope";
-import { OrderTimelineService } from "../core/order-timeline.service";
 
 const NO_MATCH = "00000000-0000-0000-0000-000000000000";
 
@@ -19,10 +18,7 @@ interface CountableLine {
 
 @Injectable()
 export class OrderScansService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly timeline: OrderTimelineService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   scan(principal: AuthPrincipal, orderId: string, code: string): Promise<ScanResultView> {
     return this.whilePacking(principal, orderId, async (tx, order) => {
@@ -32,27 +28,7 @@ export class OrderScansService {
       if (!line) {
         throw Errors.validation({ code: [lot || barcode ? "That item isn't part of this order" : "That code doesn't match anything on this order"] });
       }
-      return this.count(tx, line, "code");
-    });
-  }
-
-  confirmUnit(principal: AuthPrincipal, orderId: string, lineId: string): Promise<ScanResultView> {
-    return this.whilePacking(principal, orderId, async (tx) => {
-      const line = await tx.orderLine.findFirst({ where: { id: lineId, orderId }, include: { product: { select: { _count: { select: { barcodes: true } } } } } });
-      if (!line) {
-        throw Errors.notFound();
-      }
-      if (line.product._count.barcodes > 0) {
-        throw Errors.invalidTransition(`Scan the barcode on ${line.productName} instead.`);
-      }
-      const counted = await this.count(tx, line, "lineId");
-      await this.timeline.add(tx, orderId, {
-        type: "order.unit_confirmed",
-        description: `${line.productName} checked by hand (${counted.scannedQuantity} of ${line.quantity})`,
-        source: "STAFF",
-        actorId: principal.userId,
-      });
-      return counted;
+      return this.count(tx, line);
     });
   }
 
@@ -75,9 +51,9 @@ export class OrderScansService {
     });
   }
 
-  private async count(tx: Prisma.TransactionClient, line: CountableLine, field: string): Promise<ScanResultView> {
+  private async count(tx: Prisma.TransactionClient, line: CountableLine): Promise<ScanResultView> {
     if (line.scannedQuantity >= line.quantity) {
-      throw Errors.validation({ [field]: [`All ${line.quantity} of ${line.productName} are already scanned`] });
+      throw Errors.validation({ code: [`All ${line.quantity} of ${line.productName} are already scanned`] });
     }
     const updated = await tx.orderLine.update({ where: { id: line.id }, data: { scannedQuantity: { increment: 1 } } });
     return { lineId: line.id, productName: line.productName, scannedQuantity: updated.scannedQuantity, quantity: line.quantity, complete: updated.scannedQuantity === line.quantity };
