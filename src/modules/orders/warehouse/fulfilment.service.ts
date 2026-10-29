@@ -14,7 +14,6 @@ import {
   type OrderStatus,
   type OrderSummaryView,
   type PackInput,
-  type ScanResultView,
   type StaffOrderActionInput,
   staffOrderActions,
 } from "../../../shared";
@@ -28,6 +27,7 @@ import { OrderTrackingService } from "../core/order-tracking.service";
 import { OrdersRepository } from "../core/orders.repository";
 import { StockAllocationService } from "../core/stock-allocation.service";
 import { DispatchEvidenceService } from "./dispatch-evidence.service";
+import { OrderScansService } from "./order-scans.service";
 
 export interface StaffQueueFilters {
   status?: OrderStatus;
@@ -52,6 +52,7 @@ export class FulfilmentService {
     private readonly evidence: DispatchEvidenceService,
     private readonly audit: AuditService,
     private readonly owners: OrderAlertsService,
+    private readonly scans: OrderScansService,
   ) {}
 
   async queue(principal: AuthPrincipal, filters: StaffQueueFilters): Promise<OrderSummaryView[]> {
@@ -95,37 +96,8 @@ export class FulfilmentService {
     return principal.partnerId ? { ...view, charges: null, rates: view.rates.map((rate) => ({ ...rate, chargeMinor: null })) } : view;
   }
 
-  async scan(principal: AuthPrincipal, orderId: string, code: string): Promise<ScanResultView> {
-    const order = await this.inScope(principal, orderId);
-    return this.prisma.$transaction(async (tx) => {
-      const current = await this.locked(tx, order.id);
-      if (current.status !== "PENDING_PACKING") {
-        throw Errors.invalidTransition("Scanning is only for orders waiting to be packed.");
-      }
-      const normalised = code.trim().toUpperCase();
-      const lot = await tx.orderAllocation.findFirst({ where: { orderId, releasedAt: null, lot: { code: normalised } }, select: { lineId: true } });
-      const barcode = lot ? null : await tx.productBarcode.findFirst({ where: { vendorId: current.vendorId, value: code.trim() }, select: { productId: true } });
-      const line = await tx.orderLine.findFirst({ where: { orderId, ...(lot ? { id: lot.lineId } : { productId: barcode?.productId ?? "00000000-0000-0000-0000-000000000000" }) } });
-      if (!line) {
-        throw Errors.validation({ code: [lot || barcode ? "That item isn't part of this order" : "That code doesn't match anything on this order"] });
-      }
-      if (line.scannedQuantity >= line.quantity) {
-        throw Errors.validation({ code: [`All ${line.quantity} of ${line.productName} are already scanned`] });
-      }
-      const updated = await tx.orderLine.update({ where: { id: line.id }, data: { scannedQuantity: { increment: 1 } } });
-      return { lineId: line.id, productName: line.productName, scannedQuantity: updated.scannedQuantity, quantity: line.quantity, complete: updated.scannedQuantity === line.quantity };
-    });
-  }
-
   async resetScans(principal: AuthPrincipal, orderId: string): Promise<OrderDetailView> {
-    const order = await this.inScope(principal, orderId);
-    await this.prisma.$transaction(async (tx) => {
-      const current = await this.locked(tx, order.id);
-      if (current.status !== "PENDING_PACKING") {
-        throw Errors.invalidTransition("Scanning is only for orders waiting to be packed.");
-      }
-      await tx.orderLine.updateMany({ where: { orderId }, data: { scannedQuantity: 0 } });
-    });
+    await this.scans.reset(principal, orderId);
     return this.detail(principal, orderId);
   }
 

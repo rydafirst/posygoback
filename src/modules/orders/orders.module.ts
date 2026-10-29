@@ -28,6 +28,7 @@ import { OrderImportService } from "./vendor/order-import.service";
 import { VendorOrdersService } from "./vendor/vendor-orders.service";
 import { DispatchEvidenceService } from "./warehouse/dispatch-evidence.service";
 import { FulfilmentService } from "./warehouse/fulfilment.service";
+import { OrderScansService } from "./warehouse/order-scans.service";
 
 @Module({
   imports: [PartnerOperationsModule, FinanceModule, OnboardingModule, FilesModule],
@@ -51,6 +52,7 @@ import { FulfilmentService } from "./warehouse/fulfilment.service";
     VendorOrdersService,
     OrderImportService,
     FulfilmentService,
+    OrderScansService,
     DispatchEvidenceService,
     PackagingService,
     ApiKeysService,

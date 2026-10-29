@@ -45,6 +45,7 @@ import { PackagingService } from "./packaging/packaging.service";
 import { OrderImportService } from "./vendor/order-import.service";
 import { VendorOrdersService } from "./vendor/vendor-orders.service";
 import { FulfilmentService } from "./warehouse/fulfilment.service";
+import { OrderScansService } from "./warehouse/order-scans.service";
 
 const uuid = new ParseUUIDPipe({ version: "4" });
 const listQuery = new ZodValidationPipe(z.object({ status: z.enum(ORDER_STATUSES).optional(), q: z.string().trim().max(64).optional(), warehouseId: z.string().uuid().optional() }));
@@ -147,6 +148,7 @@ export class VendorApiKeysController {
 export class WarehouseOrdersController {
   constructor(
     private readonly fulfilment: FulfilmentService,
+    private readonly scans: OrderScansService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
@@ -177,7 +179,15 @@ export class WarehouseOrdersController {
   @Post(":id/scans")
   @HttpCode(HttpStatus.OK)
   scan(@Param("id", uuid) id: string, @Body(new ZodValidationPipe(scanSchema)) input: { code: string }, @CurrentPrincipal() principal: AuthPrincipal) {
-    return this.fulfilment.scan(principal, id, input.code);
+    return this.scans.scan(principal, id, input.code);
+  }
+
+  @RequirePermission("orders.fulfil")
+  @Throttle({ default: { limit: 600, ttl: 60_000 } })
+  @Post(":id/lines/:lineId/confirm")
+  @HttpCode(HttpStatus.OK)
+  confirmUnit(@Param("id", uuid) id: string, @Param("lineId", uuid) lineId: string, @CurrentPrincipal() principal: AuthPrincipal) {
+    return this.scans.confirmUnit(principal, id, lineId);
   }
 
   @RequirePermission("orders.fulfil")

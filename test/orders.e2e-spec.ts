@@ -5,7 +5,7 @@ import { JobLockService } from "../src/modules/finance/jobs/job-lock.service";
 import { CarrierAccountsService } from "../src/modules/orders/carriers/carrier-accounts.service";
 import { CarrierError, type CarrierRate, type LabelRate, type PurchasedLabel, type RateRequest, type TrackingSnapshot } from "../src/modules/orders/carriers/carrier.port";
 import { ShippoCarrier } from "../src/modules/orders/carriers/shippo.carrier";
-import type { CarrierTrackingEvent, ImportResultView, OrderDetailView, OrderSummaryView } from "../src/shared";
+import type { CarrierTrackingEvent, ImportResultView, OrderDetailView, OrderSummaryView, ShippingEstimateView } from "../src/shared";
 import { CARRIER_WEBHOOK_TOKEN, createStaff, flushRateLimits, fundWallet, insertLegalDocument, makeVendorTrade, resetDatabase, seedStock, signUpAndVerify, startApp, type TestApp } from "./harness";
 
 const as = (token: string) => ({ Authorization: `Bearer ${token}` });
@@ -199,7 +199,7 @@ describe("orders, packing and shipping", () => {
       const estimate = (body: object) => test.http().post("/v1/vendor/orders/shipping-estimate").set(as(owner)).send(body);
       const rough = await estimate({ recipient: GB_RECIPIENT, lines: [{ productId: wigId, quantity: 2 }] }).expect(200);
       expect(rough.body).toMatchObject({ currency: "GBP", sized: false, productsWithoutSize: ["Body wave wig"] });
-      expect(rough.body.rates.map((rate: { chargeMinor: number; tags: string[]; preferred: boolean }) => [rate.chargeMinor, rate.tags, rate.preferred])).toEqual([
+      expect((rough.body as ShippingEstimateView).rates.map((rate) => [rate.chargeMinor, rate.tags, rate.preferred])).toEqual([
         [704, ["CHEAPEST"], true],
         [2199, ["FASTEST"], false],
       ]);
@@ -286,9 +286,21 @@ describe("orders, packing and shipping", () => {
       const early = await staff(`${orderId}/pack`).send({ presetId, weightGrams: 900 }).expect(409);
       expect(early.body.message).toMatch(/Still to scan: Wig cap, Body wave wig\./);
       await staff(`${orderId}/scans`).send({ code: "0000000000000" }).expect(400);
-      await staff(`${orderId}/scans`).send({ code: "CAP-RED" }).expect(200);
-      const capAgain = await staff(`${orderId}/scans`).send({ code: "CAP-RED" }).expect(400);
-      expect(capAgain.body.fieldErrors.code[0]).toMatch(/already scanned/);
+      const lines = ((await test.http().get(`/v1/warehouse/orders/${orderId}`).set(as(gbOperator)).expect(200)).body as OrderDetailView).lines;
+      const capLine = lines.find((line) => line.productCode === "CAP-1")!.id;
+      const wigLine = lines.find((line) => line.productCode === "WIG-1")!.id;
+      const barcoded = await staff(`${orderId}/lines/${wigLine}/confirm`).expect(409);
+      expect(barcoded.body.message).toMatch(/Scan the barcode on Body wave wig/);
+      const [capBarcode] = await query<{ id: string; product_id: string; vendor_id: string }>("DELETE FROM product_barcodes WHERE value = 'CAP-RED' RETURNING id, product_id, vendor_id");
+      const confirmed = await staff(`${orderId}/lines/${capLine}/confirm`).expect(200);
+      expect(confirmed.body).toMatchObject({ productName: "Wig cap", scannedQuantity: 1, complete: true });
+      const capAgain = await staff(`${orderId}/lines/${capLine}/confirm`).expect(400);
+      expect(capAgain.body.fieldErrors.lineId[0]).toMatch(/already scanned/);
+      await query("INSERT INTO product_barcodes (id, product_id, vendor_id, value, symbology) VALUES ($1, $2, $3, 'CAP-RED', 'CODE128')", [capBarcode!.id, capBarcode!.product_id, capBarcode!.vendor_id]);
+      const scannedAgain = await staff(`${orderId}/scans`).send({ code: "CAP-RED" }).expect(400);
+      expect(scannedAgain.body.fieldErrors.code[0]).toMatch(/already scanned/);
+      const timeline = ((await test.http().get(`/v1/warehouse/orders/${orderId}`).set(as(gbOperator)).expect(200)).body as OrderDetailView).events;
+      expect(timeline.some((event) => event.type === "order.unit_confirmed" && event.description === "Wig cap checked by hand (1 of 1)")).toBe(true);
       await staff(`${orderId}/scans`).send({ code: "4006381333931" }).expect(200);
       const last = await staff(`${orderId}/scans`).send({ code: "4006381333931" }).expect(200);
       expect(last.body).toMatchObject({ productName: "Body wave wig", scannedQuantity: 2, quantity: 2, complete: true });
