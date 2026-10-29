@@ -28,11 +28,12 @@ export const STAFF_TOPICS = {
   shoppingToBuy: { label: "Paid shopping requests to buy", href: "/admin/shopping", permission: "shopping.manage" },
   shoppingAtWarehouse: { label: "Shopping parcels to book in or send", href: "/admin/shopping-desk", permission: "orders.fulfil" },
   support: { label: "Support cases", href: "/admin/support", permission: "support.manage" },
+  taxDeadlines: { label: "Tax deadlines coming up or overdue", href: "/admin/tax", permission: "tax.manage" },
 } as const satisfies Record<string, StaffTopic>;
 
 export type StaffTopicKey = keyof typeof STAFF_TOPICS;
 
-export const EMAILED_BY_DEFAULT: ReadonlySet<StaffTopicKey> = new Set(["support"]);
+export const EMAILED_BY_DEFAULT: ReadonlySet<StaffTopicKey> = new Set(["support", "taxDeadlines"]);
 
 export function isStaffTopic(value: string): value is StaffTopicKey {
   return value in STAFF_TOPICS;

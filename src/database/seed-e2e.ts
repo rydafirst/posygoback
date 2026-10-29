@@ -54,6 +54,7 @@ async function vendorId(prisma: PrismaClient): Promise<string> {
 }
 
 const LEFTOVER_AFTER_MS = 60 * 60 * 1000;
+const BROWSER_TAX_TITLE = "Browser check";
 
 async function platformHub(prisma: PrismaClient): Promise<void> {
   await prisma.warehouse.upsert({
@@ -265,6 +266,7 @@ async function main(): Promise<void> {
     const abandoned = { lt: new Date(Date.now() - LEFTOVER_AFTER_MS) };
     await prisma.stockTransfer.updateMany({ where: { fromWarehouseId: hubId, status: "REQUESTED", createdAt: abandoned }, data: { status: "CANCELLED" } });
     await prisma.vendorReturn.updateMany({ where: { vendorId: vendor, status: "REQUESTED", createdAt: abandoned }, data: { status: "CANCELLED" } });
+    await prisma.taxObligation.deleteMany({ where: { title: { startsWith: BROWSER_TAX_TITLE } } });
     for (const member of CAST) {
       await user(prisma, encryption, member, { vendorId: vendor, partnerId }, passwordHash, secret);
     }

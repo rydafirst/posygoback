@@ -22,6 +22,7 @@ export type LedgerEntryType = (typeof LEDGER_ENTRY_TYPES)[number];
 
 export const CREDIT_TYPES: readonly LedgerEntryType[] = ["DEPOSIT", "MANUAL_CREDIT", "REFUND", "REVERSAL", "COMPENSATION", "REFERRAL_CREDIT", "CARRIED_OVER"];
 export const DEBIT_TYPES: readonly LedgerEntryType[] = ["ONBOARDING", "STORAGE", "FULFILMENT", "SHIPPING", "RETURN", "RECEIVING_HOLD_FEE", "MANUAL_DEBIT", "PAYMENT_REVERSAL", "STOREFRONT_FEE"];
+export const FEE_TYPES: readonly LedgerEntryType[] = ["ONBOARDING", "STORAGE", "FULFILMENT", "SHIPPING", "RETURN", "RECEIVING_HOLD_FEE", "STOREFRONT_FEE"];
 
 export const WALLET_STATUSES = ["ACTIVE", "STORAGE_OVERDUE", "FROZEN", "CLOSED"] as const;
 export type WalletStatus = (typeof WALLET_STATUSES)[number];

@@ -60,6 +60,7 @@ export const PERMISSIONS = [
   "shopping.manage",
   "support.read",
   "support.manage",
+  "tax.manage",
 ] as const;
 
 export const PARTNER_OPERATIONS: readonly Permission[] = [
@@ -135,6 +136,7 @@ const GRANTS: Record<Role, readonly Permission[]> = {
     "storefronts.manage",
     "referrals.manage",
     "shopping.read",
+    "tax.manage",
   ],
   COMPLIANCE: [
     "countries.read",
@@ -216,6 +218,7 @@ const GRANTS: Record<Role, readonly Permission[]> = {
     "shopping.manage",
     "support.read",
     "support.manage",
+    "tax.manage",
   ],
 };
 

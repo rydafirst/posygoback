@@ -322,6 +322,7 @@ model Country {
 
   shoppingRequests ShoppingRequest[]
 
+  taxObligations   TaxObligation[]
   @@index([status], map: "countries_status_idx")
   @@map("countries")
 }
@@ -2847,4 +2848,61 @@ enum DeliveryPreference {
   FASTEST
 
   @@map("delivery_preference")
+}
+
+enum TaxCadence {
+  ONCE
+  MONTHLY
+  QUARTERLY
+  YEARLY
+
+  @@map("tax_cadence")
+}
+
+enum TaxDeadlineStatus {
+  OPEN
+  FILED
+
+  @@map("tax_deadline_status")
+}
+
+model TaxObligation {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  countryCode String        @map("country_code") @db.Char(2)
+  title       String        @db.VarChar(120)
+  authority   String        @db.VarChar(120)
+  description String        @db.VarChar(1000)
+  cadence     TaxCadence
+  dueRule     String        @map("due_rule") @db.VarChar(200)
+  guidanceUrl String?       @map("guidance_url") @db.VarChar(500)
+  owner       String?       @db.VarChar(120)
+  confirmed   Boolean       @default(false)
+  active      Boolean       @default(true)
+  createdBy   String?       @map("created_by") @db.Uuid
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  country     Country       @relation(fields: [countryCode], references: [code], onDelete: Restrict, onUpdate: NoAction)
+  deadlines   TaxDeadline[]
+
+  @@index([countryCode, active], map: "tax_obligations_country_idx")
+  @@map("tax_obligations")
+}
+
+model TaxDeadline {
+  id           String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  obligationId String            @map("obligation_id") @db.Uuid
+  dueOn        DateTime          @map("due_on") @db.Date
+  status       TaxDeadlineStatus @default(OPEN)
+  filedOn      DateTime?         @map("filed_on") @db.Date
+  reference    String?           @db.VarChar(120)
+  note         String?           @db.VarChar(1000)
+  filedBy      String?           @map("filed_by") @db.Uuid
+  remindedDays Int?              @map("reminded_days")
+  remindedOn   DateTime?         @map("reminded_on") @db.Date
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  obligation   TaxObligation     @relation(fields: [obligationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([obligationId, dueOn], map: "tax_deadlines_once_per_day")
+  @@index([status, dueOn], map: "tax_deadlines_due_idx")
+  @@map("tax_deadlines")
 }

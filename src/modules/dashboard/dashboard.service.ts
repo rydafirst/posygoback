@@ -4,12 +4,12 @@ import type { AuthPrincipal } from "../../common/auth/auth-principal";
 import { Errors } from "../../common/http/app-exception";
 import { PrismaService } from "../../database/prisma.service";
 import { Prisma } from "../../generated/prisma/client";
-import { type AttentionItem, type DashboardView, hasPermission, type MoneyTotal } from "../../shared";
+import { type AttentionItem, type DashboardView, FEE_TYPES, hasPermission, type MoneyTotal } from "../../shared";
 import { STAFF_TOPICS, type StaffTopicKey } from "../notifications/staff-topics";
 import { warehouseCountryScope } from "../stock/scope";
 
 const WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
-const CHARGES = ["ONBOARDING", "STORAGE", "FULFILMENT", "SHIPPING", "RETURN", "RECEIVING_HOLD_FEE", "STOREFRONT_FEE"];
+const TAX_SOON_MS = 7 * 24 * 60 * 60 * 1000;
 
 type Counter = (country: string | undefined) => Promise<number>;
 
@@ -37,6 +37,8 @@ export class DashboardService {
       storePayouts: (c) => db.storefrontOrder.count({ where: { payoutStatus: "FAILED", countryCode: c } }),
       shoppingToPrice: (c) => db.shoppingRequest.count({ where: { status: "REQUESTED", confirmedAt: { not: null }, countryCode: c } }),
       shoppingToBuy: (c) => db.shoppingRequest.count({ where: { status: "PAID", countryCode: c } }),
+      taxDeadlines: (c) =>
+        db.taxDeadline.count({ where: { status: "OPEN", dueOn: { lte: new Date(Date.now() + TAX_SOON_MS) }, obligation: { active: true, countryCode: c } } }),
       shoppingAtWarehouse: (c) => db.shoppingRequest.count({ where: { countryCode: c, OR: [{ status: "ARRIVED" }, { status: "BUYING", lines: { none: { status: "QUOTED" } } }] } }),
     };
   }
@@ -68,7 +70,7 @@ export class DashboardService {
       this.prisma.$queryRaw<Array<{ currency: string; total: bigint }>>`
         SELECT w.currency, -SUM(l.amount_minor)::bigint AS total
         FROM ledger_entries l JOIN wallets w ON w.id = l.wallet_id JOIN vendors v ON v.id = l.vendor_id
-        WHERE l.created_at >= ${since} AND l.type::text IN (${Prisma.join(CHARGES)}) ${countryFilter}
+        WHERE l.created_at >= ${since} AND l.type::text IN (${Prisma.join(FEE_TYPES)}) ${countryFilter}
         GROUP BY w.currency ORDER BY w.currency`,
       this.prisma.$queryRaw<Array<{ currency: string; total: bigint }>>`
         SELECT w.currency, SUM(w.balance_minor)::bigint AS total FROM wallets w JOIN vendors v ON v.id = w.vendor_id WHERE true ${countryFilter} GROUP BY w.currency ORDER BY w.currency`,
