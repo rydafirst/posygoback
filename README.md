@@ -103,7 +103,7 @@ Buyers send links from `/shop-for-me`; country staff price them at `/admin/shopp
 
 ## Deploying on Railway
 
-`railway.json` builds the app, applies any new database migrations before each deploy, runs the development seed (it only adds what's missing, and refuses to run when `NODE_ENV=production`), then starts the server once `/v1/health/ready` answers. Set `SEED_SUPER_ADMIN_EMAIL` and `SEED_SUPER_ADMIN_PASSWORD` in the service variables to have the first admin created on deploy.
+`railway.json` builds the app, applies any new database migrations before each deploy, then starts the server once `/v1/health/ready` answers. Deploys never run the development seed. Set `NODE_ENV=production` and `TRUST_PROXY_HOPS=1` on the service; the app refuses to start in production with test sign-in shortcuts, the log email transport, the sandbox payment processor or the practice identity provider. Stripe and Shippo test keys work in production only when their account entry has `"testMode": true`.
 
 ## Testing without email
 
