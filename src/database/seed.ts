@@ -50,7 +50,8 @@ async function main(): Promise<void> {
   loadEnvironmentFile();
   const config = loadConfig();
   if (config.NODE_ENV === "production") {
-    throw new Error("The development seed never runs in production");
+    process.stdout.write("Development seed skipped in production\n");
+    return;
   }
   const prisma = new PrismaClient({ adapter: createAdapter(config) });
   try {
