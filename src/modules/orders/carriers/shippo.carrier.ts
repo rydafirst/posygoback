@@ -155,7 +155,7 @@ export class ShippoCarrier implements CarrierAdapter {
       carrier: rate.carrier,
       carrierCode: rate.carrierCode,
       service: rate.service,
-      trackingNumber: transaction.tracking_number!,
+      trackingNumber: this.practice ? `${transaction.tracking_number!}-${transaction.object_id.slice(-8)}` : transaction.tracking_number!,
       labelUrl: transaction.label_url ?? null,
       trackingUrl: transaction.tracking_url_provider ?? null,
     };

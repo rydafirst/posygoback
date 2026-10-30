@@ -34,3 +34,16 @@ describe("test carriers", () => {
     expect(new SandboxCarrier().practice).toBe(true);
   });
 });
+
+describe("Shippo test labels", () => {
+  const transaction = { object_id: "abcdef0123456789", status: "SUCCESS", tracking_number: "00000000000000", label_url: "https://example.com/label.pdf" };
+  const rate = { providerRateId: "rate_1", carrier: "Hermes UK", carrierCode: "hermes_uk", service: "ParcelShop Drop-Off" };
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it("keeps test tracking numbers unique, because Shippo repeats them", async () => {
+    jest.spyOn(global, "fetch").mockImplementation(() => Promise.resolve(new Response(JSON.stringify(transaction), { status: 200 })));
+    expect((await new ShippoCarrier("shippo_test_abc").buyLabel(rate, "ORD-1")).trackingNumber).toBe("00000000000000-23456789");
+    expect((await new ShippoCarrier("shippo_live_abc").buyLabel(rate, "ORD-1")).trackingNumber).toBe("00000000000000");
+  });
+});
