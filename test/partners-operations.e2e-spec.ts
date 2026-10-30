@@ -115,6 +115,7 @@ describe("partner hubs at work", () => {
     it("takes stock up to the hub's tier, then asks the vendor to choose another hub", async () => {
       inboundA = await createInbound(a.hubId, 10);
       await submitInbound(inboundA).expect(200);
+      expect(test.email.sent.filter((message) => message.kind === "stock.shipment_coming").at(-1)?.action?.url).toContain(`/admin/receiving/${inboundA}`);
       const over = await createInbound(a.hubId, 2);
       const refused = await submitInbound(over).expect(409);
       expect(refused.body.message).toBe("This hub can hold stock worth £50.00 more right now. Send fewer units or choose another hub.");

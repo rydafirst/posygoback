@@ -26,6 +26,13 @@ const openShipment = (webUrl: string, shipment: ShipmentLink): EmailAction => ({
 const addressOf = (hub: HubAddress) => [`${PLATFORM_NAME} ${hub.name}`, ...hub.addressLines, `${hub.city} ${hub.postalCode}`].join("\n");
 
 export const StockEmails = {
+  coming: (to: string, shipment: ShipmentLink, seller: string, hubName: string, arrival: string, webUrl: string): EmailMessage => ({
+    to,
+    kind: "stock.shipment_coming",
+    subject: `Stock on its way to ${hubName}: ${shipment.reference}`,
+    text: `${seller} has sent stock shipment ${shipment.reference} to ${hubName}. It's expected around ${arrival}.\n\nWhen it arrives, open it in Receiving, check it in, count it and photograph it.${EMAIL_SIGN_OFF}`,
+    action: { label: "Open the shipment", url: `${webUrl}/admin/receiving/${shipment.id}` },
+  }),
   submitted: (to: string, shipment: ShipmentLink, details: SubmittedDetails, webUrl: string): EmailMessage => ({
     to,
     kind: "stock.shipment_submitted",

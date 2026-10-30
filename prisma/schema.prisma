@@ -1333,8 +1333,8 @@ model Order {
   carrierCode            String?             @map("carrier_code") @db.VarChar(40)
   carrierService         String?             @map("carrier_service") @db.VarChar(120)
   trackingNumber         String?             @map("tracking_number") @db.VarChar(64)
-  trackingUrl            String?             @map("tracking_url") @db.VarChar(500)
-  labelUrl               String?             @map("label_url") @db.VarChar(1000)
+  trackingUrl            String?             @map("tracking_url") @db.Text
+  labelUrl               String?             @map("label_url") @db.Text
   labelTransactionId     String?             @map("label_transaction_id") @db.VarChar(120)
   sealNumber             String?             @map("seal_number") @db.VarChar(40)
   labelPurchasedBy       String?             @map("label_purchased_by") @db.Uuid
@@ -2588,8 +2588,8 @@ model ShoppingRequest {
   receivedBy             String?        @map("received_by") @db.Uuid
   carrier                String?        @db.VarChar(60)
   trackingNumber         String?        @map("tracking_number") @db.VarChar(64)
-  trackingUrl            String?        @map("tracking_url") @db.VarChar(500)
-  labelUrl               String?        @map("label_url") @db.VarChar(500)
+  trackingUrl            String?        @map("tracking_url") @db.Text
+  labelUrl               String?        @map("label_url") @db.Text
   shippedBy              String?        @map("shipped_by") @db.Uuid
   shippedAt              DateTime?      @map("shipped_at") @db.Timestamptz(6)
   deliveredAt            DateTime?      @map("delivered_at") @db.Timestamptz(6)

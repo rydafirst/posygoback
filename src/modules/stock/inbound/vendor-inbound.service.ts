@@ -181,6 +181,7 @@ export class VendorInboundService {
       countryCode: inbound.countryCode,
       vendorName: inbound.vendor.businessName,
       warehouseName: inbound.warehouse.name,
+      partnerId: inbound.warehouse.partnerId,
       arrival: details.arrival,
     });
   }

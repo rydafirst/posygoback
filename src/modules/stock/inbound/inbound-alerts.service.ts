@@ -5,6 +5,8 @@ import type { AppConfig } from "../../../config/config.schema";
 import type { EmailMessage } from "../../../infrastructure/email/email.port";
 import { WalletAlertsService } from "../../finance/wallets/wallet-alerts.service";
 import { StaffAlertsService } from "../../notifications/staff-alerts.service";
+import { PartnerNotifierService } from "../../partners/partner-notifier.service";
+import { StockEmails } from "../stock-emails";
 
 export interface InboundOwner {
   id: string;
@@ -26,6 +28,7 @@ export interface SubmittedInbound {
   countryCode: string;
   vendorName: string;
   warehouseName: string;
+  partnerId: string | null;
   arrival: string;
 }
 
@@ -37,6 +40,7 @@ export class InboundAlertsService {
     private readonly alerts: WalletAlertsService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly staffAlerts: StaffAlertsService,
+    private readonly partners: PartnerNotifierService,
   ) {}
 
   async tellOwner(inbound: InboundOwner, message: (to: string, webUrl: string) => EmailMessage): Promise<void> {
@@ -52,6 +56,9 @@ export class InboundAlertsService {
       body: `Expected ${inbound.arrival} at ${inbound.warehouseName}.`,
       href: `/admin/receiving/${inbound.id}`,
     });
+    if (inbound.partnerId) {
+      await this.partners.notify(inbound.partnerId, (to, webUrl) => StockEmails.coming(to, inbound, inbound.vendorName, inbound.warehouseName, inbound.arrival, webUrl));
+    }
   }
 
   async tellStaff(inbound: WaitingInbound, exceptUserId: string): Promise<void> {

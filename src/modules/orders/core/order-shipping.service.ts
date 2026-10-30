@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 
 import { AppException, Errors } from "../../../common/http/app-exception";
 import { lockRow, PrismaService } from "../../../database/prisma.service";
@@ -30,6 +30,8 @@ function isWalletProblem(error: unknown): boolean {
 
 @Injectable()
 export class OrderShippingService {
+  private readonly logger = new Logger(OrderShippingService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly orders: OrdersRepository,
@@ -207,8 +209,9 @@ export class OrderShippingService {
     try {
       kept = await this.labels.record(orderId, label, actor);
     } catch (error) {
+      this.logger.error(`Couldn't save the label for order ${orderId}: ${error instanceof Error ? error.message : String(error)}`);
       await this.labels.voidLabel(orderId, adapter, label.transactionId, "The label couldn't be saved, so it was voided.");
-      throw error;
+      throw Errors.carrierFailed("The courier sold the label but we couldn't save it, so it was cancelled with them. Try the label again. If it keeps happening, contact support.");
     }
     if (!kept) {
       await this.labels.voidLabel(orderId, adapter, label.transactionId, "The order changed while the label was being bought, so the label was voided.");
