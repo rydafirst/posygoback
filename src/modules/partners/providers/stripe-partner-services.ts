@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 
-import { type PayoutAccountRequest, type PayoutAccountSnapshot, type PayoutGateway, TransferError, WebhookRejected } from "./partner-services.port";
+import { modeOfKey, type PaymentMode, type PayoutAccountRequest, type PayoutAccountSnapshot, type PayoutGateway, TransferError, WebhookRejected } from "./partner-services.port";
 
 const TOLERANCE_SECONDS = 300;
 
@@ -18,6 +18,7 @@ function verifiedEvent(stripe: Stripe, rawBody: Buffer, signature: string, secre
 
 export class StripeConnectGateway implements PayoutGateway {
   readonly provider = "STRIPE_CONNECT";
+  readonly mode: PaymentMode;
   private readonly stripe: Stripe;
 
   constructor(
@@ -25,6 +26,7 @@ export class StripeConnectGateway implements PayoutGateway {
     private readonly webhookSecret: string,
   ) {
     this.stripe = client(secretKey);
+    this.mode = modeOfKey(secretKey);
   }
 
   async createAccount(request: PayoutAccountRequest): Promise<string> {

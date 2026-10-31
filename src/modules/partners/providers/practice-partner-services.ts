@@ -4,6 +4,7 @@ import type { PayoutAccountSnapshot, PayoutGateway } from "./partner-services.po
 
 export class PracticePayoutGateway implements PayoutGateway {
   readonly provider = "PRACTICE";
+  readonly mode = "TEST" as const;
 
   createAccount(): Promise<string> {
     return Promise.resolve(`practice_acct_${randomUUID()}`);

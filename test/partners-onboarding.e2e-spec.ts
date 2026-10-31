@@ -1,6 +1,7 @@
 import type { HubView, PartnerDetailView, PartnerProgrammeView } from "../src/shared";
 import { createStaff, flushRateLimits, insertLegalDocument, resetDatabase, startApp, type TestApp, testSignature } from "./harness";
 import { application, as, inDays, PartnerFlow, query } from "./partner-helpers";
+import { PartnerPayoutAccountService } from "../src/modules/partners/portal/partner-payout-account.service";
 
 describe("partner applications and verification", () => {
   let test: TestApp;
@@ -185,6 +186,20 @@ describe("partner applications and verification", () => {
       expect((refreshed.body as PartnerDetailView).payoutAccount).toMatchObject({ provider: "PRACTICE", status: "ACTIVE", bankSummary: "Practice Bank ••••4242" });
       const columns = await query<{ column_name: string }>("SELECT column_name FROM information_schema.columns WHERE table_name = 'partner_payout_accounts'");
       expect(columns.map((column) => column.column_name)).not.toContain("details_encrypted");
+    });
+
+    it("asks for payouts again after switching between test and live keys", async () => {
+      const [before] = await query<{ provider_account_id: string }>("UPDATE partner_payout_accounts SET mode = 'LIVE' WHERE partner_id = $1 RETURNING provider_account_id", [partnerA]);
+      await test.app.get(PartnerPayoutAccountService).onApplicationBootstrap();
+      const stale = await test.http().get("/v1/partner").set(as(leadA)).expect(200);
+      expect((stale.body as PartnerDetailView).payoutAccount).toMatchObject({ status: "ONBOARDING" });
+      await test.http().post("/v1/partner/payouts/refresh").set(as(leadA)).expect(200);
+      await test.http().post("/v1/partner/payouts/setup").set(as(leadA)).expect(200);
+      const [after] = await query<{ provider_account_id: string; mode: string; status: string }>("SELECT provider_account_id, mode, status FROM partner_payout_accounts WHERE partner_id = $1", [partnerA]);
+      expect(after).toMatchObject({ mode: "TEST", status: "ONBOARDING" });
+      expect(after!.provider_account_id).not.toBe(before!.provider_account_id);
+      const refreshed = await test.http().post("/v1/partner/payouts/refresh").set(as(leadA)).expect(200);
+      expect((refreshed.body as PartnerDetailView).payoutAccount).toMatchObject({ status: "ACTIVE" });
     });
 
     it("sends the application for review and locks the details", async () => {

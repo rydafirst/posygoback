@@ -1,4 +1,4 @@
-import { Inject, Injectable, type OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, type OnApplicationBootstrap, type OnModuleInit } from "@nestjs/common";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
 import { APP_CONFIG } from "../../../config/config.module";
@@ -8,11 +8,11 @@ import { AuditService, SYSTEM_ACTOR } from "../../../infrastructure/audit/audit.
 import { WalletAlertsService } from "../../finance/wallets/wallet-alerts.service";
 import { vendorIdOf } from "../../onboarding/scope";
 import { ConnectAccountEvents } from "../../partners/providers/connect-account-events";
-import { PAYOUT_GATEWAY, type PayoutGateway } from "../../partners/providers/partner-services.port";
+import { FRESH_PAYOUT_ACCOUNT, PAYOUT_GATEWAY, type PayoutGateway } from "../../partners/providers/partner-services.port";
 import { CommerceEmails } from "../commerce-emails";
 
 @Injectable()
-export class VendorPayoutAccountService implements OnModuleInit {
+export class VendorPayoutAccountService implements OnModuleInit, OnApplicationBootstrap {
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(PAYOUT_GATEWAY) private readonly gateway: PayoutGateway,
@@ -26,22 +26,39 @@ export class VendorPayoutAccountService implements OnModuleInit {
     this.accountEvents.subscribe((accountId) => this.sync(accountId));
   }
 
+  async onApplicationBootstrap(): Promise<void> {
+    await this.prisma.vendorPayoutAccount.updateMany({ where: { mode: { not: this.gateway.mode }, status: { not: "ONBOARDING" } }, data: { status: "ONBOARDING" } });
+  }
+
   async startSetup(principal: AuthPrincipal, meta: RequestMeta): Promise<{ url: string }> {
     const vendorId = vendorIdOf(principal);
     const vendor = await this.prisma.vendor.findUniqueOrThrow({ where: { id: vendorId }, include: { payoutAccount: true } });
-    let accountId = vendor.payoutAccount?.providerAccountId;
+    const existing = vendor.payoutAccount;
+    let accountId = existing?.mode === this.gateway.mode ? existing.providerAccountId : null;
     if (!accountId) {
       const owner = await this.prisma.user.findFirstOrThrow({ where: { vendorId, role: "VENDOR_OWNER" }, select: { email: true } });
       accountId = await this.gateway.createAccount({ ownerType: "VENDOR", ownerId: vendorId, email: owner.email, countryCode: vendor.countryCode });
-      await this.prisma.vendorPayoutAccount.createMany({ data: [{ vendorId, provider: this.gateway.provider, providerAccountId: accountId }], skipDuplicates: true });
-      await this.audit.record({ actor: { userId: principal.userId, role: principal.role }, action: "storefront.payout_setup_started", resourceType: "vendor", resourceId: vendorId, vendorId, meta });
+      const account = { provider: this.gateway.provider, providerAccountId: accountId, mode: this.gateway.mode };
+      if (existing) {
+        await this.prisma.vendorPayoutAccount.update({ where: { vendorId }, data: { ...account, ...FRESH_PAYOUT_ACCOUNT } });
+      } else {
+        await this.prisma.vendorPayoutAccount.createMany({ data: [{ vendorId, ...account }], skipDuplicates: true });
+      }
+      await this.audit.record({
+        actor: { userId: principal.userId, role: principal.role },
+        action: existing ? "storefront.payout_account_replaced" : "storefront.payout_setup_started",
+        resourceType: "vendor",
+        resourceId: vendorId,
+        vendorId,
+        meta,
+      });
     }
     return { url: await this.gateway.onboardingLink(accountId, `${this.config.WEB_PUBLIC_URL}/storefront?payouts=returned`) };
   }
 
   async refreshOwn(principal: AuthPrincipal): Promise<void> {
     const account = await this.prisma.vendorPayoutAccount.findUnique({ where: { vendorId: vendorIdOf(principal) } });
-    if (account) {
+    if (account?.mode === this.gateway.mode) {
       await this.sync(account.providerAccountId);
     }
   }

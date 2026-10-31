@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, type OnApplicationBootstrap } from "@nestjs/common";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
 import { APP_CONFIG } from "../../../config/config.module";
@@ -9,11 +9,11 @@ import { actorOf } from "../admin/admin-partners.service";
 import { PartnerEmails } from "../partner-emails";
 import { PartnerNotifierService } from "../partner-notifier.service";
 import { ConnectAccountEvents } from "../providers/connect-account-events";
-import { PAYOUT_GATEWAY, type PayoutGateway } from "../providers/partner-services.port";
+import { FRESH_PAYOUT_ACCOUNT, PAYOUT_GATEWAY, type PayoutGateway } from "../providers/partner-services.port";
 import { OPEN_PARTNER_STATUSES, PartnerAccessService, partnerIdOf } from "./partner-access.service";
 
 @Injectable()
-export class PartnerPayoutAccountService {
+export class PartnerPayoutAccountService implements OnApplicationBootstrap {
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(PAYOUT_GATEWAY) private readonly gateway: PayoutGateway,
@@ -24,15 +24,32 @@ export class PartnerPayoutAccountService {
     private readonly audit: AuditService,
   ) {}
 
+  async onApplicationBootstrap(): Promise<void> {
+    await this.prisma.partnerPayoutAccount.updateMany({ where: { mode: { not: this.gateway.mode }, status: { not: "ONBOARDING" } }, data: { status: "ONBOARDING" } });
+  }
+
   async startSetup(principal: AuthPrincipal, meta: RequestMeta): Promise<{ url: string }> {
     const partner = await this.access.current(principal);
     const existing = await this.prisma.partnerPayoutAccount.findUnique({ where: { partnerId: partner.id } });
-    const accountId = existing?.providerAccountId ?? (await this.gateway.createAccount({ ownerType: "PARTNER", ownerId: partner.id, email: partner.contactEmail, countryCode: partner.countryCode }));
-    if (!existing) {
+    const current = existing?.mode === this.gateway.mode ? existing.providerAccountId : null;
+    const accountId = current ?? (await this.gateway.createAccount({ ownerType: "PARTNER", ownerId: partner.id, email: partner.contactEmail, countryCode: partner.countryCode }));
+    if (!current) {
       await this.access.mutate(principal, OPEN_PARTNER_STATUSES, "This partnership is closed.", async (tx) => {
-        await tx.partnerPayoutAccount.createMany({ data: [{ partnerId: partner.id, provider: this.gateway.provider, providerAccountId: accountId }], skipDuplicates: true });
+        const account = { provider: this.gateway.provider, providerAccountId: accountId, mode: this.gateway.mode };
+        if (existing) {
+          await tx.partnerPayoutAccount.update({ where: { partnerId: partner.id }, data: { ...account, ...FRESH_PAYOUT_ACCOUNT } });
+        } else {
+          await tx.partnerPayoutAccount.createMany({ data: [{ partnerId: partner.id, ...account }], skipDuplicates: true });
+        }
         await this.audit.record(
-          { actor: actorOf(principal), action: "partner.payout_setup_started", resourceType: "fulfilment_partner", resourceId: partner.id, countryCode: partner.countryCode, meta },
+          {
+            actor: actorOf(principal),
+            action: existing ? "partner.payout_account_replaced" : "partner.payout_setup_started",
+            resourceType: "fulfilment_partner",
+            resourceId: partner.id,
+            countryCode: partner.countryCode,
+            meta,
+          },
           tx,
         );
       });
@@ -42,7 +59,7 @@ export class PartnerPayoutAccountService {
 
   async refreshOwn(principal: AuthPrincipal): Promise<void> {
     const account = await this.prisma.partnerPayoutAccount.findUnique({ where: { partnerId: partnerIdOf(principal) } });
-    if (account) {
+    if (account?.mode === this.gateway.mode) {
       await this.sync(account.providerAccountId);
     }
   }

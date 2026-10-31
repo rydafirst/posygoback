@@ -1576,6 +1576,13 @@ enum PayoutAccountStatus {
   @@map("payout_account_status")
 }
 
+enum PaymentMode {
+  TEST
+  LIVE
+
+  @@map("payment_mode")
+}
+
 enum PartnerEntryType {
   RECEIVING
   FULFILMENT
@@ -1758,6 +1765,7 @@ model PartnerPayoutAccount {
   partnerId         String              @id @map("partner_id") @db.Uuid
   provider          String              @db.VarChar(30)
   providerAccountId String              @map("provider_account_id") @db.VarChar(120)
+  mode              PaymentMode         @default(TEST)
   status            PayoutAccountStatus @default(ONBOARDING)
   bankSummary       String?             @map("bank_summary") @db.VarChar(120)
   bankFingerprint   String?             @map("bank_fingerprint") @db.VarChar(120)
@@ -2187,6 +2195,7 @@ model VendorPayoutAccount {
   vendorId          String              @id @map("vendor_id") @db.Uuid
   provider          String              @db.VarChar(30)
   providerAccountId String              @map("provider_account_id") @db.VarChar(120)
+  mode              PaymentMode         @default(TEST)
   status            PayoutAccountStatus @default(ONBOARDING)
   bankSummary       String?             @map("bank_summary") @db.VarChar(120)
   bankFingerprint   String?             @map("bank_fingerprint") @db.VarChar(120)

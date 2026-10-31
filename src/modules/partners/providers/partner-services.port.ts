@@ -22,8 +22,17 @@ export class TransferError extends Error {
   }
 }
 
+export type PaymentMode = "TEST" | "LIVE";
+
+export const FRESH_PAYOUT_ACCOUNT = { status: "ONBOARDING", bankSummary: null, bankFingerprint: null, detailsChangedAt: null } as const;
+
+export function modeOfKey(secretKey: string): PaymentMode {
+  return secretKey.includes("_live_") ? "LIVE" : "TEST";
+}
+
 export interface PayoutGateway {
   readonly provider: string;
+  readonly mode: PaymentMode;
   createAccount(request: PayoutAccountRequest): Promise<string>;
   onboardingLink(accountId: string, returnUrl: string): Promise<string>;
   fetchAccount(accountId: string): Promise<PayoutAccountSnapshot>;
