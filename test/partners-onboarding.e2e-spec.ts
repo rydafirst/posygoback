@@ -276,6 +276,14 @@ describe("partner applications and verification", () => {
       const warehouses = (await test.http().get("/v1/warehouse/warehouses").set(as(leadA)).expect(200)).body as Array<{ id: string }>;
       expect(warehouses.map((warehouse) => warehouse.id)).toEqual([approved.warehouses[0]!.id]);
     });
+
+    it("lets a super admin approve a partner whose steps they reviewed", async () => {
+      const { token, partnerId } = await flow.apply("solo@partner.test", "Ada Solo");
+      await flow.completeSteps(token, "Ada Solo");
+      await flow.acceptReviewedSteps(superAdmin, partnerId);
+      const approved = (await decide(superAdmin, partnerId, "APPROVE").expect(201)).body as PartnerDetailView;
+      expect(approved.status).toBe("ACTIVE");
+    });
   });
 
   describe("changing details after checks", () => {
@@ -359,13 +367,13 @@ describe("partner applications and verification", () => {
       const upkeep = test.app.get(PartnerUpkeepService);
       expect(await upkeep.purgeProofs(new Date())).toBe(0);
       const later = new Date(Date.now() + 100 * 86_400_000);
-      expect(await upkeep.purgeProofs(later)).toBe(3);
+      expect(await upkeep.purgeProofs(later)).toBe(4);
       const [closedSpace] = await query<{ purged: boolean }>("SELECT files_purged_at IS NOT NULL AS purged FROM partner_checks WHERE partner_id = $1 AND kind = 'STORAGE_SPACE'", [partnerB]);
       expect(closedSpace!.purged).toBe(true);
       const proof = (await flow.overview(leadA)).checks.find((check) => check.kind === "PROOF_OF_ADDRESS")!;
       expect(proof).toMatchObject({ status: "ACCEPTED", filesPurged: true, fileIds: [] });
       const files = await query<{ status: string }>("SELECT status FROM stored_files WHERE purpose = 'PROOF_OF_ADDRESS' AND status = 'PURGED'");
-      expect(files).toHaveLength(4);
+      expect(files).toHaveLength(5);
     });
   });
 });
