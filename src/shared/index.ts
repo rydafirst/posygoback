@@ -53,3 +53,4 @@ export * from "./vendors/vendor-directory";
 export * from "./vendors/vendor-countries";
 export * from "./drafts/drafts.schema";
 export * from "./identity/identity-check.views";
+export * from "./reminders/reminders.schema";

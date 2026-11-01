@@ -2917,3 +2917,38 @@ model TaxDeadline {
   @@index([status, dueOn], map: "tax_deadlines_due_idx")
   @@map("tax_deadlines")
 }
+
+model ReminderSetting {
+  key        String   @id @db.VarChar(40)
+  enabled    Boolean  @default(false)
+  delaysDays Int[]    @map("delays_days")
+  subject    String?  @db.VarChar(120)
+  body       String?  @db.VarChar(2000)
+  updatedBy  String?  @map("updated_by") @db.Uuid
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("reminder_settings")
+}
+
+model ReminderSend {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key         String    @db.VarChar(40)
+  subjectId   String    @map("subject_id") @db.Uuid
+  email       String    @db.VarChar(254)
+  episodeAt   DateTime  @map("episode_at") @db.Timestamptz(6)
+  step        Int
+  sentAt      DateTime  @default(now()) @map("sent_at") @db.Timestamptz(6)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+
+  @@unique([key, subjectId, episodeAt, step], map: "reminder_sends_step_unique")
+  @@index([email, sentAt], map: "reminder_sends_email_idx")
+  @@index([key, sentAt], map: "reminder_sends_key_idx")
+  @@map("reminder_sends")
+}
+
+model ReminderOptOut {
+  email     String   @id @db.VarChar(254)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("reminder_opt_outs")
+}

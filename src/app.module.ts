@@ -34,6 +34,7 @@ import { OrdersModule } from "./modules/orders/orders.module";
 import { PartnersModule } from "./modules/partners/partners.module";
 import { StockModule } from "./modules/stock/stock.module";
 import { SupportModule } from "./modules/support/support.module";
+import { RemindersModule } from "./modules/reminders/reminders.module";
 import { TaxModule } from "./modules/tax/tax.module";
 import { AssistantModule } from "./modules/assistant/assistant.module";
 import { VendorsModule } from "./modules/vendors/vendors.module";
@@ -100,6 +101,7 @@ function maskSecrets(url: string | undefined): string | undefined {
     CommerceModule,
     SupportModule,
     TaxModule,
+    RemindersModule,
     AssistantModule,
     ReturnsModule,
     NotificationsModule,
