@@ -5,7 +5,7 @@ import { PRIVACY_TITLE, privacyPolicyBody } from "./privacy-policy";
 import { TERMS_TITLE, termsOfServiceBody } from "./terms-of-service";
 import { VENDOR_AGREEMENT_TITLE, vendorAgreementBody } from "./vendor-agreement";
 
-export const STANDARD_AGREEMENT_VERSION = "2026.10";
+export const STANDARD_AGREEMENT_VERSION = "2026.11";
 
 export interface StandardAgreement {
   countryCode: string;

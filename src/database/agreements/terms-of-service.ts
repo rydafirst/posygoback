@@ -1,3 +1,4 @@
+import { COMPANY_DETAILS } from "../../common/brand/brand";
 import { LegalProfile } from "./legal-profiles";
 
 export const TERMS_TITLE = "Terms of Service";
@@ -15,7 +16,7 @@ export function termsOfServiceBody(profile: LegalProfile): string {
 
   return `## 1. About these terms
 
-1.1 These Terms of Service are between Posygo ("Posygo", "we", "us" or "our") and you, the person or business that uses our website, seller dashboard, partner app, API or any of our other tools (together, the "Platform"). If you use the Platform for a business, you confirm that you have authority to accept these terms for it, and "you" then means that business.
+1.1 These Terms of Service are between ${COMPANY_DETAILS} ("Posygo", "we", "us" or "our") and you, the person or business that uses our website, seller dashboard, partner app, API or any of our other tools (together, the "Platform"). If you use the Platform for a business, you confirm that you have authority to accept these terms for it, and "you" then means that business.
 
 1.2 Posygo stores a seller's stock in each country the seller chooses to sell in, and picks, packs and delivers each order inside that country. We do not ship goods from one country to another.
 

@@ -1,3 +1,4 @@
+import { COMPANY_DETAILS } from "../../common/brand/brand";
 import { LegalProfile } from "./legal-profiles";
 
 export const VENDOR_AGREEMENT_TITLE = "Fulfilment Services Agreement";
@@ -15,7 +16,7 @@ export function vendorAgreementBody(profile: LegalProfile): string {
 
   return `## 1. Parties and electronic signature
 
-1.1 This Fulfilment Services Agreement is between Posygo ("Posygo", "we", "us" or "our") and the person or business that creates a seller account on our Platform and signs it electronically ("you" or "your"). If you sign for a business, you confirm you have authority to bind it, and "you" means that business.
+1.1 This Fulfilment Services Agreement is between ${COMPANY_DETAILS} ("Posygo", "we", "us" or "our") and the person or business that creates a seller account on our Platform and signs it electronically ("you" or "your"). If you sign for a business, you confirm you have authority to bind it, and "you" means that business.
 
 1.2 You accept this agreement by entering your full name and confirming your signature on the signing page. Your electronic signature has the same effect as a handwritten one, and you will not challenge this agreement on the ground that it was signed electronically.
 

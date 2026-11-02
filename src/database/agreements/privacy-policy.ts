@@ -1,3 +1,4 @@
+import { COMPANY_DETAILS } from "../../common/brand/brand";
 import { LegalProfile } from "./legal-profiles";
 
 export const PRIVACY_TITLE = "Privacy Policy";
@@ -192,7 +193,7 @@ export function privacyPolicyBody(profile: LegalProfile): string {
 
   return `## 1. About this policy
 
-1.1 This Privacy Policy explains how Posygo ("Posygo", "we", "us" or "our") collects, uses, shares and protects personal data when you use our website, seller dashboard, partner app, API, public tracking page and partner application form (together, the "Platform").
+1.1 This Privacy Policy explains how ${COMPANY_DETAILS} ("Posygo", "we", "us" or "our") collects, uses, shares and protects personal data when you use our website, seller dashboard, partner app, API, public tracking page and partner application form (together, the "Platform").
 
 1.2 Posygo stores a seller's stock in each country the seller chooses to sell in, and picks, packs and delivers each order inside that country. We do not ship goods from one country to another.
 

@@ -1,7 +1,9 @@
 import { authenticator } from "otplib";
 import { Pool } from "pg";
 
+import { COMPANY } from "../src/common/brand/brand";
 import { loadConfig } from "../src/config/config.schema";
+import { STANDARD_AGREEMENT_VERSION } from "../src/database/agreements/standard-agreements";
 import { codeFrom, flushRateLimits, resetDatabase, signUpAndVerify, startApp, SUPER_ADMIN, type TestApp } from "./harness";
 
 const GERMANY = {
@@ -117,8 +119,9 @@ describe("privileged access", () => {
     await test.http().post("/v1/admin/countries").set(auth).send(GERMANY).expect(409);
     for (const kind of ["VENDOR_AGREEMENT", "PARTNER_AGREEMENT", "TERMS", "PRIVACY"]) {
       const agreement = (await test.http().get(`/v1/legal/DE/${kind}`).expect(200)).body as { title: string; version: string; body: string };
-      expect(agreement.version).toBe("2026.10");
+      expect(agreement.version).toBe(STANDARD_AGREEMENT_VERSION);
       expect(agreement.body).toContain("Germany");
+      expect(agreement.body).toContain(`company number ${COMPANY.number}`);
     }
 
     const skip = await test.http().post("/v1/admin/countries/DE/status").set(auth).send({ status: "LIVE", reason: "skip onboarding" }).expect(409);

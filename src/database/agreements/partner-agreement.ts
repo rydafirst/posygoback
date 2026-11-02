@@ -1,3 +1,4 @@
+import { COMPANY_DETAILS } from "../../common/brand/brand";
 import { LegalProfile } from "./legal-profiles";
 
 export const PARTNER_AGREEMENT_TITLE = "Fulfilment Partner Agreement";
@@ -7,7 +8,7 @@ export function partnerAgreementBody(profile: LegalProfile): string {
 
   return `## 1. Parties and electronic signature
 
-1.1 This Fulfilment Partner Agreement is between Posygo ("Posygo", "we", "us" or "our") and the individual or business that has applied to become a fulfilment partner and signs this agreement electronically ("you" or "your"). If you sign on behalf of a business, you confirm that you have authority to bind that business, and "you" then means that business.
+1.1 This Fulfilment Partner Agreement is between ${COMPANY_DETAILS} ("Posygo", "we", "us" or "our") and the individual or business that has applied to become a fulfilment partner and signs this agreement electronically ("you" or "your"). If you sign on behalf of a business, you confirm that you have authority to bind that business, and "you" then means that business.
 
 1.2 You accept this agreement by entering your full name and confirming your signature on the signing page. Your electronic signature has the same legal effect as a handwritten signature, and you agree not to challenge the validity or enforceability of this agreement on the ground that it was signed electronically.
 

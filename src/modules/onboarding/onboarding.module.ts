@@ -10,6 +10,7 @@ import { ActivationPaymentsService } from "./activation/activation-payments.serv
 import { AdminActivationFeesController, VendorActivationController } from "./activation/activation.controllers";
 import { AdminLegalController, PublicLegalController, VendorAgreementsController } from "./agreements/agreements.controllers";
 import { AgreementsService } from "./agreements/agreements.service";
+import { StandardAgreementsPublisher } from "./agreements/standard-agreements.publisher";
 import { LegalDocumentsRepository } from "./agreements/legal-documents.repository";
 import { VendorCountriesController } from "./countries/vendor-countries.controller";
 import { VendorCountriesService } from "./countries/vendor-countries.service";
@@ -48,6 +49,7 @@ import { VerificationStore } from "./verification/verification.store";
     VendorActivationService,
     LegalDocumentsRepository,
     AgreementsService,
+    StandardAgreementsPublisher,
     TeamService,
     InvitationsService,
     VendorCountriesService,
