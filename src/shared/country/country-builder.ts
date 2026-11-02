@@ -59,7 +59,7 @@ export function toCountry(country: MajorCountry): CreateCountryInput {
         workDeclaration: country.workDeclaration,
         depositMinor: 0,
         insuranceCoverMinor: 0,
-        platformInsuranceCoverMinor: 1_000_000,
+        platformInsuranceCoverMinor: 0,
         proofOfAddressRetentionDays: 90,
         cycleCountDays: 30,
         shrinkageAlertBps: 200,

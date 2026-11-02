@@ -272,7 +272,7 @@ describe("partner applications and verification", () => {
       expect(approved.warehouses).toEqual([{ id: expect.any(String), code: expect.stringMatching(/^HUB-[A-Z2-9]{6}$/), name: "Manchester hub" }]);
       expect(test.email.lastTo("lead-a@partner.test")!.text).toContain("Your hub is live");
       const hubs = (await test.http().get("/v1/public/hubs").expect(200)).body as HubView[];
-      expect(hubs).toEqual([{ countryCode: "GB", countryName: "United Kingdom", currency: "GBP", insuredCoverMinor: 1_000_000 }]);
+      expect(hubs).toEqual([{ countryCode: "GB", countryName: "United Kingdom", currency: "GBP", insuredCoverMinor: 0 }]);
       const warehouses = (await test.http().get("/v1/warehouse/warehouses").set(as(leadA)).expect(200)).body as Array<{ id: string }>;
       expect(warehouses.map((warehouse) => warehouse.id)).toEqual([approved.warehouses[0]!.id]);
     });
