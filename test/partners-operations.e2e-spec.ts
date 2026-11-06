@@ -146,7 +146,16 @@ describe("partner hubs at work", () => {
       const mine = (await summary(a.token).expect(200)).body;
       expect(mine).toMatchObject({ unitsStored: Number(held!.units), lotsWaitingToShelve: Number(held!.lots_unshelved) });
       expect(Object.keys(mine).sort()).toEqual(["lotsWaitingToShelve", "ordersToPack", "ordersToShip", "products", "sellers", "shipmentsExpected", "unitsReserved", "unitsStored"].sort());
-      expect((await summary(c.token).expect(200)).body).toEqual({ unitsStored: 0, unitsReserved: 0, sellers: 0, products: 0, lotsWaitingToShelve: 0, shipmentsExpected: 0, ordersToPack: 0, ordersToShip: 0 });
+      expect((await summary(c.token).expect(200)).body).toEqual({
+        unitsStored: 0,
+        unitsReserved: 0,
+        sellers: 0,
+        products: 0,
+        lotsWaitingToShelve: 0,
+        shipmentsExpected: 0,
+        ordersToPack: 0,
+        ordersToShip: 0,
+      });
       await summary(owner).expect(404);
     });
 
@@ -437,6 +446,16 @@ describe("partner hubs at work", () => {
           [a.partnerId],
         ),
       ).rejects.toThrow(/below zero/);
+    });
+  });
+
+  describe("the partner's account", () => {
+    it("keeps the same payout account and brings an approved partner back to the account page to change the bank", async () => {
+      const [before] = await query<{ provider_account_id: string }>("SELECT provider_account_id FROM partner_payout_accounts WHERE partner_id = $1", [a.partnerId]);
+      const setup = await test.http().post("/v1/partner/payouts/setup").set(as(a.token)).expect(200);
+      expect(setup.body.url).toMatch(/\/admin\/partnership\/account\?payouts=returned$/);
+      const [after] = await query<{ provider_account_id: string; status: string }>("SELECT provider_account_id, status FROM partner_payout_accounts WHERE partner_id = $1", [a.partnerId]);
+      expect(after).toMatchObject({ provider_account_id: before!.provider_account_id, status: "ACTIVE" });
     });
   });
 

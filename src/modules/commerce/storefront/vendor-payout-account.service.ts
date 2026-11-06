@@ -53,7 +53,7 @@ export class VendorPayoutAccountService implements OnModuleInit, OnApplicationBo
         meta,
       });
     }
-    return { url: await this.gateway.onboardingLink(accountId, `${this.config.WEB_PUBLIC_URL}/storefront?payouts=returned`) };
+    return { url: await this.gateway.setupLink(accountId, `${this.config.WEB_PUBLIC_URL}/storefront?payouts=returned`) };
   }
 
   async refreshOwn(principal: AuthPrincipal): Promise<void> {

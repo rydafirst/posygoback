@@ -44,7 +44,12 @@ export class StripeConnectGateway implements PayoutGateway {
     return account.id;
   }
 
-  async onboardingLink(accountId: string, returnUrl: string): Promise<string> {
+  async setupLink(accountId: string, returnUrl: string): Promise<string> {
+    const account = await this.stripe.accounts.retrieve(accountId);
+    if (account.details_submitted) {
+      const login = await this.stripe.accounts.createLoginLink(accountId);
+      return login.url;
+    }
     const link = await this.stripe.accountLinks.create({ account: accountId, type: "account_onboarding", return_url: returnUrl, refresh_url: returnUrl });
     return link.url;
   }

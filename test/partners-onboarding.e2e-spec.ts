@@ -181,7 +181,7 @@ describe("partner applications and verification", () => {
 
     it("sets up payouts with the provider and never stores bank numbers", async () => {
       const setup = await test.http().post("/v1/partner/payouts/setup").set(as(leadA)).expect(200);
-      expect(setup.body.url).toContain("payouts=returned");
+      expect(setup.body.url).toMatch(/\/admin\/partnership\?payouts=returned$/);
       const refreshed = await test.http().post("/v1/partner/payouts/refresh").set(as(leadA)).expect(200);
       expect((refreshed.body as PartnerDetailView).payoutAccount).toMatchObject({ provider: "PRACTICE", status: "ACTIVE", bankSummary: "Practice Bank ••••4242" });
       const columns = await query<{ column_name: string }>("SELECT column_name FROM information_schema.columns WHERE table_name = 'partner_payout_accounts'");
@@ -195,7 +195,9 @@ describe("partner applications and verification", () => {
       expect((stale.body as PartnerDetailView).payoutAccount).toMatchObject({ status: "ONBOARDING" });
       await test.http().post("/v1/partner/payouts/refresh").set(as(leadA)).expect(200);
       await test.http().post("/v1/partner/payouts/setup").set(as(leadA)).expect(200);
-      const [after] = await query<{ provider_account_id: string; mode: string; status: string }>("SELECT provider_account_id, mode, status FROM partner_payout_accounts WHERE partner_id = $1", [partnerA]);
+      const [after] = await query<{ provider_account_id: string; mode: string; status: string }>("SELECT provider_account_id, mode, status FROM partner_payout_accounts WHERE partner_id = $1", [
+        partnerA,
+      ]);
       expect(after).toMatchObject({ mode: "TEST", status: "ONBOARDING" });
       expect(after!.provider_account_id).not.toBe(before!.provider_account_id);
       const refreshed = await test.http().post("/v1/partner/payouts/refresh").set(as(leadA)).expect(200);

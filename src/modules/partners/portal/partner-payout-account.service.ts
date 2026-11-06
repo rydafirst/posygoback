@@ -5,6 +5,7 @@ import { APP_CONFIG } from "../../../config/config.module";
 import type { AppConfig } from "../../../config/config.schema";
 import { lockRow, PrismaService } from "../../../database/prisma.service";
 import { AuditService, SYSTEM_ACTOR } from "../../../infrastructure/audit/audit.service";
+import { wasApproved } from "../../../shared";
 import { actorOf } from "../admin/admin-partners.service";
 import { PartnerEmails } from "../partner-emails";
 import { PartnerNotifierService } from "../partner-notifier.service";
@@ -54,7 +55,8 @@ export class PartnerPayoutAccountService implements OnApplicationBootstrap {
         );
       });
     }
-    return { url: await this.gateway.onboardingLink(accountId, `${this.config.WEB_PUBLIC_URL}/admin/partnership?payouts=returned`) };
+    const page = wasApproved(partner.status) ? "/admin/partnership/account" : "/admin/partnership";
+    return { url: await this.gateway.setupLink(accountId, `${this.config.WEB_PUBLIC_URL}${page}?payouts=returned`) };
   }
 
   async refreshOwn(principal: AuthPrincipal): Promise<void> {

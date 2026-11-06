@@ -34,7 +34,7 @@ export interface PayoutGateway {
   readonly provider: string;
   readonly mode: PaymentMode;
   createAccount(request: PayoutAccountRequest): Promise<string>;
-  onboardingLink(accountId: string, returnUrl: string): Promise<string>;
+  setupLink(accountId: string, returnUrl: string): Promise<string>;
   fetchAccount(accountId: string): Promise<PayoutAccountSnapshot>;
   transfer(request: { accountId: string; amountMinor: number; currency: string; idempotencyKey: string }): Promise<string>;
   parseWebhook(rawBody: Buffer, signature: string): string | null;

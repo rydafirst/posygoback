@@ -10,7 +10,7 @@ export class PracticePayoutGateway implements PayoutGateway {
     return Promise.resolve(`practice_acct_${randomUUID()}`);
   }
 
-  onboardingLink(_accountId: string, returnUrl: string): Promise<string> {
+  setupLink(_accountId: string, returnUrl: string): Promise<string> {
     return Promise.resolve(returnUrl);
   }
 

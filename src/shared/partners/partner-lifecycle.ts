@@ -1,6 +1,12 @@
 export const PARTNER_STATUSES = ["APPLIED", "VERIFYING", "UNDER_REVIEW", "ACTIVE", "SUSPENDED", "OFFBOARDING", "TERMINATED", "REJECTED"] as const;
 export type PartnerStatus = (typeof PARTNER_STATUSES)[number];
 
+export const APPROVED_PARTNER_STATUSES: readonly PartnerStatus[] = ["ACTIVE", "SUSPENDED", "OFFBOARDING"];
+
+export function wasApproved(status: PartnerStatus): boolean {
+  return APPROVED_PARTNER_STATUSES.includes(status);
+}
+
 export const PARTNER_TRANSITIONS: Record<PartnerStatus, readonly PartnerStatus[]> = {
   APPLIED: ["VERIFYING", "REJECTED"],
   VERIFYING: ["UNDER_REVIEW", "REJECTED"],
