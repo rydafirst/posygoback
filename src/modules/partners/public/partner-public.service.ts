@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 
 import { PrismaService } from "../../../database/prisma.service";
-import { type FeeSchedule, fulfilmentFee, type HubView, partnerProgramme, type PartnerProgrammeView, partnerRates, partnerShare } from "../../../shared";
+import { type FeeSchedule, fulfilmentFee, type HubView, partnerEarningsSchedule, partnerProgramme, type PartnerProgrammeView, partnerRates, partnerShare } from "../../../shared";
 
 const EXAMPLE = { boxesReceived: 20, boxesStored: 30, ordersPacked: 100 };
 
@@ -32,7 +32,8 @@ export class PartnerPublicService {
     const views: PartnerProgrammeView[] = [];
     for (const country of countries) {
       const schedule = country.feeSchedules[0]?.schedule as unknown as FeeSchedule | undefined;
-      if (!schedule || !partnerProgramme(country.config as { partners?: unknown }).acceptingApplications) {
+      const programme = partnerProgramme(country.config as { partners?: unknown });
+      if (!schedule || !programme.acceptingApplications) {
         continue;
       }
       const rates = partnerRates(schedule);
@@ -49,6 +50,8 @@ export class PartnerPublicService {
         holdbackBps: rates.holdbackBps,
         holdbackDays: rates.holdbackDays,
         example: { ...EXAMPLE, monthlyMinor: this.exampleMonth(schedule) },
+        schedule: partnerEarningsSchedule(schedule),
+        tiers: programme.tiers,
       });
     }
     return views;

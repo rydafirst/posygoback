@@ -1,3 +1,5 @@
+import type { PartnerTier } from "../country/country.schema";
+import type { PartnerEarningsSchedule } from "../finance/fee-schedule";
 import type { SignatureCertificateView } from "../onboarding/signature.schema";
 import type { PartnerDecision, PartnerStatus } from "./partner-lifecycle";
 import type { HeardFrom, PartnerCheckKind, PartnerCheckStatus, PartnerEntryType, PartnerKind, PartnerLegalKind, PartnerProfileInput, SecurityKind } from "./partner.schema";
@@ -231,6 +233,8 @@ export interface PartnerProgrammeView {
   holdbackBps: number;
   holdbackDays: number;
   example: { boxesReceived: number; boxesStored: number; ordersPacked: number; monthlyMinor: number };
+  schedule: PartnerEarningsSchedule;
+  tiers: PartnerTier[];
 }
 
 export interface PartnerStockSummaryView {

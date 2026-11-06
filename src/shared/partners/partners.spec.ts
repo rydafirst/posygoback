@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { DEFAULT_PARTNER_TIERS, partnerProgramme, tierFor } from "../country/country.schema";
-import { DEFAULT_PARTNER_RATES, partnerRates, partnerShare, splitHoldback } from "../finance/fee-schedule";
+import { DEFAULT_PARTNER_RATES, partnerEarningsSchedule, partnerRates, partnerShare, splitHoldback } from "../finance/fee-schedule";
+import { SEED_FEE_SCHEDULES } from "../finance/seed-fee-schedules";
 import { decisionsFrom, PARTNER_STATUSES, PARTNER_TRANSITIONS } from "./partner-lifecycle";
 import { partnerApplicationSchema } from "./partner.schema";
 
@@ -28,6 +29,13 @@ describe("partner lifecycle", () => {
 });
 
 describe("partner earnings", () => {
+  it("publishes what a partner earns per box and per order", () => {
+    const schedule = partnerEarningsSchedule(SEED_FEE_SCHEDULES.GB!);
+    expect(schedule.perBox.find((box) => box.tier === "SMALL")).toEqual({ tier: "SMALL", receivedMinor: 1470, monthlyMinor: 630 });
+    expect(schedule.perBox.find((box) => box.tier === "PALLET")).toEqual({ tier: "PALLET", receivedMinor: null, monthlyMinor: 3150 });
+    expect(schedule.perOrder).toEqual({ firstItemMinor: 209, eachExtraItemMinor: 69, maxMinor: 769 });
+  });
+
   it("pays the share of what the vendor paid, plus the founding bonus", () => {
     expect(partnerShare(1000, 7000, false, DEFAULT_PARTNER_RATES)).toBe(700);
     expect(partnerShare(1000, 7000, true, DEFAULT_PARTNER_RATES)).toBe(750);

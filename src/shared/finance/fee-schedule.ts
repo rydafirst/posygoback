@@ -184,6 +184,40 @@ export function partnerShare(amountMinor: number, shareBps: number, founding: bo
   return Math.floor((amountMinor * effective) / 10_000);
 }
 
+export interface PartnerBoxEarning {
+  tier: StorageTier;
+  receivedMinor: number | null;
+  monthlyMinor: number | null;
+}
+
+export interface PartnerEarningsSchedule {
+  perBox: PartnerBoxEarning[];
+  perOrder: { firstItemMinor: number; eachExtraItemMinor: number; maxMinor: number };
+}
+
+export function partnerEarningsSchedule(schedule: FeeSchedule): PartnerEarningsSchedule {
+  const rates = partnerRates(schedule);
+  const share = (amountMinor: number, shareBps: number) => partnerShare(amountMinor, shareBps, false, rates);
+  const perBox = STORAGE_TIERS.map((tier): PartnerBoxEarning => {
+    const onboarding = schedule.onboarding[tier];
+    const monthly = schedule.monthlyStorage[tier];
+    return {
+      tier,
+      receivedMinor: onboarding.negotiated ? null : share(onboarding.stockingMinor, rates.receivingShareBps) + share(onboarding.firstMonthStorageMinor, rates.storageShareBps),
+      monthlyMinor: monthly === null ? null : share(monthly, rates.storageShareBps),
+    };
+  });
+  const firstItemMinor = share(fulfilmentFee(schedule, 1), rates.fulfilmentShareBps);
+  return {
+    perBox,
+    perOrder: {
+      firstItemMinor,
+      eachExtraItemMinor: share(fulfilmentFee(schedule, 2), rates.fulfilmentShareBps) - firstItemMinor,
+      maxMinor: share(schedule.fulfilment.maxMinor, rates.fulfilmentShareBps),
+    },
+  };
+}
+
 export function splitHoldback(amountMinor: number, rates: PartnerRates): { availableMinor: number; heldMinor: number } {
   const heldMinor = Math.floor((amountMinor * rates.holdbackBps) / 10_000);
   return { availableMinor: amountMinor - heldMinor, heldMinor };

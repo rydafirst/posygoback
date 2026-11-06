@@ -1,4 +1,4 @@
-import { COMPANY_DETAILS } from "../../common/brand/brand";
+import { COMPANY_DETAILS, EARNINGS_SCHEDULE_URL } from "../../common/brand/brand";
 import { LegalProfile } from "./legal-profiles";
 
 export const PARTNER_AGREEMENT_TITLE = "Fulfilment Partner Agreement";
@@ -24,7 +24,7 @@ export function partnerAgreementBody(profile: LegalProfile): string {
 - **Confidential Information** means any information of a confidential nature that you receive in connection with this agreement, including information about Sellers, Goods, Recipients, Orders, our pricing and our systems.
 - **Custody Record** means the record on the Platform of every Good you receive, store, move, pick, pack, dispatch, return or hand over, including scans, photographs and timestamps.
 - **Earnings** means the amounts payable to you under the Earnings Schedule.
-- **Earnings Schedule** means the published schedule of earnings rates, Tier rules, security deposit amounts and insurance requirements for ${name}, as updated under section 9.
+- **Earnings Schedule** means the schedule of earnings rates, Tier rules and held-back earnings for ${name}, published at ${EARNINGS_SCHEDULE_URL} and updated under section 9.
 - **Goods** means any products or stock that Sellers have entrusted to us and that are delivered to you or held by you, including returned items.
 - **Inbound Shipment** means a delivery of Goods to your Storage Space and the advance notice for it on the Platform.
 - **Loss** means any Goods that are missing, damaged, destroyed or diverted while in your custody.
@@ -35,7 +35,6 @@ export function partnerAgreementBody(profile: LegalProfile): string {
 - **Recipient Data** means personal data about Recipients that you access in order to fulfil Orders or process returns.
 - **Referee** means the person you named in your application who can vouch for your character and reliability.
 - **Scorecard** means the regular report of your performance against the measures described in section 12.
-- **Security Deposit** means the deposit described in section 8.
 - **Seller** means a business that uses our services to store and fulfil its Goods.
 - **Service Levels** means the timeframes and quality standards for receiving, picking, packing and dispatching published on the Platform for your Tier.
 - **Storage Space** means the premises or part of premises that we have approved for you to store Goods.
@@ -63,13 +62,12 @@ export function partnerAgreementBody(profile: LegalProfile): string {
 - provide proof of your address;
 - provide evidence of your Storage Space, including photographs, and allow an inspection if we ask;
 - complete a declaration that you have the right to work and that you will meet your tax obligations;
-- sign this agreement;
-- register a Payout Account in your own name; and
-- arrange any insurance and pay any Security Deposit required for your Tier.
+- sign this agreement; and
+- register a Payout Account in your own name.
 
 4.2 You authorise us to carry out these checks and to use third-party verification services for them. You confirm that all information and documents you give us are true, complete and your own. Giving false or misleading information is a serious breach of this agreement.
 
-4.3 Verification is ongoing. We may repeat any check at any time, ask you to update your documents when they expire, and carry out new checks on you and your Approved Personnel. You must tell us within 2 Business Days of any change to your identity details, address, Storage Space, right to work, Payout Account or insurance, and of any criminal charge or conviction involving dishonesty, theft or violence, to the extent the law allows us to ask for this information.
+4.3 Verification is ongoing. We may repeat any check at any time, ask you to update your documents when they expire, and carry out new checks on you and your Approved Personnel. You must tell us within 2 Business Days of any change to your identity details, address, Storage Space, right to work or Payout Account, and of any criminal charge or conviction involving dishonesty, theft or violence, to the extent the law allows us to ask for this information.
 
 4.4 We may decline an application, or withdraw your approval, at our discretion, including where a check is not passed, is not completed, or raises concerns we cannot resolve.
 
@@ -119,15 +117,15 @@ export function partnerAgreementBody(profile: LegalProfile): string {
 
 7.4 Diverting Goods may also be a criminal offence. We may report any suspected diversion to the police or other authorities, and share evidence, including the Custody Record and your verification information, with them and with the affected Seller.
 
-## 8. Insurance and security deposit
+## 8. Held-back earnings
 
-8.1 Depending on your Tier, the value of Goods you hold and the requirements for ${name} in the Earnings Schedule, we may require you to hold insurance, which may include public liability cover, cover for goods in your custody, and any cover the law requires for people you engage. You must provide evidence of cover when we ask and tell us immediately if it is cancelled, reduced or not renewed.
+8.1 We hold back a share of each Earning for a set number of days, as shown in the Earnings Schedule, before it becomes available to pay out. Held-back Earnings are still yours, and we release them to you when the holding period ends.
 
-8.2 We may require you to pay a Security Deposit, in ${currency}, before you receive Goods or before you move to a higher Tier. The amount is set out in the Earnings Schedule. With your agreement, we may build up the Security Deposit by deductions from your Earnings over an agreed period.
+8.2 We may use held-back Earnings to recover any amount you owe us under section 10. We will show any amount we use, with the reason, on your monthly statement.
 
-8.3 We hold the Security Deposit as security for your obligations under this agreement. It does not earn interest unless the law requires it. We may use it to recover any amount you owe us under section 10 or otherwise under this agreement, and you must top it up to the required amount within 14 days after we tell you we have used it.
+8.3 We do not ask you for a security deposit, and we do not require you to hold insurance for the Goods. You may arrange your own insurance if you wish.
 
-8.4 Within 60 days after this agreement ends and all Goods have been handed over and reconciled, we will return the Security Deposit to your Payout Account, less any amounts you owe us, with a statement of any deductions.
+8.4 When this agreement ends, we will release your held-back Earnings to your Payout Account after all Goods have been handed over and reconciled, less any amounts you owe us.
 
 ## 9. Earnings, statements and payouts
 
@@ -140,8 +138,7 @@ export function partnerAgreementBody(profile: LegalProfile): string {
 9.4 We will pay the amount shown in each statement in ${currency} to your Payout Account, normally within 10 Business Days after the statement is issued. We only pay Earnings to a verified Payout Account in your own name.
 
 9.5 We may deduct from your Earnings, or withhold from a payout:
-- amounts recoverable for Losses under section 10, after the Security Deposit has been applied;
-- any amount needed to restore your Security Deposit, where you have agreed to this;
+- amounts recoverable for Losses under section 10;
 - overpayments made to you in error;
 - any amount connected with an open investigation into a suspected Loss or diversion, limited to the amount at stake, until it is decided; and
 - any tax we are required by law to deduct.
@@ -160,7 +157,7 @@ export function partnerAgreementBody(profile: LegalProfile): string {
 
 10.5 For a proven Loss for which you are responsible, the amount recoverable is the compensation and fees we credited to the Seller for the Goods concerned, plus our reasonable costs of investigation. For a Loss caused by diversion, section 7.3 applies.
 
-10.6 We will recover the amount first from your Security Deposit and then from your Earnings. Any amount still unpaid is a debt you owe us, and you must pay it within 30 days after we ask.
+10.6 We will recover the amount first from your held-back Earnings and then from your other Earnings. Any amount still unpaid is a debt you owe us, and you must pay it within 30 days after we ask.
 
 ## 11. Audits, stock counts and test orders
 
@@ -180,7 +177,7 @@ export function partnerAgreementBody(profile: LegalProfile): string {
 
 12.2 We will give you a Scorecard on the Platform at least once a month.
 
-12.3 Your Tier determines matters such as the volume and value of Goods we allocate to you, your Service Levels, your earnings rates and bonuses, and your Security Deposit and insurance requirements, as set out in the Earnings Schedule. We may move you to a higher or lower Tier based on your Scorecard.
+12.3 Your Tier determines matters such as the volume and value of Goods we allocate to you, your Service Levels, and your earnings rates and bonuses, as set out in the Earnings Schedule. We may move you to a higher or lower Tier based on your Scorecard.
 
 12.4 If your performance falls below the standard for your Tier, we may agree an improvement plan with you. If your performance does not improve, or falls significantly below the standard, we may reduce the Goods allocated to you, move Goods to other premises, or end this agreement.
 
@@ -232,7 +229,7 @@ export function partnerAgreementBody(profile: LegalProfile): string {
 
 15.4 When this agreement ends, you must hand over all Goods under section 15.3, return any packaging, labels and equipment we provided, and delete all Recipient Data and Confidential Information you hold. If you do not hand over the Goods as required, we may take any lawful step to recover them, and you must pay our reasonable costs.
 
-15.5 After handover and reconciliation, we will pay any Earnings due, less deductions allowed by this agreement, and deal with the Security Deposit under section 8.4.
+15.5 After handover and reconciliation, we will pay any Earnings due, including held-back Earnings under section 8.4, less deductions allowed by this agreement.
 
 15.6 Sections 7, 8.3, 8.4, 9.5, 9.6, 10, 13, 15, 16, 18 and 19, and any other provisions that by their nature are intended to continue, survive the end of this agreement.
 

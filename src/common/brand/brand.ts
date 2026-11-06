@@ -1,4 +1,5 @@
 export const PLATFORM_NAME = "Posygo";
+export const EARNINGS_SCHEDULE_URL = "posygo.com/partners/earnings";
 export const EMAIL_SIGN_OFF = `\n\n${PLATFORM_NAME}`;
 
 export const COMPANY = {
