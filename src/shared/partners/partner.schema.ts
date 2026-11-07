@@ -75,6 +75,8 @@ export const signAgreementSchema = z.object({ documentId: z.string().uuid(), sig
 export type SignAgreementInput = z.infer<typeof signAgreementSchema>;
 
 export const partnerDecisionSchema = z.object({ reason: text(10, 1000) });
+export const profileChangeDecisionSchema = z.object({ approve: z.boolean(), note: text(10, 500) });
+export type ProfileChangeDecisionInput = z.infer<typeof profileChangeDecisionSchema>;
 export const assignWarehouseSchema = z.object({ warehouseId: z.string().uuid() });
 export const partnerRequirementsSchema = z.object({ requiredDepositMinor: minor, requiredInsuranceMinor: minor });
 export const setTierSchema = z.object({ level: z.number().int().min(1).max(10), reason: text(10, 500) });

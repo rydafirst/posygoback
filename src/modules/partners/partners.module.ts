@@ -43,6 +43,7 @@ import { PartnerAccessService } from "./portal/partner-access.service";
 import { PartnerIdentityService } from "./portal/partner-identity.service";
 import { PartnerPayoutAccountService } from "./portal/partner-payout-account.service";
 import { PartnerPortalService } from "./portal/partner-portal.service";
+import { PartnerProfileChangesService } from "./portal/partner-profile-changes.service";
 import { PartnerVerificationService } from "./portal/partner-verification.service";
 import { ConnectAccountEvents } from "./providers/connect-account-events";
 import { PAYOUT_GATEWAY } from "./providers/partner-services.port";
@@ -88,6 +89,7 @@ import { TrustService } from "./trust/trust.service";
     PartnerSecuritiesService,
     PartnerPortalService,
     PartnerVerificationService,
+    PartnerProfileChangesService,
     PartnerIdentityService,
     PartnerPayoutAccountService,
     PartnerApplicationsService,

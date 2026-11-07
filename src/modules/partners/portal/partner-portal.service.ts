@@ -33,6 +33,7 @@ export class PartnerPortalService {
       ...shared,
       contactEmail: "",
       profile: null,
+      profileChange: null,
       heardFrom: null,
       checks: shared.checks.map((check) => ({ ...check, details: {}, fileIds: [], reviewNote: null, callOutcome: null })),
       agreements: [],

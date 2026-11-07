@@ -11,7 +11,7 @@ import type { Prisma } from "../../generated/prisma/client";
 import { type AuditActor, AuditService } from "../../infrastructure/audit/audit.service";
 import { EMAIL_SENDER, type EmailSender } from "../../infrastructure/email/email.port";
 import { AttemptLimiterService } from "../../infrastructure/rate-limit/attempt-limiter.service";
-import { scrubSensitive, type SupportReport, type SupportReportResult } from "../../shared";
+import { ACCOUNT_REQUEST_KINDS, type AccountRequest, type AccountRequestKind, hasPermission, scrubSensitive, type SupportCaseKind, type SupportReport, type SupportReportResult } from "../../shared";
 import { randomCode } from "../stock/inbound/references";
 import { NotificationsService } from "../notifications/notifications.service";
 import { StaffAlertsService } from "../notifications/staff-alerts.service";
@@ -21,6 +21,21 @@ const PER_IP = { name: "support-report-ip", limit: 20, windowSeconds: 60 * 60 };
 const PER_USER = { name: "support-report-user", limit: 30, windowSeconds: 24 * 60 * 60 };
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 const LONG_NUMBER = /\b\d{4,}\b/g;
+
+const REQUEST_HEADLINES: Record<AccountRequestKind, string> = { ACCOUNT_CLOSURE: "someone asked to close their account", DATA_COPY: "someone asked for a copy of their data" };
+
+const REQUEST_PAGE = "/account";
+
+function isAccountRequest(kind: SupportCaseKind): kind is AccountRequestKind {
+  return (ACCOUNT_REQUEST_KINDS as readonly SupportCaseKind[]).includes(kind);
+}
+
+const ANSWERED_NOTICE: Record<SupportCaseKind, string> = {
+  ERROR: "The problem you reported is sorted",
+  QUESTION: "We've answered your question",
+  ACCOUNT_CLOSURE: "We've dealt with your request to close your account",
+  DATA_COPY: "We've dealt with your request for your data",
+};
 
 export function normalisePath(path: string): string {
   return path.replace(UUID, ":id").replace(LONG_NUMBER, ":n").toLowerCase();
@@ -118,9 +133,41 @@ export class SupportCasesService {
     return result;
   }
 
+  async request(input: AccountRequest, principal: AuthPrincipal): Promise<SupportReportResult> {
+    if (input.kind === "ACCOUNT_CLOSURE" && !this.ownsAccount(principal)) {
+      throw Errors.forbidden("Only the account owner can ask to close it.");
+    }
+    await this.limiter.consume(PER_USER, principal.userId);
+    const result = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${principal.userId}:${input.kind}`}))`;
+      const open = await tx.supportCase.findFirst({ where: { kind: input.kind, status: "OPEN", reports: { some: { userId: principal.userId } } }, select: { reference: true } });
+      if (open) {
+        return { reference: open.reference, alreadyKnown: true };
+      }
+      const created = await tx.supportCase.create({
+        data: { reference: `CASE-${randomCode(8)}`, kind: input.kind, page: REQUEST_PAGE, reports: { create: { userId: principal.userId, message: scrubSensitive(input.message) } } },
+      });
+      return { reference: created.reference, alreadyKnown: false };
+    });
+    if (!result.alreadyKnown) {
+      const headline = REQUEST_HEADLINES[input.kind];
+      await this.tellTeam(
+        result.reference,
+        headline,
+        `A request from a signed-in ${principal.vendorId ? "seller" : principal.partnerId ? "partner" : "team member"}`,
+        REQUEST_PAGE,
+        scrubSensitive(input.message),
+      );
+      await this.staffAlerts.raise("support", { countryCode: principal.countryCode, title: `${result.reference}: ${headline}`, body: scrubSensitive(input.message) || "No message." });
+    }
+    return result;
+  }
+
   async captureServerFault(fault: ServerFault): Promise<void> {
     try {
-      const fingerprint = createHash("sha256").update(`server|${fault.errorName}|${fault.method} ${normalisePath(fault.path)}`).digest("hex");
+      const fingerprint = createHash("sha256")
+        .update(`server|${fault.errorName}|${fault.method} ${normalisePath(fault.path)}`)
+        .digest("hex");
       const report = {
         userId: fault.userId,
         message: scrubSensitive(`${fault.errorName}: ${fault.message}`).slice(0, 1000),
@@ -174,24 +221,30 @@ export class SupportCasesService {
         where: { id: caseId },
         include: { reports: { select: { contactEmail: true, user: { select: { id: true, vendorId: true, email: true } } } } },
       });
+      const personal = isAccountRequest(supportCase.kind);
       await this.audit.record({ actor, action: "support.case_resolved", resourceType: "support_case", resourceId: caseId, after: { note }, meta }, tx);
       const people = [...new Map(supportCase.reports.flatMap((report) => (report.user ? [[report.user.id, report.user] as const] : []))).values()];
       const emails = new Set(supportCase.reports.map((report) => report.user?.email ?? report.contactEmail).filter((email): email is string => Boolean(email)));
-      return { reference: supportCase.reference, page: supportCase.page, people, emails };
+      return { reference: supportCase.reference, kind: supportCase.kind, page: supportCase.page, people, emails, personal };
     });
-    const notice = { title: "The problem you reported is sorted", body: `${reporters.reference}: ${note}` };
-    const vendorIds = new Set(reporters.people.flatMap((person) => (person.vendorId ? [person.vendorId] : [])));
+    const title = ANSWERED_NOTICE[reporters.kind];
+    const notice = { title, body: `${reporters.reference}: ${note}` };
+    const vendorIds = new Set(reporters.personal ? [] : reporters.people.flatMap((person) => (person.vendorId ? [person.vendorId] : [])));
     for (const vendorId of vendorIds) {
       await this.notifications.forVendor(vendorId, notice);
     }
-    for (const person of reporters.people.filter((entry) => !entry.vendorId)) {
+    for (const person of reporters.people.filter((entry) => reporters.personal || !entry.vendorId)) {
       await this.notifications.forUser(person.id, notice);
     }
     for (const to of reporters.emails) {
       await this.email
-        .send(SupportEmails.caseResolved(to, reporters.reference, note, reporters.page, this.config.WEB_PUBLIC_URL))
+        .send(SupportEmails.caseResolved(to, title, reporters.reference, note, reporters.personal ? null : reporters.page, this.config.WEB_PUBLIC_URL))
         .catch((error: unknown) => this.logger.warn(`Couldn't email ${reporters.reference} reporter: ${error instanceof Error ? error.message : String(error)}`));
     }
+  }
+
+  private ownsAccount(principal: AuthPrincipal): boolean {
+    return principal.vendorId ? principal.role === "VENDOR_OWNER" : principal.partnerId ? hasPermission(principal.role, "partner.profile.manage") : false;
   }
 
   private async caseForCorrelation(tx: Prisma.TransactionClient, correlationId: string | null): Promise<{ id: string; reference: string } | null> {
@@ -215,5 +268,4 @@ export class SupportCasesService {
       .send(SupportEmails.newCase(this.config.SUPPORT_EMAIL, reference, headline, what, page, message, this.config.WEB_PUBLIC_URL))
       .catch((error: unknown) => this.logger.warn(`Couldn't email support about ${reference}: ${error instanceof Error ? error.message : String(error)}`));
   }
-
 }

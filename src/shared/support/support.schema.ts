@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-export const SUPPORT_CASE_KINDS = ["ERROR", "QUESTION"] as const;
+export const HELPER_REPORT_KINDS = ["ERROR", "QUESTION"] as const;
+export const ACCOUNT_REQUEST_KINDS = ["ACCOUNT_CLOSURE", "DATA_COPY"] as const;
+export type AccountRequestKind = (typeof ACCOUNT_REQUEST_KINDS)[number];
+
+export const SUPPORT_CASE_KINDS = [...HELPER_REPORT_KINDS, ...ACCOUNT_REQUEST_KINDS] as const;
 export type SupportCaseKind = (typeof SUPPORT_CASE_KINDS)[number];
 
 export const SUPPORT_CASE_SOURCES = ["HELPER", "SERVER"] as const;
@@ -26,7 +30,7 @@ const pagePath = z
 
 export const supportReportSchema = z
   .object({
-    kind: z.enum(SUPPORT_CASE_KINDS),
+    kind: z.enum(HELPER_REPORT_KINDS),
     page: pagePath,
     message: z.string().trim().max(1000).default(""),
     contactEmail: z.string().trim().toLowerCase().email().max(254).optional(),
@@ -54,6 +58,10 @@ export const supportReportSchema = z
 export type SupportReportInput = z.input<typeof supportReportSchema>;
 export type SupportReport = z.output<typeof supportReportSchema>;
 
+export const accountRequestSchema = z.object({ kind: z.enum(ACCOUNT_REQUEST_KINDS), message: z.string().trim().max(1000).default("") });
+export type AccountRequestInput = z.input<typeof accountRequestSchema>;
+export type AccountRequest = z.output<typeof accountRequestSchema>;
+
 export const resolveSupportCaseSchema = z.object({ note: z.string().trim().min(5).max(500) });
 export type ResolveSupportCaseInput = z.infer<typeof resolveSupportCaseSchema>;
 
@@ -75,6 +83,17 @@ export interface SupportCaseView {
   reports: number;
   firstSeenAt: string;
   lastSeenAt: string;
+  resolvedAt: string | null;
+  resolutionNote: string | null;
+}
+
+export interface MySupportRequestView {
+  reference: string;
+  kind: SupportCaseKind;
+  status: SupportCaseStatus;
+  page: string;
+  message: string;
+  sentAt: string;
   resolvedAt: string | null;
   resolutionNote: string | null;
 }

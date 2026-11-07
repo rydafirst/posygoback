@@ -23,6 +23,7 @@ export const ATTEMPT_POLICIES = {
   mfaEnrolmentResend: { name: "mfa-enrolment-resend", limit: 5, windowSeconds: 60 * 60 },
   signupPerIp: { name: "signup-ip", limit: 10, windowSeconds: 60 * 60 },
   signupPerEmail: { name: "signup-email", limit: 5, windowSeconds: 60 * 60 },
+  accountChangePerUser: { name: "account-change-user", limit: 10, windowSeconds: 60 * 60 },
 } satisfies Record<string, AttemptPolicy>;
 
 @Injectable()

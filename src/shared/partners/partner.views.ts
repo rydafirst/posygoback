@@ -93,6 +93,7 @@ export interface PartnerSummaryView {
 export interface PartnerDetailView extends PartnerSummaryView {
   contactEmail: string;
   profile: PartnerProfileInput | null;
+  profileChange: { profile: PartnerProfileInput; requestedAt: string } | null;
   heardFrom: HeardFrom | null;
   statusReason: string | null;
   currency: string;

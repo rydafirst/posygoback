@@ -9,11 +9,11 @@ export const SupportEmails = {
     text: `${what}\nPage: ${page}\n\n${message || "No message."}\n\nOpen the support cases page in the admin console to see the steps that led here.${EMAIL_SIGN_OFF}`,
     action: { label: "Open support cases", url: `${webUrl}/admin/support` },
   }),
-  caseResolved: (to: string, reference: string, note: string, page: string, webUrl: string): EmailMessage => ({
+  caseResolved: (to: string, subject: string, reference: string, note: string, retryPage: string | null, webUrl: string): EmailMessage => ({
     to,
     kind: "support.case_resolved",
-    subject: "The problem you reported is sorted",
-    text: `Thanks for reporting it. We've looked into ${reference} and marked it as sorted.\n\nNote from our team: ${note}${EMAIL_SIGN_OFF}`,
-    action: { label: "Try again", url: `${webUrl}${page}` },
+    subject,
+    text: `Thanks for getting in touch. We've looked into ${reference} and marked it as done.\n\nNote from our team: ${note}${EMAIL_SIGN_OFF}`,
+    ...(retryPage ? { action: { label: "Try again", url: `${webUrl}${retryPage}` } } : {}),
   }),
 };

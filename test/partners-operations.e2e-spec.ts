@@ -16,7 +16,7 @@ import {
   type TestApp,
   uploadVerifiedFile,
 } from "./harness";
-import { as, GB_RECIPIENT, inDays, PartnerFlow, query } from "./partner-helpers";
+import { application, as, GB_RECIPIENT, inDays, PartnerFlow, query } from "./partner-helpers";
 
 const SANDBOX_EXPRESS = serviceKey("Sandbox Post", "Express");
 
@@ -457,6 +457,23 @@ describe("partner hubs at work", () => {
       const [after] = await query<{ provider_account_id: string; status: string }>("SELECT provider_account_id, status FROM partner_payout_accounts WHERE partner_id = $1", [a.partnerId]);
       expect(after).toMatchObject({ provider_account_id: before!.provider_account_id, status: "ACTIVE" });
     });
+
+    it("sends a change of details for review, and only applies it once approved", async () => {
+      const { fullName, phone, city, addressLines, postalCode, spaceDescription } = application("lead-a@partner.test", "Ada Obi");
+      const current = { fullName, phone, city, addressLines, postalCode, spaceDescription };
+      const moved = { ...current, addressLines: ["4 New Road"], postalCode: "M2 2BB" };
+      await test.http().post("/v1/partner/profile/change").set(as(a.token)).send(current).expect(400);
+      const requested = await test.http().post("/v1/partner/profile/change").set(as(a.token)).send(moved).expect(201);
+      expect(requested.body).toMatchObject({ profile: { addressLines: ["12 Rose Street"] }, profileChange: { profile: { addressLines: ["4 New Road"] }, requestedAt: expect.any(String) } });
+      await test.http().delete("/v1/partner/profile/change").set(as(a.token)).expect(200);
+      await test.http().post(`/v1/admin/partners/${a.partnerId}/profile-change`).set(as(complianceA)).send({ approve: true, note: "Proof of address checked." }).expect(409);
+
+      await test.http().post("/v1/partner/profile/change").set(as(a.token)).send(moved).expect(201);
+      const decided = await test.http().post(`/v1/admin/partners/${a.partnerId}/profile-change`).set(as(complianceA)).send({ approve: true, note: "New proof of address checked." }).expect(200);
+      expect(decided.body).toMatchObject({ profile: { addressLines: ["4 New Road"], postalCode: "M2 2BB" }, profileChange: null });
+      expect(test.email.lastTo("lead-a@partner.test")?.subject).toBe("Your new details are saved");
+      expect((await flow.overview(a.token)).heardFrom).toBe("COMMUNITY_GROUP");
+    });
   });
 
   describe("the partner's team", () => {
@@ -465,7 +482,7 @@ describe("partner hubs at work", () => {
       const helper = await acceptStaffInvitation(test, "helper@partner.test");
       expect(((await test.http().get("/v1/warehouse/warehouses").set(as(helper)).expect(200)).body as Array<{ id: string }>).map((warehouse) => warehouse.id)).toEqual([a.hubId]);
       const limited = await flow.overview(helper);
-      expect(limited).toMatchObject({ payoutAccount: null, team: [], agreements: [], profile: null });
+      expect(limited).toMatchObject({ payoutAccount: null, team: [], agreements: [], profile: null, profileChange: null });
       await test.http().get("/v1/partner/statement").set(as(helper)).expect(404);
       await test.http().get("/v1/partner/scorecard").set(as(helper)).expect(404);
       await test.http().post("/v1/partner/payouts/setup").set(as(helper)).expect(404);

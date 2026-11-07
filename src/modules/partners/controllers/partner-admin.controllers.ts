@@ -21,6 +21,8 @@ import {
   type PartnerStatus,
   partnerTeamInviteSchema,
   payoutDecisionSchema,
+  type ProfileChangeDecisionInput,
+  profileChangeDecisionSchema,
   recordCallSchema,
   type RecordSecurityInput,
   recordSecuritySchema,
@@ -40,6 +42,7 @@ import { AdminPartnersService } from "../admin/admin-partners.service";
 import { PartnerFinanceService } from "../admin/partner-finance.service";
 import { PartnerReviewsService } from "../admin/partner-reviews.service";
 import { PartnerStatementService } from "../ledger/partner-statement.service";
+import { PartnerProfileChangesService } from "../portal/partner-profile-changes.service";
 import { MysteryOrdersService } from "../trust/mystery-orders.service";
 import { PartnerScorecardService } from "../trust/partner-scorecard.service";
 import { PartnerSecuritiesService } from "../admin/partner-securities.service";
@@ -65,6 +68,7 @@ export class AdminPartnersController {
     private readonly securities: PartnerSecuritiesService,
     private readonly counts: StockCountsService,
     private readonly mystery: MysteryOrdersService,
+    private readonly profileChanges: PartnerProfileChangesService,
   ) {}
 
   @RequirePermission("partners.read")
@@ -105,6 +109,18 @@ export class AdminPartnersController {
     @Meta() meta: RequestMeta,
   ) {
     return this.partners.setRequirements(principal, id, input, meta);
+  }
+
+  @RequirePermission("partners.review")
+  @Post(":id/profile-change")
+  @HttpCode(HttpStatus.OK)
+  decideProfileChange(
+    @Param("id", uuid) id: string,
+    @Body(body(profileChangeDecisionSchema)) input: ProfileChangeDecisionInput,
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Meta() meta: RequestMeta,
+  ) {
+    return this.profileChanges.decide(principal, id, input, meta);
   }
 
   @RequirePermission("partners.manage")

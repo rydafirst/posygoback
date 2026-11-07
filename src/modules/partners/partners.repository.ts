@@ -125,6 +125,7 @@ export class PartnersRepository {
       ...toPartnerSummary(row),
       contactEmail: row.contactEmail,
       profile: profile ? profileFields : null,
+      profileChange: row.profileChange && row.profileChangeAt ? { profile: row.profileChange as unknown as PartnerProfileInput, requestedAt: row.profileChangeAt.toISOString() } : null,
       heardFrom,
       statusReason: row.statusReason,
       currency: row.country.currency,

@@ -63,6 +63,7 @@ enum CodePurpose {
   EMAIL_VERIFICATION
   PASSWORD_RESET
   MFA_ENROLMENT
+  EMAIL_CHANGE
 
   @@map("code_purpose")
 }
@@ -382,6 +383,7 @@ model Vendor {
 model User {
   id                        String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email                     String     @unique(map: "users_email_unique") @db.VarChar(254)
+  pendingEmail              String?    @map("pending_email") @db.VarChar(254)
   passwordHash              String     @map("password_hash")
   role                      Role
   status                    UserStatus @default(PENDING_EMAIL_VERIFICATION)
@@ -1622,6 +1624,8 @@ model FulfilmentPartner {
   status                 PartnerStatus @default(APPLIED)
   statusReason           String?       @map("status_reason") @db.VarChar(1000)
   profile                Json?
+  profileChange          Json?         @map("profile_change")
+  profileChangeAt        DateTime?     @map("profile_change_at") @db.Timestamptz(6)
   requiredDepositMinor   BigInt        @map("required_deposit_minor")
   requiredInsuranceMinor BigInt        @map("required_insurance_minor")
   createdBy              String?       @map("created_by") @db.Uuid
@@ -2677,6 +2681,8 @@ model MigrationLink {
 enum SupportCaseKind {
   ERROR
   QUESTION
+  ACCOUNT_CLOSURE
+  DATA_COPY
 
   @@map("support_case_kind")
 }

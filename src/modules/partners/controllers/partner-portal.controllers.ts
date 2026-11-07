@@ -30,6 +30,7 @@ import {
 import { PartnerStatementService } from "../ledger/partner-statement.service";
 import { partnerIdOf } from "../portal/partner-access.service";
 import { PartnerPayoutAccountService } from "../portal/partner-payout-account.service";
+import { PartnerProfileChangesService } from "../portal/partner-profile-changes.service";
 import { PartnerPortalService } from "../portal/partner-portal.service";
 import { PartnerIdentityService } from "../portal/partner-identity.service";
 import { PartnerStockSummaryService } from "../portal/partner-stock-summary.service";
@@ -50,6 +51,7 @@ export class PartnerPortalController {
     private readonly statements: PartnerStatementService,
     private readonly scorecards: PartnerScorecardService,
     private readonly stock: PartnerStockSummaryService,
+    private readonly profileChanges: PartnerProfileChangesService,
   ) {}
 
   @RequirePermission("partner.profile.read")
@@ -74,6 +76,20 @@ export class PartnerPortalController {
   @Put("profile")
   async profile(@Body(body(partnerProfileSchema)) input: PartnerProfileInput, @CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
     await this.verification.updateProfile(principal, input, meta);
+    return this.portal.overview(principal);
+  }
+
+  @RequirePermission("partner.profile.manage")
+  @Post("profile/change")
+  async requestProfileChange(@Body(body(partnerProfileSchema)) input: PartnerProfileInput, @CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
+    await this.profileChanges.request(principal, input, meta);
+    return this.portal.overview(principal);
+  }
+
+  @RequirePermission("partner.profile.manage")
+  @Delete("profile/change")
+  async withdrawProfileChange(@CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
+    await this.profileChanges.withdraw(principal, meta);
     return this.portal.overview(principal);
   }
 

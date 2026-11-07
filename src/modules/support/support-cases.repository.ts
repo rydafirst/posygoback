@@ -3,10 +3,11 @@ import { Injectable } from "@nestjs/common";
 import { Errors } from "../../common/http/app-exception";
 import { PrismaService } from "../../database/prisma.service";
 import type { SupportCase } from "../../generated/prisma/client";
-import type { SupportCaseDetailView, SupportCaseKind, SupportCaseSource, SupportCaseStatus, SupportCaseView } from "../../shared";
+import type { MySupportRequestView, SupportCaseDetailView, SupportCaseKind, SupportCaseSource, SupportCaseStatus, SupportCaseView } from "../../shared";
 
 const PAGE_SIZE = 100;
 const REPORTS_SHOWN = 50;
+const MY_REQUESTS_SHOWN = 50;
 
 function view(row: SupportCase): SupportCaseView {
   return {
@@ -42,9 +43,28 @@ function trailOf(value: unknown): Step[] {
 export class SupportCasesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(status: SupportCaseStatus | undefined, kind?: SupportCaseKind): Promise<SupportCaseView[]> {
-    const rows = await this.prisma.supportCase.findMany({ where: { ...(status ? { status } : {}), ...(kind ? { kind } : {}) }, orderBy: { lastSeenAt: "desc" }, take: PAGE_SIZE });
+  async list(status: SupportCaseStatus | undefined, kinds?: readonly SupportCaseKind[]): Promise<SupportCaseView[]> {
+    const rows = await this.prisma.supportCase.findMany({ where: { ...(status ? { status } : {}), ...(kinds ? { kind: { in: [...kinds] } } : {}) }, orderBy: { lastSeenAt: "desc" }, take: PAGE_SIZE });
     return rows.map(view);
+  }
+
+  async mine(userId: string): Promise<MySupportRequestView[]> {
+    const reports = await this.prisma.supportReport.findMany({
+      where: { userId, supportCase: { source: "HELPER" } },
+      orderBy: { createdAt: "desc" },
+      take: MY_REQUESTS_SHOWN,
+      include: { supportCase: true },
+    });
+    return reports.map(({ supportCase, message, createdAt }) => ({
+      reference: supportCase.reference,
+      kind: supportCase.kind,
+      status: supportCase.status,
+      page: supportCase.page,
+      message,
+      sentAt: createdAt.toISOString(),
+      resolvedAt: supportCase.resolvedAt?.toISOString() ?? null,
+      resolutionNote: supportCase.resolutionNote,
+    }));
   }
 
   async detail(caseId: string): Promise<SupportCaseDetailView> {

@@ -53,6 +53,13 @@ export const PartnerEmails = {
     text: `${DECISION_LINES[decision]}\n\nNote from our team: ${reason}${EMAIL_SIGN_OFF}`,
     ...(CLOSING_DECISIONS.includes(decision) ? {} : { action: { label: "Open your partnership", url: partnership(webUrl) } }),
   }),
+  profileChangeDecided: (to: string, approved: boolean, note: string, webUrl: string): EmailMessage => ({
+    to,
+    kind: approved ? "partners.profile_change_approved" : "partners.profile_change_declined",
+    subject: approved ? "Your new details are saved" : "We couldn't change your details",
+    text: `${approved ? "We've updated your partner details as you asked." : "We've kept your partner details as they were."}\n\nNote from our team: ${note}${EMAIL_SIGN_OFF}`,
+    action: { label: "See your account", url: `${partnership(webUrl)}/account` },
+  }),
   checkReviewed: (to: string, check: PartnerCheckKind, accepted: boolean, webUrl: string): EmailMessage => ({
     to,
     kind: accepted ? "partners.check_accepted" : "partners.check_returned",

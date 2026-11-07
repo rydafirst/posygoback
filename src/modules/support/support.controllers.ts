@@ -7,6 +7,9 @@ import { AllowPendingMfa, CurrentPrincipal, Meta, Public, RequirePermission } fr
 import { ZodValidationPipe } from "../../common/http/zod-validation.pipe";
 import { THROTTLE } from "../../infrastructure/rate-limit/rate-limit.module";
 import {
+  type AccountRequest,
+  accountRequestSchema,
+  type MySupportRequestView,
   type ResolveSupportCaseInput,
   resolveSupportCaseSchema,
   SUPPORT_CASE_KINDS,
@@ -22,7 +25,13 @@ import { SupportCasesService } from "./support-cases.service";
 const uuid = new ParseUUIDPipe({ version: "4" });
 const reportPipe = new ZodValidationPipe(supportReportSchema);
 const statusFilter = new ZodValidationPipe(z.enum(SUPPORT_CASE_STATUSES).optional());
-const kindFilter = new ZodValidationPipe(z.enum(SUPPORT_CASE_KINDS).optional());
+const kindFilter = new ZodValidationPipe(
+  z
+    .string()
+    .optional()
+    .transform((raw) => raw?.split(","))
+    .pipe(z.array(z.enum(SUPPORT_CASE_KINDS)).min(1).optional()),
+);
 
 @Controller({ path: "public/support-cases", version: "1" })
 export class PublicSupportController {
@@ -38,7 +47,21 @@ export class PublicSupportController {
 
 @Controller({ path: "support-cases", version: "1" })
 export class SupportController {
-  constructor(private readonly cases: SupportCasesService) {}
+  constructor(
+    private readonly cases: SupportCasesService,
+    private readonly repository: SupportCasesRepository,
+  ) {}
+
+  @Get()
+  mine(@CurrentPrincipal() principal: AuthPrincipal): Promise<MySupportRequestView[]> {
+    return this.repository.mine(principal.userId);
+  }
+
+  @Throttle(THROTTLE.authStrict)
+  @Post("requests")
+  request(@Body(new ZodValidationPipe(accountRequestSchema)) input: AccountRequest, @CurrentPrincipal() principal: AuthPrincipal) {
+    return this.cases.request(input, principal);
+  }
 
   @AllowPendingMfa()
   @Throttle(THROTTLE.auth)
@@ -57,8 +80,8 @@ export class AdminSupportController {
 
   @RequirePermission("support.read")
   @Get()
-  list(@Query("status", statusFilter) status: SupportCaseStatus | undefined, @Query("kind", kindFilter) kind: SupportCaseKind | undefined) {
-    return this.repository.list(status, kind);
+  list(@Query("status", statusFilter) status: SupportCaseStatus | undefined, @Query("kind", kindFilter) kinds: SupportCaseKind[] | undefined) {
+    return this.repository.list(status, kinds);
   }
 
   @RequirePermission("support.read")

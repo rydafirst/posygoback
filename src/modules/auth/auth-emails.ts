@@ -48,6 +48,27 @@ export const AuthEmails = {
     text: sign(`Your password was just changed, and every other session was signed out.\n\n${SECURE_IT}`),
     action: { label: "Reset my password", url: `${webUrl}/forgot-password` },
   }),
+  confirmNewEmail: (to: string, link: string): EmailMessage => ({
+    to,
+    kind: "auth.confirm_new_email",
+    subject: `Confirm your new ${PLATFORM_NAME} email`,
+    text: sign(`Someone asked to use this address to sign in to their ${PLATFORM_NAME} account. The link works once and expires in 60 minutes.\n\n${NOT_YOU} Nothing will change.`),
+    action: { label: "Confirm this email", url: link },
+  }),
+  emailChangeRequested: (to: string, newEmail: string, webUrl: string): EmailMessage => ({
+    to,
+    kind: "auth.email_change_requested",
+    subject: "Someone asked to change your sign-in email",
+    text: sign(`We've been asked to change the email for your account to ${newEmail}. Nothing changes until that address is confirmed.\n\n${SECURE_IT}`),
+    action: { label: "Reset my password", url: `${webUrl}/forgot-password` },
+  }),
+  emailChanged: (to: string, newEmail: string, webUrl: string): EmailMessage => ({
+    to,
+    kind: "auth.email_changed",
+    subject: "Your sign-in email was changed",
+    text: sign(`Your account now signs in with ${newEmail}, and every session was signed out.\n\nIf this wasn't you, contact us straight away by replying to this email.`),
+    action: { label: "Sign in", url: `${webUrl}/login` },
+  }),
   accountLocked: (to: string, minutes: number, webUrl: string): EmailMessage => ({
     to,
     kind: "auth.account_locked",

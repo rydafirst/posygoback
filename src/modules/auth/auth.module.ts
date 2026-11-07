@@ -4,9 +4,11 @@ import { JwtModule } from "@nestjs/jwt";
 import { APP_CONFIG } from "../../config/config.module";
 import type { AppConfig } from "../../config/config.schema";
 import { CountriesModule } from "../countries/countries.module";
+import { AccountController } from "./account.controller";
 import { AuthController } from "./auth.controller";
 import { VerificationCodeService } from "./codes/verification-code.service";
 import { EmailVerificationService } from "./flows/email-verification.service";
+import { AccountChangesService } from "./flows/account-changes.service";
 import { AccountEmailsService } from "./flows/account-emails.service";
 import { LoginService } from "./flows/login.service";
 import { MfaEnrolmentService } from "./flows/mfa-enrolment.service";
@@ -27,7 +29,7 @@ import { UsersRepository } from "./users.repository";
 @Global()
 @Module({
   imports: [JwtModule.register({}), CountriesModule],
-  controllers: [AuthController, MfaController],
+  controllers: [AuthController, AccountController, MfaController],
   providers: [
     {
       provide: BREACHED_PASSWORD_CHECKER,
@@ -50,6 +52,7 @@ import { UsersRepository } from "./users.repository";
     AccountEmailsService,
     MfaEnrolmentService,
     PasswordResetService,
+    AccountChangesService,
   ],
   exports: [AccessTokenService, SessionService, SessionIssuerService, UsersRepository, PasswordService],
 })

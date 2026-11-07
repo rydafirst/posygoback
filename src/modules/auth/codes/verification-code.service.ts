@@ -6,7 +6,7 @@ import type { CodePurpose } from "../../../generated/prisma/client";
 import { SecretHasherService } from "../../../infrastructure/crypto/secret-hasher.service";
 import { VERIFICATION_CODE_LENGTH } from "../../../shared";
 
-const LIFETIMES_MINUTES: Record<CodePurpose, number> = { EMAIL_VERIFICATION: 15, PASSWORD_RESET: 30, MFA_ENROLMENT: 15 };
+const LIFETIMES_MINUTES: Record<CodePurpose, number> = { EMAIL_VERIFICATION: 15, PASSWORD_RESET: 30, MFA_ENROLMENT: 15, EMAIL_CHANGE: 60 };
 const MAX_ATTEMPTS = 5;
 
 @Injectable()

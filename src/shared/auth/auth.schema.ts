@@ -56,12 +56,28 @@ export const mfaConfirmSchema = z.object({ code: totpCodeSchema, emailCode: veri
 
 export const resetPasswordSchema = z.object({ token: z.string().min(32).max(200), password: passwordSchema });
 
+const currentPassword = z.string().min(1, "Enter your current password").max(PASSWORD_MAX_LENGTH);
+
+export const changePasswordSchema = z.object({ currentPassword, password: passwordSchema });
+
+export const changeEmailSchema = z.object({ currentPassword, email: emailSchema });
+
+export const confirmEmailChangeSchema = z.object({ token: z.string().min(32).max(200) });
+
 export type SignupInput = z.infer<typeof signupSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
 export type MfaChallengeInput = z.infer<typeof mfaChallengeSchema>;
 export type MfaConfirmInput = z.infer<typeof mfaConfirmSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type ChangeEmailInput = z.infer<typeof changeEmailSchema>;
+export type ConfirmEmailChangeInput = z.infer<typeof confirmEmailChangeSchema>;
+
+export interface AccountView {
+  email: string;
+  pendingEmail: string | null;
+}
 
 export type MfaState = "VERIFIED" | "NOT_REQUIRED" | "ENROLMENT_REQUIRED";
 
