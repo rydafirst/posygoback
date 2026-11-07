@@ -8,6 +8,12 @@ export interface EmailDetails {
   rows: ReadonlyArray<readonly [label: string, value: string]>;
 }
 
+export interface EmailOptOut {
+  question: string;
+  label: string;
+  url: string;
+}
+
 export interface EmailSignature {
   name: string;
   title: string;
@@ -24,6 +30,7 @@ export interface EmailMessage {
   preheader?: string;
   details?: EmailDetails;
   signature?: EmailSignature;
+  optOut?: EmailOptOut;
 }
 
 export interface EmailSender {

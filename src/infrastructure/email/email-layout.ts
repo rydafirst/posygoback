@@ -54,6 +54,10 @@ function button(message: EmailMessage): string {
   return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:4px 0 28px"><tr><td bgcolor="${YELLOW}" style="border-radius:10px"><a href="${escape(url)}" style="display:inline-block;padding:13px 22px;font-size:15px;line-height:20px;font-weight:600;color:${INK};text-decoration:none;border-radius:10px">${escape(label)}</a></td></tr></table>`;
 }
 
+function unsubscribe(url: string | undefined): string {
+  return url ? `<p style="margin:0 0 20px;font-size:13px;line-height:20px"><a href="${escape(url)}" style="color:${FAINT};text-decoration:underline">Unsubscribe</a></p>` : "";
+}
+
 function signature(signed: EmailSignature | undefined): string {
   if (!signed) {
     return "";
@@ -85,15 +89,25 @@ function withoutButtonLink(text: string, message: EmailMessage): string {
     .join("");
 }
 
+function splitAtAction(text: string, message: EmailMessage): [lead: string, rest: string] {
+  const at = message.action ? text.indexOf(message.action.url) : -1;
+  if (at < 0) {
+    return [text, ""];
+  }
+  const end = text.indexOf("\n\n", at);
+  return end < 0 ? [text, ""] : [text.slice(0, end), text.slice(end)];
+}
+
 export function renderHtml(message: EmailMessage, siteUrl: string): string {
   const site = siteUrl.replace(/\/$/, "");
-  const body = paragraphs(withoutButtonLink(withoutSignOff(message.text), message));
+  const [lead, rest] = splitAtAction(withoutSignOff(message.text), message);
+  const body = `${paragraphs(withoutButtonLink(lead, message))}${details(message.details)}${button(message)}${paragraphs(rest)}`;
   return `<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${escape(message.subject)}</title></head>
 <body style="margin:0;padding:0;background:#ffffff;font-family:${FONT}">${preheader(message.preheader)}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff"><tr><td align="center" style="padding:40px 16px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;font-family:${FONT}">
 <tr><td style="padding:0 0 20px;border-bottom:1px solid ${LINE}"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="padding-right:10px;vertical-align:middle"><img src="${escape(site)}/brand/email-mark.png" width="28" height="28" alt="" style="display:block;border:0"></td><td style="vertical-align:middle;font-size:20px;line-height:28px;font-weight:700;letter-spacing:-0.5px;color:${INK}">${PLATFORM_NAME}</td></tr></table></td></tr>
-<tr><td style="padding:36px 0 8px">${eyebrow(message.eyebrow)}<h1 style="margin:0 0 20px;font-size:26px;line-height:32px;font-weight:600;letter-spacing:-0.4px;color:${INK}">${escape(message.heading ?? message.subject)}</h1>${body}${details(message.details)}${button(message)}${signature(message.signature)}</td></tr>
+<tr><td style="padding:36px 0 8px">${eyebrow(message.eyebrow)}<h1 style="margin:0 0 20px;font-size:26px;line-height:32px;font-weight:600;letter-spacing:-0.4px;color:${INK}">${escape(message.heading ?? message.subject)}</h1>${body}${signature(message.signature)}${unsubscribe(message.unsubscribeUrl)}</td></tr>
 <tr><td style="padding:24px 0 0;border-top:1px solid ${LINE};font-size:12px;line-height:18px;color:${FAINT}">${PLATFORM_NAME} · <a href="${escape(site)}" style="color:${FAINT}">${escape(site.replace(/^https?:\/\//, ""))}</a><br>You're getting this because you have a ${PLATFORM_NAME} account.<br>${escape(COMPANY_FOOTER)}</td></tr>
 </table></td></tr></table></body></html>`;
 }
@@ -105,8 +119,9 @@ function detailsText(block: EmailDetails | undefined): string {
 export function plainText(message: EmailMessage): string {
   const action = message.action && !message.text.includes(message.action.url) ? `\n\n${message.action.label}: ${message.action.url}` : "";
   const signed = message.signature ? `\n\nKind regards,\n${message.signature.name}\n${message.signature.title}` : "";
+  const optOut = message.unsubscribeUrl ? `\n\nUnsubscribe: ${message.unsubscribeUrl}` : "";
   if (!message.details && !message.signature) {
-    return `${message.text}${action}`;
+    return `${message.text}${action}${optOut}`;
   }
-  return `${withoutSignOff(message.text)}${detailsText(message.details)}${action}${signed}`;
+  return `${withoutSignOff(message.text)}${detailsText(message.details)}${action}${signed}${optOut}`;
 }

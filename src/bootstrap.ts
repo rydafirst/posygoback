@@ -5,6 +5,7 @@ import { json } from "express";
 import helmet from "helmet";
 
 import type { AppConfig } from "./config/config.schema";
+import { RealtimeAdapter } from "./infrastructure/realtime/realtime.adapter";
 
 export function configureApp(app: INestApplication, config: AppConfig): void {
   const express = app as NestExpressApplication;
@@ -31,5 +32,6 @@ export function configureApp(app: INestApplication, config: AppConfig): void {
   );
   app.use(cookieParser());
   app.enableVersioning({ type: VersioningType.URI });
+  app.useWebSocketAdapter(new RealtimeAdapter(app, config));
   app.enableShutdownHooks();
 }

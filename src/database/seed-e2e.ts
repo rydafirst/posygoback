@@ -122,7 +122,12 @@ async function user(
 async function vendorTrading(prisma: PrismaClient, vendor: string): Promise<void> {
   await prisma.vendor.update({ where: { id: vendor }, data: { status: "ACTIVE" } });
   const owner = await prisma.user.findUniqueOrThrow({ where: { email: e2eEmail("vendor-owner") }, select: { id: true } });
-  const documents = await prisma.legalDocument.findMany({ where: { countryCode: COUNTRY, kind: { in: [...VENDOR_LEGAL_KINDS] } }, distinct: ["kind"], orderBy: [{ kind: "asc" }, { publishedAt: "desc" }], select: { id: true } });
+  const documents = await prisma.legalDocument.findMany({
+    where: { countryCode: COUNTRY, kind: { in: [...VENDOR_LEGAL_KINDS] } },
+    distinct: ["kind"],
+    orderBy: [{ kind: "asc" }, { publishedAt: "desc" }],
+    select: { id: true },
+  });
   await prisma.agreementAcceptance.createMany({ data: documents.map((document) => ({ vendorId: vendor, legalDocumentId: document.id, acceptedBy: owner.id })), skipDuplicates: true });
   const ledger = new WalletLedgerService();
   await prisma.$transaction(async (tx) => {
@@ -176,6 +181,7 @@ async function stock(prisma: PrismaClient, vendor: string, hubId: string): Promi
 }
 
 async function resetStore(prisma: PrismaClient, vendor: string): Promise<void> {
+  await prisma.chatThread.deleteMany({ where: { vendorId: vendor } });
   await prisma.storefront.deleteMany({ where: { vendorId: vendor } });
   await prisma.vendorPayoutAccount.deleteMany({ where: { vendorId: vendor } });
   await prisma.product.updateMany({ where: { vendorId: vendor }, data: { listed: false } });

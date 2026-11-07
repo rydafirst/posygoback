@@ -38,7 +38,8 @@ export function reminderEmail(reminder: Pick<ResolvedReminder, "key" | "definiti
     to,
     kind: `reminder.${reminder.key.toLowerCase()}`,
     subject: fillReminder(reminder.subject, name),
-    text: `${fillReminder(reminder.body, name)}\n\nDon't want these reminders? Stop them here: ${links.stopUrl}`,
+    text: fillReminder(reminder.body, name),
     action: { label: reminder.definition.actionLabel, url: `${links.webUrl}${reminder.definition.actionPath}` },
+    optOut: { question: "Don't want these reminders?", label: "Stop them", url: links.stopUrl },
   };
 }

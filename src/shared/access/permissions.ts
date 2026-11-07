@@ -60,6 +60,7 @@ export const PERMISSIONS = [
   "shopping.manage",
   "support.read",
   "support.manage",
+  "chat.use",
   "tax.manage",
   "emails.manage",
 ] as const;
@@ -92,10 +93,11 @@ const GRANTS: Record<Role, readonly Permission[]> = {
     "vendor.orders.manage",
     "vendor.integrations.manage",
     "vendor.storefront.manage",
+    "chat.use",
   ],
-  VENDOR_MEMBER: ["vendor.portal.access", "vendor.team.read", "vendor.stock.read", "vendor.orders.read"],
+  VENDOR_MEMBER: ["vendor.portal.access", "vendor.team.read", "vendor.stock.read", "vendor.orders.read", "chat.use"],
   WAREHOUSE_OPERATOR: ["warehouses.read", "warehouse.locations.manage", "inbound.read", "inbound.receive", "inventory.read", "inventory.place", "orders.read", "orders.fulfil"],
-  FULFILMENT_PARTNER: [...PARTNER_OPERATIONS, "partner.profile.read", "partner.profile.manage", "partner.team.manage", "partner.statement.read"],
+  FULFILMENT_PARTNER: [...PARTNER_OPERATIONS, "partner.profile.read", "partner.profile.manage", "partner.team.manage", "partner.statement.read", "chat.use"],
   PARTNER_STAFF: [...PARTNER_OPERATIONS, "partner.profile.read"],
   COUNTRY_OPS: [
     "countries.read",

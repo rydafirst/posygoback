@@ -39,6 +39,7 @@ export class DashboardService {
       shoppingToBuy: (c) => db.shoppingRequest.count({ where: { status: "PAID", countryCode: c } }),
       taxDeadlines: (c) =>
         db.taxDeadline.count({ where: { status: "OPEN", dueOn: { lte: new Date(Date.now() + TAX_SOON_MS) }, obligation: { active: true, countryCode: c } } }),
+      chat: (c) => db.chatThread.count({ where: { waitingSince: { not: null }, countryCode: c } }),
       shoppingAtWarehouse: (c) => db.shoppingRequest.count({ where: { countryCode: c, OR: [{ status: "ARRIVED" }, { status: "BUYING", lines: { none: { status: "QUOTED" } } }] } }),
     };
   }

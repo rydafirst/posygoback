@@ -341,6 +341,7 @@ model Vendor {
 
   country          Country               @relation(fields: [countryCode], references: [code], onDelete: Restrict, onUpdate: NoAction, map: "vendors_country_code_countries_code_fk")
   users            User[]
+  chatThread       ChatThread?
   files            StoredFile[]
   acceptances      AgreementAcceptance[]
   countries        VendorCountry[]
@@ -412,6 +413,8 @@ model User {
   acceptances             AgreementAcceptance[]
   legalDocuments          LegalDocument[]
   vendorInvitations       VendorInvitation[]
+  chatMessages            ChatMessage[]
+  chatReads               ChatRead[]
   verificationDecisions   VendorVerification[]
   inboundCreated          InboundShipment[]            @relation("InboundCreatedBy")
   inboundReceived         InboundShipment[]            @relation("InboundReceivedBy")
@@ -1656,6 +1659,7 @@ model FulfilmentPartner {
 
   custodyClaims CustodyClaim[]
   custodyAlerts CustodyAlert[]
+  chatThread    ChatThread?
 
   @@index([countryCode, status], map: "fulfilment_partners_country_idx")
   @@map("fulfilment_partners")
@@ -2957,4 +2961,66 @@ model ReminderOptOut {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@map("reminder_opt_outs")
+}
+
+enum ChatSide {
+  CUSTOMER
+  TEAM
+
+  @@map("chat_side")
+}
+
+model ChatThread {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reference         String    @unique @db.VarChar(20)
+  vendorId          String?   @unique @map("vendor_id") @db.Uuid
+  partnerId         String?   @unique @map("partner_id") @db.Uuid
+  countryCode       String    @map("country_code") @db.Char(2)
+  waitingSince      DateTime? @map("waiting_since") @db.Timestamptz(6)
+  customerEmailedAt DateTime? @map("customer_emailed_at") @db.Timestamptz(6)
+  lastMessageAt     DateTime? @map("last_message_at") @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  vendor   Vendor?            @relation(fields: [vendorId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  partner  FulfilmentPartner? @relation(fields: [partnerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  messages ChatMessage[]
+  reads    ChatRead[]
+
+  @@index([countryCode, lastMessageAt], map: "chat_threads_country_idx")
+  @@index([waitingSince], map: "chat_threads_waiting_idx")
+  @@map("chat_threads")
+}
+
+model ChatMessage {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  threadId  String   @map("thread_id") @db.Uuid
+  authorId  String?  @map("author_id") @db.Uuid
+  side      ChatSide
+  clientId  String   @map("client_id") @db.Uuid
+  body      String   @db.VarChar(2000)
+  replyToId String?  @map("reply_to_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  thread  ChatThread    @relation(fields: [threadId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  author  User?         @relation(fields: [authorId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  replyTo ChatMessage?  @relation("ChatReplies", fields: [replyToId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  replies ChatMessage[] @relation("ChatReplies")
+
+  @@unique([threadId, clientId], map: "chat_messages_client_unique")
+  @@index([threadId, createdAt], map: "chat_messages_thread_idx")
+  @@map("chat_messages")
+}
+
+model ChatRead {
+  threadId String   @map("thread_id") @db.Uuid
+  userId   String   @map("user_id") @db.Uuid
+  side     ChatSide
+  readAt   DateTime @map("read_at") @db.Timestamptz(6)
+
+  thread ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([threadId, userId])
+  @@index([threadId, side, readAt], map: "chat_reads_thread_side_idx")
+  @@map("chat_reads")
 }

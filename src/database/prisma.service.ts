@@ -30,6 +30,7 @@ export class PrismaService extends PrismaClient implements OnModuleDestroy {
 
 const LOCKABLE_TABLES = {
   vendors: "vendors",
+  chatThreads: "chat_threads",
   vendorVerifications: "vendor_verifications",
   vendorInvitations: "vendor_invitations",
   staffInvitations: "staff_invitations",

@@ -36,6 +36,17 @@ describe("email", () => {
     expect(plainText({ ...MESSAGE, text })).toContain(url);
   });
 
+  it("puts the button straight after the ask, and the way to stop the emails below it", () => {
+    const url = MESSAGE.action.url;
+    const text = `Set a password to continue:\n${url}\n\nIf you didn't apply, ignore this email.`;
+    const optOut = { question: "Don't want these reminders?", label: "Stop them", url: "https://posygo.com/reminders/stop?e=x" };
+    const html = renderHtml({ ...MESSAGE, text, optOut }, SETTINGS.siteUrl);
+    const order = ["Set a password to continue", "Choose a new password", "ignore this email", "Don't want these reminders?", "You're getting this"].map((part) => html.indexOf(part));
+    expect(order.every((at, index) => at > 0 && (index === 0 || at > order[index - 1]!))).toBe(true);
+    expect(html).toContain(">Stop them</a>");
+    expect(plainText({ ...MESSAGE, optOut })).toMatch(/Choose a new password: \S+\n\nDon't want these reminders\? Stop them: https:\/\/posygo.com\/reminders\/stop\?e=x$/);
+  });
+
   it("renders an account details table and a signature, and keeps both in the plain-text version", () => {
     const message = {
       ...MESSAGE,
