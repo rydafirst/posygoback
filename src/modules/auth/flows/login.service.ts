@@ -45,7 +45,7 @@ export class LoginService {
       await this.recordFailure(user, meta);
       throw Errors.invalidCredentials();
     }
-    this.assertCanSignIn(user);
+    await this.assertCanSignIn(user);
     if (user.mfaEnrolledAt) {
       return { kind: "mfa", result: { status: "MFA_REQUIRED", challengeToken: await this.challenges.issue(user.id) } };
     }
@@ -66,7 +66,7 @@ export class LoginService {
     if (!user?.mfaSecretEncrypted || isLocked(user.lockedUntil, new Date())) {
       throw Errors.unauthenticated("Sign in again to continue.");
     }
-    this.assertCanSignIn(user);
+    await this.assertCanSignIn(user);
     await this.challenges.markUsed(challengeId);
     const passed = input.code
       ? await this.totp.verifyOnce(user.id, this.encryption.decrypt(user.mfaSecretEncrypted, mfaSecretContext(user.id)), input.code)
@@ -84,11 +84,11 @@ export class LoginService {
     return issued;
   }
 
-  private assertCanSignIn(user: UserRecord): void {
+  private async assertCanSignIn(user: UserRecord): Promise<void> {
     if (user.status === "PENDING_EMAIL_VERIFICATION") {
       throw Errors.emailNotVerified();
     }
-    if (user.status !== "ACTIVE") {
+    if (user.status !== "ACTIVE" || (await this.users.accountDeactivated(user))) {
       throw Errors.accountInactive();
     }
   }

@@ -1,3 +1,4 @@
+import type { AccountControlView } from "../access/account-control";
 import type { PartnerTier } from "../country/country.schema";
 import type { PartnerEarningsSchedule } from "../finance/fee-schedule";
 import type { SignatureCertificateView } from "../onboarding/signature.schema";
@@ -111,6 +112,7 @@ export interface PartnerDetailView extends PartnerSummaryView {
   decisions: PartnerDecision[];
   team: Array<{ userId: string; email: string; role: "FULFILMENT_PARTNER" | "PARTNER_STAFF"; status: string }>;
   pendingInvitations: Array<{ id: string; email: string; role: "FULFILMENT_PARTNER" | "PARTNER_STAFF"; expiresAt: string }>;
+  control: AccountControlView;
 }
 
 export interface ScorecardView {

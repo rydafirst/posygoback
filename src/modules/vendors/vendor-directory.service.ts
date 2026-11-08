@@ -1,3 +1,4 @@
+import { vendorHasHistory } from "../accounts/account-history";
 import { Injectable } from "@nestjs/common";
 
 import type { AuthPrincipal } from "../../common/auth/auth-principal";
@@ -78,7 +79,7 @@ export class VendorDirectoryService {
     if (!vendor) {
       throw Errors.notFound();
     }
-    const [unitsFor, products] = await Promise.all([this.stock.unitsInStorageByVendor([vendor.id]), this.products.forVendor(vendor.id)]);
+    const [unitsFor, products, hasHistory] = await Promise.all([this.stock.unitsInStorageByVendor([vendor.id]), this.products.forVendor(vendor.id), vendorHasHistory(this.prisma, vendor.id)]);
     const owner = vendor.users.find((user) => user.role === "VENDOR_OWNER");
     return {
       id: vendor.id,
@@ -105,6 +106,7 @@ export class VendorDirectoryService {
       counts: { products: vendor._count.products, inboundShipments: vendor._count.inboundShipments, orders: vendor._count.orders },
       unitsInStorage: unitsFor(vendor.id),
       products,
+      control: { deactivatedAt: vendor.deactivatedAt?.toISOString() ?? null, deletable: !hasHistory },
     };
   }
 }

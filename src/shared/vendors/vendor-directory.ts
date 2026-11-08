@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import type { AccountControlView } from "../access/account-control";
 import type { Role } from "../access/roles";
 import type { VerificationStatus } from "../onboarding/verification.schema";
 
@@ -126,4 +127,5 @@ export interface VendorDetailView {
   counts: { products: number; inboundShipments: number; orders: number };
   unitsInStorage: number;
   products: ProductRowView[];
+  control: AccountControlView;
 }

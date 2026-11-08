@@ -35,7 +35,7 @@ export class SessionIssuerService {
 
   async authenticate(userId: string, sessionId: string, mfaState: MfaState): Promise<AuthenticatedResult> {
     const profile = await this.users.findProfile(userId);
-    if (!profile || profile.user.status !== "ACTIVE") {
+    if (!profile || profile.user.status !== "ACTIVE" || profile.accountDeactivated) {
       throw Errors.unauthenticated();
     }
     const principal = this.principalFor(profile, sessionId, mfaState);

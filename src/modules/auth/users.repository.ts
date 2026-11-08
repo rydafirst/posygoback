@@ -13,6 +13,7 @@ export interface UserProfile {
   vendorCountryCode: string | null;
   currency: string | null;
   partnerStatus: PartnerStatus | null;
+  accountDeactivated: boolean;
 }
 
 @Injectable()
@@ -34,7 +35,7 @@ export class UsersRepository {
   async findProfile(id: string): Promise<UserProfile | undefined> {
     const found = await this.prisma.user.findUnique({
       where: { id },
-      include: { vendor: { include: { country: true } }, partner: { select: { status: true, country: { select: { currency: true } } } } },
+      include: { vendor: { include: { country: true } }, partner: { select: { status: true, deactivatedAt: true, country: { select: { currency: true } } } } },
     });
     if (!found) {
       return undefined;
@@ -47,7 +48,16 @@ export class UsersRepository {
       vendorCountryCode: vendor?.countryCode ?? null,
       currency: vendor?.country.currency ?? partner?.country.currency ?? null,
       partnerStatus: partner?.status ?? null,
+      accountDeactivated: Boolean(vendor?.deactivatedAt ?? partner?.deactivatedAt),
     };
+  }
+
+  async accountDeactivated(user: Pick<UserRecord, "vendorId" | "partnerId">): Promise<boolean> {
+    const [vendor, partner] = await Promise.all([
+      user.vendorId ? this.prisma.vendor.findUnique({ where: { id: user.vendorId }, select: { deactivatedAt: true } }) : null,
+      user.partnerId ? this.prisma.fulfilmentPartner.findUnique({ where: { id: user.partnerId }, select: { deactivatedAt: true } }) : null,
+    ]);
+    return Boolean(vendor?.deactivatedAt ?? partner?.deactivatedAt);
   }
 
   async createVendorOwner(input: { email: string; passwordHash: string; businessName: string; countryCode: string; referralCode?: string }, client: DatabaseClient): Promise<UserRecord> {

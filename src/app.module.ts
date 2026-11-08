@@ -16,6 +16,7 @@ import { ClientThrottlerGuard } from "./infrastructure/rate-limit/client-throttl
 import { RateLimitModule } from "./infrastructure/rate-limit/rate-limit.module";
 import { RedisModule } from "./infrastructure/redis/redis.module";
 import { AuditAnchorModule } from "./modules/audit-anchor/audit-anchor.module";
+import { AccountsModule } from "./modules/accounts/accounts.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { CommerceModule } from "./modules/commerce/commerce.module";
 import { ReturnsModule } from "./modules/returns/returns.module";
@@ -98,6 +99,7 @@ function maskSecrets(url: string | undefined): string | undefined {
     EmailModule,
     RateLimitModule,
     AuthModule,
+    AccountsModule,
     AuditAnchorModule,
     CommerceModule,
     SupportModule,

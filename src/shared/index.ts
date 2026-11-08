@@ -6,6 +6,7 @@ export * from "./country/country-status.policy";
 export * from "./country/seed-countries";
 export * from "./access/roles";
 export * from "./access/permissions";
+export * from "./access/account-control";
 export * from "./auth/auth.schema";
 export * from "./http/api-error";
 export * from "./http/error-guide";

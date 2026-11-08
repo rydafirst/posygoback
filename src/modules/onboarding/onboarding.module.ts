@@ -58,6 +58,6 @@ import { VerificationStore } from "./verification/verification.store";
     ActivationPaymentsService,
     ActivationFeesService,
   ],
-  exports: [VendorStandingService],
+  exports: [VendorStandingService, VendorActivationService],
 })
 export class OnboardingModule {}

@@ -1,3 +1,4 @@
+import { partnerHasHistory } from "../accounts/account-history";
 import { Injectable } from "@nestjs/common";
 
 import { Errors } from "../../common/http/app-exception";
@@ -196,11 +197,12 @@ export class PartnersRepository {
           }
         : null,
       readiness,
-      decisions: decisionsFrom(row.status),
+      decisions: row.deactivatedAt ? [] : decisionsFrom(row.status),
       team: row.users.map((user) => ({ userId: user.id, email: user.email, role: user.role as PartnerRole, status: user.status })),
       pendingInvitations: row.invitations
         .filter((invitation) => invitation.expiresAt > new Date())
         .map((invitation) => ({ id: invitation.id, email: invitation.email, role: invitation.role as PartnerRole, expiresAt: invitation.expiresAt.toISOString() })),
+      control: { deactivatedAt: row.deactivatedAt?.toISOString() ?? null, deletable: !(await partnerHasHistory(client, row.id)) },
     };
   }
 }

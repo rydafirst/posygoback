@@ -63,6 +63,7 @@ export const PERMISSIONS = [
   "chat.use",
   "tax.manage",
   "emails.manage",
+  "accounts.close",
 ] as const;
 
 export const PARTNER_OPERATIONS: readonly Permission[] = [
@@ -180,6 +181,7 @@ const GRANTS: Record<Role, readonly Permission[]> = {
   ],
   SUPER_ADMIN: [
     "emails.manage",
+    "accounts.close",
     "countries.read",
     "countries.manage",
     "audit.read",

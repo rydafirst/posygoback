@@ -177,6 +177,9 @@ export class AdminPartnersService {
     const partner = await this.prisma.$transaction(async (tx) => {
       await lockRow(tx, "fulfilmentPartners", partnerId);
       const current = await tx.fulfilmentPartner.findUniqueOrThrow({ where: { id: partnerId } });
+      if (current.deactivatedAt) {
+        throw Errors.invalidTransition("Reactivate this account first.");
+      }
       if (!decisionsFrom(current.status).includes(decision)) {
         throw Errors.invalidTransition("That decision isn't available for this partner right now.");
       }

@@ -294,20 +294,20 @@ model Country {
   createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  users            User[]
-  vendors          Vendor[]
-  legalDocuments   LegalDocument[]
-  vendorCountries  VendorCountry[]
-  verifications    VendorVerification[]
-  warehouses       Warehouse[]
-  inboundShipments InboundShipment[]
-  staffInvitations StaffInvitation[]
-  feeSchedules     FeeSchedule[]
-  topUps           TopUp[]
-  packagingPresets PackagingPreset[]
-  ordersFrom       Order[]              @relation("OrderOrigin")
-  ordersTo         Order[]              @relation("OrderDestination")
-  partners         FulfilmentPartner[]
+  users              User[]
+  vendors            Vendor[]
+  legalDocuments     LegalDocument[]
+  vendorCountries    VendorCountry[]
+  verifications      VendorVerification[]
+  warehouses         Warehouse[]
+  inboundShipments   InboundShipment[]
+  staffInvitations   StaffInvitation[]
+  feeSchedules       FeeSchedule[]
+  topUps             TopUp[]
+  packagingPresets   PackagingPreset[]
+  ordersFrom         Order[]                   @relation("OrderOrigin")
+  ordersTo           Order[]                   @relation("OrderDestination")
+  partners           FulfilmentPartner[]
   activationPayments VendorActivationPayment[]
   orderImports       OrderImportBatch[]
 
@@ -323,21 +323,24 @@ model Country {
 
   shoppingRequests ShoppingRequest[]
 
-  taxObligations   TaxObligation[]
+  taxObligations TaxObligation[]
+
   @@index([status], map: "countries_status_idx")
   @@map("countries")
 }
 
 model Vendor {
-  id                 String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  isTestAccount      Boolean      @default(false) @map("is_test_account")
-  businessName       String       @map("business_name") @db.VarChar(120)
-  signupReferralCode String?      @map("signup_referral_code") @db.VarChar(40)
-  countryCode        String       @map("country_code") @db.Char(2)
-  status             VendorStatus @default(PENDING_VERIFICATION)
-  activationDueAt    DateTime?    @map("activation_due_at") @db.Timestamptz(6)
-  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                       String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  isTestAccount            Boolean       @default(false) @map("is_test_account")
+  businessName             String        @map("business_name") @db.VarChar(120)
+  signupReferralCode       String?       @map("signup_referral_code") @db.VarChar(40)
+  countryCode              String        @map("country_code") @db.Char(2)
+  status                   VendorStatus  @default(PENDING_VERIFICATION)
+  activationDueAt          DateTime?     @map("activation_due_at") @db.Timestamptz(6)
+  deactivatedAt            DateTime?     @map("deactivated_at") @db.Timestamptz(6)
+  statusBeforeDeactivation VendorStatus? @map("status_before_deactivation")
+  createdAt                DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   country          Country               @relation(fields: [countryCode], references: [code], onDelete: Restrict, onUpdate: NoAction, map: "vendors_country_code_countries_code_fk")
   users            User[]
@@ -484,7 +487,7 @@ model User {
 
   supportReports       SupportReport[]
   assistantQuestions   AssistantQuestion[]
-  supportCasesResolved SupportCase[]   @relation("SupportCaseResolver")
+  supportCasesResolved SupportCase[]       @relation("SupportCaseResolver")
 
   productsCreated Product[] @relation("ProductCreator")
 
@@ -1311,7 +1314,7 @@ model Order {
   source                 OrderSource
   externalReference      String?             @map("external_reference") @db.VarChar(64)
   deliveryPreference     DeliveryPreference  @default(CHEAPEST) @map("delivery_preference")
-  preferredService       String?                 @map("preferred_service") @db.VarChar(200)
+  preferredService       String?             @map("preferred_service") @db.VarChar(200)
   groupId                String              @map("group_id") @db.Uuid
   recipientEncrypted     String              @map("recipient_encrypted")
   recipientName          String              @map("recipient_name") @db.VarChar(100)
@@ -1618,28 +1621,30 @@ enum PartnerPayoutStatus {
 }
 
 model FulfilmentPartner {
-  id                     String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  reference              String        @unique(map: "fulfilment_partners_reference_unique") @db.VarChar(20)
-  countryCode            String        @map("country_code") @db.Char(2)
-  kind                   PartnerKind   @default(INDIVIDUAL)
-  legalName              String        @map("legal_name") @db.VarChar(160)
-  contactEmail           String        @map("contact_email") @db.VarChar(254)
-  status                 PartnerStatus @default(APPLIED)
-  statusReason           String?       @map("status_reason") @db.VarChar(1000)
-  profile                Json?
-  profileChange          Json?         @map("profile_change")
-  profileChangeAt        DateTime?     @map("profile_change_at") @db.Timestamptz(6)
-  requiredDepositMinor   BigInt        @map("required_deposit_minor")
-  requiredInsuranceMinor BigInt        @map("required_insurance_minor")
-  createdBy              String?       @map("created_by") @db.Uuid
-  tierLevel              Int           @default(1) @map("tier_level")
-  tierSetManuallyAt      DateTime?     @map("tier_set_manually_at") @db.Timestamptz(6)
-  founding               Boolean       @default(false)
-  approvedBy             String?       @map("approved_by") @db.Uuid
-  activatedAt            DateTime?     @map("activated_at") @db.Timestamptz(6)
-  terminatedAt           DateTime?     @map("terminated_at") @db.Timestamptz(6)
-  createdAt              DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                       String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reference                String         @unique(map: "fulfilment_partners_reference_unique") @db.VarChar(20)
+  countryCode              String         @map("country_code") @db.Char(2)
+  kind                     PartnerKind    @default(INDIVIDUAL)
+  legalName                String         @map("legal_name") @db.VarChar(160)
+  contactEmail             String         @map("contact_email") @db.VarChar(254)
+  status                   PartnerStatus  @default(APPLIED)
+  statusReason             String?        @map("status_reason") @db.VarChar(1000)
+  profile                  Json?
+  profileChange            Json?          @map("profile_change")
+  profileChangeAt          DateTime?      @map("profile_change_at") @db.Timestamptz(6)
+  requiredDepositMinor     BigInt         @map("required_deposit_minor")
+  requiredInsuranceMinor   BigInt         @map("required_insurance_minor")
+  createdBy                String?        @map("created_by") @db.Uuid
+  tierLevel                Int            @default(1) @map("tier_level")
+  tierSetManuallyAt        DateTime?      @map("tier_set_manually_at") @db.Timestamptz(6)
+  founding                 Boolean        @default(false)
+  approvedBy               String?        @map("approved_by") @db.Uuid
+  activatedAt              DateTime?      @map("activated_at") @db.Timestamptz(6)
+  terminatedAt             DateTime?      @map("terminated_at") @db.Timestamptz(6)
+  deactivatedAt            DateTime?      @map("deactivated_at") @db.Timestamptz(6)
+  statusBeforeDeactivation PartnerStatus? @map("status_before_deactivation")
+  createdAt                DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   country       Country                      @relation(fields: [countryCode], references: [code], onDelete: Restrict, onUpdate: NoAction)
   creator       User?                        @relation("PartnerCreator", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: NoAction)
