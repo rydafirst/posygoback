@@ -1,4 +1,4 @@
-import { type CreateCountryInput, DEFAULT_PARTNER_TIERS, STANDARD_ACTIVATION_FEE_MINOR } from "./country.schema";
+import { type CreateCountryInput, DEFAULT_PARTNER_TIERS } from "./country.schema";
 
 export interface MajorCountry {
   code: string;
@@ -69,7 +69,6 @@ export function toCountry(country: MajorCountry): CreateCountryInput {
         noScanAlertHours: 48,
         tiers: DEFAULT_PARTNER_TIERS,
       },
-      activationFeeMinor: STANDARD_ACTIVATION_FEE_MINOR,
     },
   };
 }

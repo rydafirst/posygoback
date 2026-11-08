@@ -5,59 +5,58 @@ import { Errors } from "../../../common/http/app-exception";
 import { PrismaService } from "../../../database/prisma.service";
 import type { Prisma } from "../../../generated/prisma/client";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
-import { type ActivationFeeInput, activationFeeOf, hasPermission } from "../../../shared";
-import { CountriesRepository, type CountryRecord } from "../../countries/countries.repository";
+import { type ActivationFeeInput, type ActivationFeeView, hasPermission } from "../../../shared";
 import { VendorActivationService } from "../vendor-activation.service";
+import { ActivationFeeRepository } from "./activation-fee.repository";
 import { ActivationNoticesService } from "./activation-notices.service";
 
 @Injectable()
 export class ActivationFeesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly countries: CountriesRepository,
+    private readonly fees: ActivationFeeRepository,
     private readonly activation: VendorActivationService,
     private readonly notices: ActivationNoticesService,
     private readonly audit: AuditService,
   ) {}
 
-  async set(code: string, input: ActivationFeeInput, principal: AuthPrincipal, meta: RequestMeta): Promise<CountryRecord> {
+  current(): Promise<ActivationFeeView> {
+    return this.fees.current();
+  }
+
+  async set(input: ActivationFeeInput, principal: AuthPrincipal, meta: RequestMeta): Promise<ActivationFeeView> {
     if (!hasPermission(principal.role, "countries.manage")) {
       throw Errors.forbidden("Only a super admin can change the activation fee.");
     }
-    const { country, liveNow } = await this.prisma.$transaction(async (tx) => {
-      const before = await this.countries.findByCode(code, tx);
-      if (!before) {
-        throw Errors.notFound("Country not found.");
-      }
-      const previous = activationFeeOf(before.config);
-      const updated = await this.countries.update(code, { config: { ...before.config, activationFeeMinor: input.activationFeeMinor } }, tx);
-      if (previous !== input.activationFeeMinor) {
+    const { fee, liveNow } = await this.prisma.$transaction(async (tx) => {
+      const before = await this.fees.current(tx);
+      const updated = await this.fees.update(input.activationFeeMinor, tx);
+      if (before.feeMinor !== updated.feeMinor) {
         await this.audit.record(
           {
             actor: { userId: principal.userId, role: principal.role },
-            action: "country.activation_fee_changed",
-            resourceType: "country",
-            resourceId: code,
-            countryCode: code,
-            before: { activationFeeMinor: previous, currency: before.currency },
-            after: { activationFeeMinor: input.activationFeeMinor, currency: before.currency },
+            action: "platform.activation_fee_changed",
+            resourceType: "platform_setting",
+            resourceId: "activation_fee",
+            before: { ...before },
+            after: { ...updated },
             meta,
           },
           tx,
         );
       }
-      return { country: updated, liveNow: input.activationFeeMinor === 0 ? await this.releaseWaiting(code, tx) : [] };
+      return { fee: updated, liveNow: updated.feeMinor === 0 ? await this.releaseWaiting(tx) : [] };
     });
     for (const vendorId of liveNow) {
       await this.notices.waived(vendorId);
     }
-    return country;
+    return fee;
   }
 
-  private async releaseWaiting(countryCode: string, tx: Prisma.TransactionClient): Promise<string[]> {
-    const waiting = await tx.vendor.findMany({ where: { countryCode, status: "PENDING_VERIFICATION", activationDueAt: { not: null } }, select: { id: true } });
+  private async releaseWaiting(tx: Prisma.TransactionClient): Promise<string[]> {
+    const waiting = await tx.vendor.findMany({ where: { status: "PENDING_VERIFICATION", activationDueAt: { not: null } }, select: { id: true, countryCode: true } });
     const released: string[] = [];
-    for (const { id } of waiting) {
+    for (const { id, countryCode } of waiting) {
       if (await this.activation.goLive(id, countryCode, tx, { feeMinor: 0, reason: "activation fee removed" })) {
         released.push(id);
       }

@@ -35,7 +35,7 @@ export class TopUpsService {
   async start(principal: AuthPrincipal, country: SellerCountry, amountMinor: number, meta: RequestMeta): Promise<TopUpStarted> {
     const { vendorId } = country;
     const quote = this.quote(country, amountMinor);
-    const resolved = this.accounts.forCountry(country.countryCode);
+    const resolved = this.accounts.forSeller(country.countryCode);
     const owner = await this.users.findById(principal.userId);
     const wallet = await this.ledger.walletFor(this.prisma, vendorId, quote.currency);
     const topUp = await this.prisma.$transaction(async (tx) => {
@@ -43,7 +43,8 @@ export class TopUpsService {
         data: {
           walletId: wallet.id,
           vendorId,
-          countryCode: resolved.countryCode,
+          countryCode: country.countryCode,
+          accountKey: resolved.accountKey,
           processor: resolved.processor.name,
           currency: quote.currency,
           netMinor: BigInt(quote.netMinor),
@@ -59,8 +60,8 @@ export class TopUpsService {
           resourceType: "top_up",
           resourceId: created.id,
           vendorId,
-          countryCode: resolved.countryCode,
-          after: quote,
+          countryCode: country.countryCode,
+          after: { ...quote, accountKey: resolved.accountKey },
           meta,
         },
         tx,
@@ -99,7 +100,7 @@ export class TopUpsService {
     if (!topUp || topUp.processor !== "SANDBOX" || this.config.NODE_ENV === "production" || !topUp.providerReference) {
       throw Errors.notFound();
     }
-    await this.events.handle("SANDBOX", topUp.countryCode, {
+    await this.events.handle("SANDBOX", topUp.accountKey, {
       kind: "TOP_UP_PAID",
       eventId: `sandbox_paid_${topUp.id}`,
       topUpId: topUp.id,
@@ -114,7 +115,7 @@ export class TopUpsService {
   }
 
   private terms(country: SellerCountry) {
-    const { account } = this.accounts.forCountry(country.countryCode);
+    const { account } = this.accounts.forSeller(country.countryCode);
     return { currency: country.currency, feePercentBps: account.feePercentBps, fixedFeeMinor: account.fixedFeeMinor };
   }
 

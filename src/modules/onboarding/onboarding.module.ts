@@ -4,6 +4,7 @@ import { CountriesModule } from "../countries/countries.module";
 import { FinanceModule } from "../finance/finance.module";
 import { FilesModule } from "../files/files.module";
 import { IdentityModule } from "../identity/identity.module";
+import { ActivationFeeRepository } from "./activation/activation-fee.repository";
 import { ActivationFeesService } from "./activation/activation-fees.service";
 import { ActivationNoticesService } from "./activation/activation-notices.service";
 import { ActivationPaymentsService } from "./activation/activation-payments.service";
@@ -56,6 +57,7 @@ import { VerificationStore } from "./verification/verification.store";
     VendorStandingService,
     ActivationNoticesService,
     ActivationPaymentsService,
+    ActivationFeeRepository,
     ActivationFeesService,
   ],
   exports: [VendorStandingService, VendorActivationService],

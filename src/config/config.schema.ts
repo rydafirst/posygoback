@@ -175,6 +175,10 @@ export const configSchema = z
       .default("off")
       .transform((value) => value === "on"),
     PAYMENT_ACCOUNTS: paymentAccounts,
+    PLATFORM_PAYMENT_ACCOUNT: z
+      .string()
+      .regex(/^[A-Z]{2}$/, "Use the two-letter key of an account in PAYMENT_ACCOUNTS")
+      .default("GB"),
     CARRIER_ACCOUNTS: carrierAccounts,
     PARTNER_SERVICES: partnerServices,
     IDENTITY_PROVIDER: z.union([z.literal(""), z.enum(IDENTITY_PROVIDERS)]).default(""),
@@ -202,22 +206,27 @@ export const configSchema = z
     message: "Production runs behind a proxy: set TRUST_PROXY_HOPS or CLIENT_IP_HEADER so rate limits see real client addresses",
     path: ["TRUST_PROXY_HOPS"],
   })
+  .refine((config) => Object.keys(config.PAYMENT_ACCOUNTS).length === 0 || config.PLATFORM_PAYMENT_ACCOUNT in config.PAYMENT_ACCOUNTS, {
+    message: "PLATFORM_PAYMENT_ACCOUNT must name one of the PAYMENT_ACCOUNTS",
+    path: ["PLATFORM_PAYMENT_ACCOUNT"],
+  })
   .refine((config) => config.NODE_ENV !== "production" || Object.values(config.PAYMENT_ACCOUNTS).every((account) => account.processor !== "SANDBOX"), {
     message: "The sandbox payment processor can't be used in production",
     path: ["PAYMENT_ACCOUNTS"],
   })
-  .refine((config) => config.NODE_ENV !== "production" || Object.values(config.PAYMENT_ACCOUNTS).every((account) => account.processor !== "STRIPE" || account.secretKey.includes("_live_") || account.testMode), {
-    message: "Production needs live Stripe keys",
-    path: ["PAYMENT_ACCOUNTS"],
-  })
+  .refine(
+    (config) =>
+      config.NODE_ENV !== "production" || Object.values(config.PAYMENT_ACCOUNTS).every((account) => account.processor !== "STRIPE" || account.secretKey.includes("_live_") || account.testMode),
+    { message: "Production needs live Stripe keys", path: ["PAYMENT_ACCOUNTS"] },
+  )
   .refine((config) => config.NODE_ENV !== "production" || Object.values(config.CARRIER_ACCOUNTS).every(isRealCarrier), {
     message: 'Production needs Shippo accounts with live tokens. To try Shippo\'s test tokens on a live site, add "testMode": true to that country',
     path: ["CARRIER_ACCOUNTS"],
   })
-  .refine((config) => config.NODE_ENV !== "production" || (config.PARTNER_SERVICES.provider === "STRIPE" && (config.PARTNER_SERVICES.secretKey.includes("_live_") || config.PARTNER_SERVICES.testMode)), {
-    message: "Partner identity checks and payouts need a live Stripe key in production",
-    path: ["PARTNER_SERVICES"],
-  })
+  .refine(
+    (config) => config.NODE_ENV !== "production" || (config.PARTNER_SERVICES.provider === "STRIPE" && (config.PARTNER_SERVICES.secretKey.includes("_live_") || config.PARTNER_SERVICES.testMode)),
+    { message: "Partner identity checks and payouts need a live Stripe key in production", path: ["PARTNER_SERVICES"] },
+  )
   .refine((config) => config.NODE_ENV !== "production" || config.IDENTITY_PROVIDER !== "didit" || diditConfigured(config), {
     message: "IDENTITY_PROVIDER is didit, so DIDIT_API_KEY, DIDIT_WORKFLOW_ID and DIDIT_WEBHOOK_SECRET are required in production",
     path: ["IDENTITY_PROVIDER"],

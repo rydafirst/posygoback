@@ -3,8 +3,8 @@ import { Injectable } from "@nestjs/common";
 import { lockRow } from "../../database/prisma.service";
 import type { Prisma } from "../../generated/prisma/client";
 import { AuditService, SYSTEM_ACTOR } from "../../infrastructure/audit/audit.service";
-import { activationFeeOf, VENDOR_LEGAL_KINDS } from "../../shared";
-import { CountriesRepository } from "../countries/countries.repository";
+import { VENDOR_LEGAL_KINDS } from "../../shared";
+import { ActivationFeeRepository } from "./activation/activation-fee.repository";
 import { LegalDocumentsRepository } from "./agreements/legal-documents.repository";
 import { VerificationStore } from "./verification/verification.store";
 
@@ -20,7 +20,7 @@ export class VendorActivationService {
   constructor(
     private readonly verifications: VerificationStore,
     private readonly legal: LegalDocumentsRepository,
-    private readonly countries: CountriesRepository,
+    private readonly fees: ActivationFeeRepository,
     private readonly audit: AuditService,
   ) {}
 
@@ -29,8 +29,7 @@ export class VendorActivationService {
     if (!(await this.readyForActivation(vendorId, countryCode, executor))) {
       return NOT_YET;
     }
-    const country = await this.countries.findByCode(countryCode, executor);
-    const feeMinor = country ? activationFeeOf(country.config) : 0;
+    const { feeMinor } = await this.fees.current(executor);
     if (feeMinor === 0) {
       return { vendorActive: await this.goLive(vendorId, countryCode, executor, { feeMinor }), activationDue: false };
     }

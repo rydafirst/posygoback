@@ -127,17 +127,14 @@ export const countryConfigSchema = z.object({
     .default([]),
   feeScheduleKey: z.string().regex(/^[a-z0-9_]{3,60}$/),
   partners: partnerProgrammeSchema.prefault({}),
-  activationFeeMinor: amountMinor.default(0),
 });
-
-export const STANDARD_ACTIVATION_FEE_MINOR = 1_000;
 
 export const activationFeeSchema = z.object({ activationFeeMinor: amountMinor });
 export type ActivationFeeInput = z.infer<typeof activationFeeSchema>;
 
-export function activationFeeOf(config: { activationFeeMinor?: unknown }): number {
-  const parsed = amountMinor.safeParse(config.activationFeeMinor);
-  return parsed.success ? parsed.data : 0;
+export interface ActivationFeeView {
+  feeMinor: number;
+  currency: string;
 }
 
 export const createCountrySchema = z.object({ code: isoCountryCode, name: z.string().min(2).max(80), currency: currencyCode, config: countryConfigSchema });

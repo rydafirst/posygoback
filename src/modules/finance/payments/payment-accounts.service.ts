@@ -9,6 +9,7 @@ import { StripeProcessor } from "./stripe.processor";
 
 export interface ResolvedAccount {
   countryCode: string;
+  accountKey: string;
   account: PaymentAccount;
   processor: PaymentProcessor;
 }
@@ -24,11 +25,20 @@ export class PaymentAccountsService {
     if (!account) {
       throw Errors.invalidTransition("Top-ups aren't available in your market yet.");
     }
-    return { countryCode, account, processor: this.processorFor(countryCode, account) };
+    return { countryCode, accountKey: countryCode, account, processor: this.processorFor(countryCode, account) };
   }
 
   find(countryCode: string): ResolvedAccount | null {
     return this.config.PAYMENT_ACCOUNTS[countryCode] ? this.forCountry(countryCode) : null;
+  }
+
+  forSeller(countryCode: string): ResolvedAccount {
+    const accountKey = this.config.PAYMENT_ACCOUNTS[countryCode] ? countryCode : this.config.PLATFORM_PAYMENT_ACCOUNT;
+    return { ...this.forCountry(accountKey), countryCode };
+  }
+
+  platform(): ResolvedAccount {
+    return this.forCountry(this.config.PLATFORM_PAYMENT_ACCOUNT);
   }
 
   register(countryCode: string, processor: PaymentProcessor): void {

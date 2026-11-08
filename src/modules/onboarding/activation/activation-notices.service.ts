@@ -1,10 +1,11 @@
 import { Injectable } from "@nestjs/common";
 
 import { PrismaService } from "../../../database/prisma.service";
-import { activationFeeOf, Money, sellerNumber } from "../../../shared";
+import { Money, sellerNumber } from "../../../shared";
 import { WalletAlertsService } from "../../finance/wallets/wallet-alerts.service";
 import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { type ActivationReceipt, OnboardingEmails } from "../onboarding-emails";
+import { ActivationFeeRepository } from "./activation-fee.repository";
 
 export interface PaidActivation {
   paymentId: string;
@@ -26,13 +27,14 @@ const LONG_DATE = new Intl.DateTimeFormat(LOCALE, { day: "numeric", month: "long
 export class ActivationNoticesService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly fees: ActivationFeeRepository,
     private readonly owners: WalletAlertsService,
     private readonly staff: StaffAlertsService,
   ) {}
 
   async due(vendorId: string): Promise<void> {
-    const vendor = await this.prisma.vendor.findUniqueOrThrow({ where: { id: vendorId }, include: { country: true } });
-    const fee = Money.of(activationFeeOf(vendor.country.config as { activationFeeMinor?: unknown }), vendor.country.currency).format(LOCALE);
+    const { feeMinor, currency } = await this.fees.current();
+    const fee = Money.of(feeMinor, currency).format(LOCALE);
     await this.owners.notifyOwner(vendorId, (to, webUrl) => OnboardingEmails.activationDue(to, fee, webUrl), "/verification");
   }
 

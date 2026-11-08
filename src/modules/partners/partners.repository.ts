@@ -6,7 +6,7 @@ import { type DatabaseClient, PrismaService } from "../../database/prisma.servic
 import type { Prisma } from "../../generated/prisma/client";
 import {
   type ActivationReadiness,
-  decisionsFrom,
+  availableDecisions,
   type HeardFrom,
   type InsurancePolicyView,
   PARTNER_CHECK_KINDS,
@@ -197,7 +197,7 @@ export class PartnersRepository {
           }
         : null,
       readiness,
-      decisions: row.deactivatedAt ? [] : decisionsFrom(row.status),
+      decisions: availableDecisions(row.status, row.deactivatedAt !== null),
       team: row.users.map((user) => ({ userId: user.id, email: user.email, role: user.role as PartnerRole, status: user.status })),
       pendingInvitations: row.invitations
         .filter((invitation) => invitation.expiresAt > new Date())

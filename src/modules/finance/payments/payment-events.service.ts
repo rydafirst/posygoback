@@ -85,7 +85,7 @@ export class PaymentEventsService {
     const topUp = UUID.test(event.topUpId) && (await lockRow(tx, "topUps", event.topUpId)) ? await tx.topUp.findUnique({ where: { id: event.topUpId } }) : null;
     const problem = !topUp
       ? "unknown top-up"
-      : topUp.processor !== provider || topUp.countryCode !== accountKey
+      : topUp.processor !== provider || topUp.accountKey !== accountKey
         ? "paid into the wrong account"
         : topUp.providerReference !== event.providerReference
           ? "checkout session does not match"
@@ -131,7 +131,7 @@ export class PaymentEventsService {
       return { outcome: "unknown top-up", followUps: [] };
     }
     const updated = await tx.topUp.updateMany({
-      where: { id: event.topUpId, processor: provider, countryCode: accountKey, providerReference: event.providerReference, status: "PENDING" },
+      where: { id: event.topUpId, processor: provider, accountKey, providerReference: event.providerReference, status: "PENDING" },
       data: { status: event.outcome, completedAt: new Date() },
     });
     return { outcome: updated.count > 0 ? event.outcome.toLowerCase() : "nothing to close", followUps: [] };
@@ -217,7 +217,7 @@ export class PaymentEventsService {
   }
 
   private async matchedPayment(tx: Prisma.TransactionClient, provider: string, accountKey: string, paymentId: string): Promise<TopUp> {
-    const candidate = paymentId ? await tx.topUp.findFirst({ where: { providerPaymentId: paymentId, processor: provider, countryCode: accountKey }, select: { id: true } }) : null;
+    const candidate = paymentId ? await tx.topUp.findFirst({ where: { providerPaymentId: paymentId, processor: provider, accountKey }, select: { id: true } }) : null;
     if (!candidate) {
       throw new PaymentEventNotReady("No settled top-up matches this payment yet");
     }

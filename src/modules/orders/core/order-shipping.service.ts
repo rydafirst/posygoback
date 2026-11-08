@@ -209,7 +209,16 @@ export class OrderShippingService {
     try {
       kept = await this.labels.record(orderId, label, actor);
     } catch (error) {
-      this.logger.error(`Couldn't save the label for order ${orderId}: ${error instanceof Error ? error.message : String(error)}`);
+      const reason = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Couldn't save the label for order ${orderId}: ${reason}`);
+      await this.audit.record({
+        actor: { userId: actor.userId, role: actor.role },
+        action: "order.label_save_failed",
+        resourceType: "order",
+        resourceId: orderId,
+        vendorId: order.vendorId,
+        after: { reason: reason.slice(0, 1000) },
+      });
       await this.labels.voidLabel(orderId, adapter, label.transactionId, "The label couldn't be saved, so it was voided.");
       throw Errors.carrierFailed("The courier sold the label but we couldn't save it, so it was cancelled with them. Try the label again. If it keeps happening, contact support.");
     }

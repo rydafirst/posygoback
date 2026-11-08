@@ -124,7 +124,7 @@ describe("deactivating and deleting accounts", () => {
     await test.http().post(`/v1/admin/partners/${partnerId}/deactivate`).set(as(superAdmin)).send(REASON).expect(204);
     const paused = await partnerDetail(partnerId);
     expect(paused.status).toBe("SUSPENDED");
-    expect(paused.decisions).toEqual([]);
+    expect(paused.decisions).toEqual(["OFFBOARD"]);
     expect(paused.control.deactivatedAt).not.toBeNull();
     await test.http().get("/v1/auth/me").set(as(token)).expect(401);
     await test.http().post(`/v1/admin/partners/${partnerId}/decisions/REINSTATE`).set(as(superAdmin)).send({ reason: "Trying to resume the hub early." }).expect(409);
@@ -133,5 +133,17 @@ describe("deactivating and deleting accounts", () => {
     const back = await partnerDetail(partnerId);
     expect(back.status).toBe("ACTIVE");
     expect(back.control.deactivatedAt).toBeNull();
+  });
+
+  it("lets a deactivated partner be closed for good", async () => {
+    const { partnerId } = await flow.onboard("closing@partner.test", "Chris Lee", compliance, superAdmin);
+    await test.http().post(`/v1/admin/partners/${partnerId}/deactivate`).set(as(superAdmin)).send(REASON).expect(204);
+    const closing = { reason: "The partner asked to close their account." };
+    await test.http().post(`/v1/admin/partners/${partnerId}/decisions/OFFBOARD`).set(as(superAdmin)).send(closing).expect(201);
+    expect((await partnerDetail(partnerId)).decisions).toEqual(["TERMINATE"]);
+    await test.http().post(`/v1/admin/partners/${partnerId}/decisions/TERMINATE`).set(as(superAdmin)).send(closing).expect(201);
+    const ended = await partnerDetail(partnerId);
+    expect(ended.status).toBe("TERMINATED");
+    expect(ended.control.deactivatedAt).not.toBeNull();
   });
 });

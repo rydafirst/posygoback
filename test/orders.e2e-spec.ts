@@ -22,6 +22,7 @@ async function query<T = Record<string, unknown>>(text: string, values: unknown[
 class FakeShippo extends ShippoCarrier {
   failNextLabel: "refused" | "timeout" | null = null;
   failNextTracking = false;
+  signedLinks = false;
   voided: string[] = [];
   quotes: RateRequest[] = [];
   trackingEvents: CarrierTrackingEvent[] = [];
@@ -54,7 +55,7 @@ class FakeShippo extends ShippoCarrier {
       carrierCode: rate.carrierCode,
       service: rate.service,
       trackingNumber,
-      labelUrl: `https://labels.example/${trackingNumber}.pdf`,
+      labelUrl: `https://labels.example/${trackingNumber}.pdf${this.signedLinks ? `?X-Amz-Security-Token=${"a".repeat(1400)}` : ""}`,
       trackingUrl: `https://ups.example/${trackingNumber}`,
       rateId: rate.providerRateId,
     };
@@ -187,7 +188,13 @@ describe("orders, packing and shipping", () => {
       expect(await lot()).toEqual({ quantity_available: 28, quantity_reserved: 2 });
       expect(await balance()).toBe(20_000 - 398);
       const detail = await test.http().get(`/v1/vendor/orders/${placed.body[0].id}`).set(as(owner)).expect(200);
-      expect(detail.body).toMatchObject({ recipient: { name: "Ada Obi", postalCode: "M1 1AA" }, charges: { currency: "GBP", fulfilmentFeeMinor: 398 }, actions: ["CANCEL"], rates: [], deliveryPreference: "CHEAPEST" });
+      expect(detail.body).toMatchObject({
+        recipient: { name: "Ada Obi", postalCode: "M1 1AA" },
+        charges: { currency: "GBP", fulfilmentFeeMinor: 398 },
+        actions: ["CANCEL"],
+        rates: [],
+        deliveryPreference: "CHEAPEST",
+      });
       expect(detail.body.lines[0].locations).toEqual([]);
       const [row] = await query<{ recipient_encrypted: string }>("SELECT recipient_encrypted FROM orders WHERE id = $1", [placed.body[0].id]);
       expect(row!.recipient_encrypted).not.toContain("High Street");
@@ -214,7 +221,12 @@ describe("orders, packing and shipping", () => {
 
       await estimate({ recipient: US_RECIPIENT, lines: [{ productId: wigId, quantity: 1 }] }).expect(400);
       expect((await estimate({ recipient: GB_RECIPIENT, lines: [{ productId: wigId, quantity: 1000 }] }).expect(409)).body.code).toBe("insufficient_stock");
-      await test.http().post("/v1/vendor/orders/shipping-estimate").set(as(otherOwner)).send({ recipient: GB_RECIPIENT, lines: [{ productId: wigId, quantity: 1 }] }).expect(400);
+      await test
+        .http()
+        .post("/v1/vendor/orders/shipping-estimate")
+        .set(as(otherOwner))
+        .send({ recipient: GB_RECIPIENT, lines: [{ productId: wigId, quantity: 1 }] })
+        .expect(400);
     });
 
     it("keeps the seller's delivery choice, and refuses one it doesn't know", async () => {
@@ -311,7 +323,11 @@ describe("orders, packing and shipping", () => {
         [704, ["CHEAPEST"], true],
         [2199, ["FASTEST"], false],
       ]);
-      expect(carrier.quotes.at(-1)).toMatchObject({ parcel: { lengthMm: 300, widthMm: 200, heightMm: 100, weightGrams: 900 }, customs: null, from: { name: "Acme Goods", city: "Manchester", phone: "+44 161 000 0000" } });
+      expect(carrier.quotes.at(-1)).toMatchObject({
+        parcel: { lengthMm: 300, widthMm: 200, heightMm: 100, weightGrams: 900 },
+        customs: null,
+        from: { name: "Acme Goods", city: "Manchester", phone: "+44 161 000 0000" },
+      });
       const before = await balance();
       const ground = rated.body.rates[0].id as string;
       const labelled = await staff(`${orderId}/actions`).send({ action: "SELECT_RATE", rateId: ground }).expect(200);
@@ -450,6 +466,21 @@ describe("orders, packing and shipping", () => {
       expect(await balance()).toBe(before + 299);
       const released = await query<{ type: string }>("SELECT type FROM custody_events WHERE lot_id = $1 ORDER BY sequence DESC LIMIT 1", [lotId]);
       expect(released[0]!.type).toBe("RELEASED");
+    });
+
+    it("keeps a label whose signed download link is very long", async () => {
+      await fundWallet(vendorId, 5_000);
+      const orderId = await packed();
+      const rated = await staff(`${orderId}/actions`).send({ action: "FETCH_RATES" }).expect(200);
+      carrier.signedLinks = true;
+      try {
+        await staff(`${orderId}/actions`).send({ action: "SELECT_RATE", rateId: rated.body.rates[0].id }).expect(200);
+      } finally {
+        carrier.signedLinks = false;
+      }
+      const [row] = await query<{ status: string; length: number }>("SELECT status, length(label_url) AS length FROM orders WHERE id = $1", [orderId]);
+      expect(row!.status).toBe("LABEL_PURCHASED");
+      expect(row!.length).toBeGreaterThan(1400);
     });
 
     it("voids the label when staff cancel after it was bought", async () => {

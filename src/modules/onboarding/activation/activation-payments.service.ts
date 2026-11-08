@@ -8,13 +8,14 @@ import type { AppConfig } from "../../../config/config.schema";
 import { lockRow, PrismaService } from "../../../database/prisma.service";
 import type { Prisma, VendorActivationPayment } from "../../../generated/prisma/client";
 import { AuditService, SYSTEM_ACTOR } from "../../../infrastructure/audit/audit.service";
-import { type ActivationPaymentView, type ActivationStarted, activationFeeOf, type VendorActivationView } from "../../../shared";
+import { type ActivationPaymentView, type ActivationStarted, type VendorActivationView } from "../../../shared";
 import { UsersRepository } from "../../auth/users.repository";
 import { ANOTHER_ACCOUNT, type OrderPaymentEvent, type OrderPaymentHandler, OrderPaymentRouter, type PaymentOutcome, type PaymentReversalEvent } from "../../finance/payments/order-payment.router";
 import { PaymentAccountsService, type ResolvedAccount } from "../../finance/payments/payment-accounts.service";
 import { PaymentEventsService } from "../../finance/payments/payment-events.service";
 import { vendorIdOf } from "../scope";
 import { VendorActivationService } from "../vendor-activation.service";
+import { ActivationFeeRepository } from "./activation-fee.repository";
 import { ActivationNoticesService } from "./activation-notices.service";
 import { activationStateOf, isAwaitingActivation } from "./activation-state";
 
@@ -41,6 +42,7 @@ export class ActivationPaymentsService implements OrderPaymentHandler, OnModuleI
     private readonly prisma: PrismaService,
     private readonly router: OrderPaymentRouter,
     private readonly accounts: PaymentAccountsService,
+    private readonly fees: ActivationFeeRepository,
     private readonly events: PaymentEventsService,
     private readonly activation: VendorActivationService,
     private readonly notices: ActivationNoticesService,
@@ -55,26 +57,24 @@ export class ActivationPaymentsService implements OrderPaymentHandler, OnModuleI
 
   async view(principal: AuthPrincipal): Promise<VendorActivationView> {
     const vendorId = vendorIdOf(principal);
-    const vendor = await this.prisma.vendor.findUnique({ where: { id: vendorId }, include: { country: true } });
+    const vendor = await this.prisma.vendor.findUnique({ where: { id: vendorId } });
     if (!vendor) {
       throw Errors.notFound();
     }
     const latest = await this.prisma.vendorActivationPayment.findFirst({ where: { vendorId }, orderBy: { createdAt: "desc" } });
     const state = activationStateOf(vendor);
+    const fee = await this.fees.current();
     return {
       state,
-      feeMinor: state === "DUE" ? activationFeeOf(vendor.country.config as { activationFeeMinor?: unknown }) : null,
-      currency: vendor.country.currency,
+      feeMinor: state === "DUE" ? fee.feeMinor : null,
+      currency: fee.currency,
       payment: latest ? toView(latest) : null,
     };
   }
 
   async start(principal: AuthPrincipal, meta: RequestMeta): Promise<ActivationStarted> {
     const vendorId = vendorIdOf(principal);
-    const resolved = this.accounts.find(principal.countryCode ?? "");
-    if (!resolved) {
-      throw Errors.invalidTransition("Card payments aren't available in your market yet. Contact us to activate your account.");
-    }
+    const resolved = this.accounts.platform();
     const prepared = await this.prisma.$transaction((tx) => this.prepare(tx, principal, vendorId, resolved, meta));
     if (prepared.live) {
       await this.notices.waived(vendorId);
@@ -105,7 +105,7 @@ export class ActivationPaymentsService implements OrderPaymentHandler, OnModuleI
     if (!payment || payment.processor !== "SANDBOX" || this.config.NODE_ENV === "production" || !payment.providerReference) {
       throw Errors.notFound();
     }
-    await this.events.handle("SANDBOX", payment.countryCode, {
+    await this.events.handle("SANDBOX", payment.accountKey, {
       kind: "ORDER_PAID",
       orderKind: "ACTIVATION",
       eventId: `sandbox_activation_paid_${payment.id}`,
@@ -125,12 +125,12 @@ export class ActivationPaymentsService implements OrderPaymentHandler, OnModuleI
       return outcome("unknown activation payment");
     }
     const payment = await tx.vendorActivationPayment.findUniqueOrThrow({ where: { id: event.orderId } });
-    if (payment.processor !== provider || payment.countryCode !== accountKey) {
+    if (payment.processor !== provider || payment.accountKey !== accountKey) {
       return outcome(ANOTHER_ACCOUNT);
     }
     if (event.kind === "ORDER_CLOSED") {
       const closed = await tx.vendorActivationPayment.updateMany({
-        where: { id: payment.id, processor: provider, countryCode: accountKey, providerReference: event.providerReference, status: "PENDING" },
+        where: { id: payment.id, processor: provider, accountKey, providerReference: event.providerReference, status: "PENDING" },
         data: { status: event.outcome, closedAt: new Date() },
       });
       return outcome(closed.count > 0 ? event.outcome.toLowerCase() : "nothing to close");
@@ -175,7 +175,7 @@ export class ActivationPaymentsService implements OrderPaymentHandler, OnModuleI
   }
 
   async paymentReversal(tx: Prisma.TransactionClient, provider: string, accountKey: string, event: PaymentReversalEvent): Promise<PaymentOutcome | null> {
-    const payment = event.paymentId ? await tx.vendorActivationPayment.findFirst({ where: { processor: provider, countryCode: accountKey, providerPaymentId: event.paymentId } }) : null;
+    const payment = event.paymentId ? await tx.vendorActivationPayment.findFirst({ where: { processor: provider, accountKey, providerPaymentId: event.paymentId } }) : null;
     if (!payment) {
       return null;
     }
@@ -197,17 +197,17 @@ export class ActivationPaymentsService implements OrderPaymentHandler, OnModuleI
 
   private async prepare(tx: Prisma.TransactionClient, principal: AuthPrincipal, vendorId: string, resolved: ResolvedAccount, meta: RequestMeta): Promise<Prepared> {
     await lockRow(tx, "vendors", vendorId);
-    const vendor = await tx.vendor.findUniqueOrThrow({ where: { id: vendorId }, include: { country: true } });
+    const vendor = await tx.vendor.findUniqueOrThrow({ where: { id: vendorId } });
     if (!isAwaitingActivation(vendor)) {
       throw Errors.invalidTransition(vendor.status === "ACTIVE" ? "Your account is already live." : "Finish verifying your business and accept the agreement first.");
     }
-    const feeMinor = activationFeeOf(vendor.country.config as { activationFeeMinor?: unknown });
+    const { feeMinor, currency } = await this.fees.current(tx);
     if (feeMinor === 0) {
       await this.activation.goLive(vendorId, vendor.countryCode, tx, { feeMinor });
       return { live: true };
     }
     const payment = await tx.vendorActivationPayment.create({
-      data: { vendorId, countryCode: vendor.countryCode, processor: resolved.processor.name, currency: vendor.country.currency, feeMinor: BigInt(feeMinor) },
+      data: { vendorId, countryCode: vendor.countryCode, accountKey: resolved.accountKey, processor: resolved.processor.name, currency, feeMinor: BigInt(feeMinor) },
     });
     await this.audit.record(
       {

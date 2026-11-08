@@ -8,6 +8,7 @@ import { AuditService } from "../../../infrastructure/audit/audit.service";
 import {
   CLOSED_PARTNER_STATUSES,
   DECISION_TARGET,
+  CLOSING_DECISIONS,
   decisionsFrom,
   hasPermission,
   MANAGER_DECISIONS,
@@ -177,7 +178,7 @@ export class AdminPartnersService {
     const partner = await this.prisma.$transaction(async (tx) => {
       await lockRow(tx, "fulfilmentPartners", partnerId);
       const current = await tx.fulfilmentPartner.findUniqueOrThrow({ where: { id: partnerId } });
-      if (current.deactivatedAt) {
+      if (current.deactivatedAt && !CLOSING_DECISIONS.includes(decision)) {
         throw Errors.invalidTransition("Reactivate this account first.");
       }
       if (!decisionsFrom(current.status).includes(decision)) {

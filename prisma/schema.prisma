@@ -1109,6 +1109,7 @@ model TopUp {
   walletId          String      @map("wallet_id") @db.Uuid
   vendorId          String      @map("vendor_id") @db.Uuid
   countryCode       String      @map("country_code") @db.Char(2)
+  accountKey        String      @map("account_key") @db.VarChar(10)
   processor         String      @db.VarChar(20)
   providerReference String?     @unique(map: "top_ups_provider_reference_unique") @map("provider_reference") @db.VarChar(255)
   providerPaymentId String?     @unique(map: "top_ups_provider_payment_unique") @map("provider_payment_id") @db.VarChar(255)
@@ -1135,6 +1136,7 @@ model VendorActivationPayment {
   id                String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   vendorId          String                  @map("vendor_id") @db.Uuid
   countryCode       String                  @map("country_code") @db.Char(2)
+  accountKey        String                  @map("account_key") @db.VarChar(10)
   processor         String                  @db.VarChar(20)
   providerReference String?                 @unique(map: "vendor_activation_payments_provider_reference_unique") @map("provider_reference") @db.VarChar(255)
   providerPaymentId String?                 @unique(map: "vendor_activation_payments_provider_payment_unique") @map("provider_payment_id") @db.VarChar(255)
@@ -1151,6 +1153,15 @@ model VendorActivationPayment {
 
   @@index([vendorId, createdAt], map: "vendor_activation_payments_vendor_created_idx")
   @@map("vendor_activation_payments")
+}
+
+model PlatformSetting {
+  id                    Int      @id @default(1) @db.SmallInt
+  activationFeeMinor    BigInt   @default(1000) @map("activation_fee_minor")
+  activationFeeCurrency String   @default("USD") @map("activation_fee_currency") @db.Char(3)
+  updatedAt             DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("platform_settings")
 }
 
 model PaymentEvent {

@@ -39,11 +39,17 @@ const DECISION_SOURCE: Partial<Record<PartnerDecision, PartnerStatus>> = { APPRO
 
 export const MANAGER_DECISIONS: readonly PartnerDecision[] = ["REINSTATE", "OFFBOARD", "TERMINATE"];
 
+export const CLOSING_DECISIONS: readonly PartnerDecision[] = ["REJECT", "OFFBOARD", "TERMINATE"];
+
 export function decisionsFrom(status: PartnerStatus): PartnerDecision[] {
   return PARTNER_DECISIONS.filter((decision) => {
     const source = DECISION_SOURCE[decision];
     return source ? source === status : canMovePartner(status, DECISION_TARGET[decision]);
   });
+}
+
+export function availableDecisions(status: PartnerStatus, deactivated: boolean): PartnerDecision[] {
+  return decisionsFrom(status).filter((decision) => !deactivated || CLOSING_DECISIONS.includes(decision));
 }
 
 export const OPERATING_PARTNER_STATUSES: readonly PartnerStatus[] = ["ACTIVE"];
