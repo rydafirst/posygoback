@@ -8,6 +8,8 @@ export interface PaymentOutcome {
   followUps: Array<() => Promise<void>>;
 }
 
+export const ANOTHER_ACCOUNT = "checkout belongs to another account";
+
 export type OrderPaymentEvent = Extract<PaymentEvent, { kind: "ORDER_PAID" | "ORDER_CLOSED" }>;
 export type PaymentReversalEvent = Extract<PaymentEvent, { kind: "PAYMENT_REFUNDED" | "PAYMENT_DISPUTED" }>;
 

@@ -4,7 +4,7 @@ import { lockRow } from "../../../database/prisma.service";
 import type { Prisma, StorefrontOrder } from "../../../generated/prisma/client";
 import { AuditService, SYSTEM_ACTOR } from "../../../infrastructure/audit/audit.service";
 import { PaymentAccountsService } from "../../finance/payments/payment-accounts.service";
-import { type OrderPaymentEvent, type OrderPaymentHandler, OrderPaymentRouter, type PaymentOutcome, type PaymentReversalEvent } from "../../finance/payments/order-payment.router";
+import { ANOTHER_ACCOUNT, type OrderPaymentEvent, type OrderPaymentHandler, OrderPaymentRouter, type PaymentOutcome, type PaymentReversalEvent } from "../../finance/payments/order-payment.router";
 import { WalletAlertsService } from "../../finance/wallets/wallet-alerts.service";
 import { CommerceEmails } from "../commerce-emails";
 import { DiscountsService } from "../checkout/discounts.service";
@@ -35,7 +35,10 @@ export class StorefrontPaymentsService implements OrderPaymentHandler, OnModuleI
       return outcome("unknown storefront order");
     }
     const order = await tx.storefrontOrder.findUniqueOrThrow({ where: { id: event.orderId } });
-    if (order.provider !== provider || order.countryCode !== accountKey || order.providerReference !== event.providerReference) {
+    if (order.provider !== provider || order.countryCode !== accountKey) {
+      return outcome(ANOTHER_ACCOUNT);
+    }
+    if (order.providerReference !== event.providerReference) {
       await this.reject(tx, order, event.eventId, "checkout does not match");
       return outcome("rejected: checkout does not match", this.giveBack(accountKey, event));
     }

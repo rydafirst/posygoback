@@ -1,3 +1,4 @@
+import { PaymentEventsService } from "../src/modules/finance/payments/payment-events.service";
 import type { VendorActivationView } from "../src/shared";
 import { createStaff, flushRateLimits, insertLegalDocument, resetDatabase, signUpAndVerify, startApp, type TestApp, testSignature, uploadVerifiedFile } from "./harness";
 import { as, query } from "./partner-helpers";
@@ -253,5 +254,36 @@ describe("vendor activation fee", () => {
     await accept("PRIVACY");
     expect(await activation(vendor)).toMatchObject({ state: "DUE", feeMinor: 1000 });
     expect(test.email.lastTo(vendor.email)!.kind).toBe("onboarding.activation_due");
+  });
+
+  it("ignores another country's copy of the payment instead of refunding it", async () => {
+    await setFee(superAdmin, "GB", 800).expect(200);
+    const vendor = await signUp("owner@shared-account.example");
+    await verify(vendor);
+    const agreements = (await http().get("/v1/vendor/agreements").set(as(vendor.token)).expect(200)).body as Array<{ document: { id: string } }>;
+    for (const agreement of agreements) {
+      await http().post(`/v1/vendor/agreements/${agreement.document.id}/accept`).set(as(vendor.token)).send({ signature: testSignature() }).expect(200);
+    }
+    const started = await http().post("/v1/vendor/activation/checkout").set(as(vendor.token)).expect(201);
+    const paymentId = started.body.paymentId as string;
+    const outcome = await test.app
+      .get(PaymentEventsService)
+      .handle("SANDBOX", "US", {
+        kind: "ORDER_PAID",
+        orderKind: "ACTIVATION",
+        eventId: `copy_for_us_${paymentId}`,
+        orderId: paymentId,
+        providerReference: `sandbox_${paymentId}`,
+        paymentId: `sandbox_payment_${paymentId}`,
+        amountMinor: 800,
+        currency: "GBP",
+        type: "checkout.session.completed",
+        payload: {},
+      });
+    expect(outcome).toBe("checkout belongs to another account");
+    expect(await query("SELECT 1 FROM audit_log_entries WHERE resource_id = $1 AND action = 'payment.rejected'", [paymentId])).toHaveLength(0);
+
+    const paid = await http().post(`/v1/vendor/activation/payments/${paymentId}/sandbox-pay`).set(as(vendor.token)).expect(200);
+    expect(paid.body.payment).toMatchObject({ id: paymentId, status: "PAID" });
   });
 });

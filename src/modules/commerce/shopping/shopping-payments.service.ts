@@ -10,7 +10,7 @@ import { AuditService, SYSTEM_ACTOR } from "../../../infrastructure/audit/audit.
 import { EMAIL_SENDER, type EmailSender } from "../../../infrastructure/email/email.port";
 import { AttemptLimiterService } from "../../../infrastructure/rate-limit/attempt-limiter.service";
 import { Money, type ShoppingCheckoutInput, type ShoppingStartedView } from "../../../shared";
-import { type OrderPaymentEvent, type OrderPaymentHandler, OrderPaymentRouter, type PaymentOutcome, type PaymentReversalEvent } from "../../finance/payments/order-payment.router";
+import { ANOTHER_ACCOUNT, type OrderPaymentEvent, type OrderPaymentHandler, OrderPaymentRouter, type PaymentOutcome, type PaymentReversalEvent } from "../../finance/payments/order-payment.router";
 import { PaymentAccountsService } from "../../finance/payments/payment-accounts.service";
 import { PaymentEventsService } from "../../finance/payments/payment-events.service";
 import { StaffAlertsService } from "../../notifications/staff-alerts.service";
@@ -139,7 +139,10 @@ export class ShoppingPaymentsService implements OrderPaymentHandler, OnModuleIni
     if (event.kind === "ORDER_CLOSED") {
       return outcome("checkout closed");
     }
-    if (row.provider !== provider || row.countryCode !== accountKey || row.providerReference !== event.providerReference) {
+    if (row.provider !== provider || row.countryCode !== accountKey) {
+      return outcome(ANOTHER_ACCOUNT);
+    }
+    if (row.providerReference !== event.providerReference) {
       await this.reject(tx, row, event.eventId, "checkout does not match");
       return outcome("rejected: checkout does not match", this.giveBack(accountKey, event));
     }
@@ -162,7 +165,8 @@ export class ShoppingPaymentsService implements OrderPaymentHandler, OnModuleIni
     const total = Money.of(event.amountMinor, row.currency).format("en-GB");
     return outcome("paid", [
       () => this.email.send(ShoppingEmails.paid(row.buyerEmail, row.reference, total, this.config.WEB_PUBLIC_URL)).then(() => undefined),
-      () => this.staffAlerts.raise("shoppingToBuy", { countryCode: row.countryCode, title: `Shopping request ${row.reference} is paid`, body: `The buyer paid ${total}. Buy the items from the shop.` }),
+      () =>
+        this.staffAlerts.raise("shoppingToBuy", { countryCode: row.countryCode, title: `Shopping request ${row.reference} is paid`, body: `The buyer paid ${total}. Buy the items from the shop.` }),
     ]);
   }
 

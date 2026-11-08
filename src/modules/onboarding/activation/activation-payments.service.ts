@@ -10,7 +10,7 @@ import type { Prisma, VendorActivationPayment } from "../../../generated/prisma/
 import { AuditService, SYSTEM_ACTOR } from "../../../infrastructure/audit/audit.service";
 import { type ActivationPaymentView, type ActivationStarted, activationFeeOf, type VendorActivationView } from "../../../shared";
 import { UsersRepository } from "../../auth/users.repository";
-import { type OrderPaymentEvent, type OrderPaymentHandler, OrderPaymentRouter, type PaymentOutcome, type PaymentReversalEvent } from "../../finance/payments/order-payment.router";
+import { ANOTHER_ACCOUNT, type OrderPaymentEvent, type OrderPaymentHandler, OrderPaymentRouter, type PaymentOutcome, type PaymentReversalEvent } from "../../finance/payments/order-payment.router";
 import { PaymentAccountsService, type ResolvedAccount } from "../../finance/payments/payment-accounts.service";
 import { PaymentEventsService } from "../../finance/payments/payment-events.service";
 import { vendorIdOf } from "../scope";
@@ -125,6 +125,9 @@ export class ActivationPaymentsService implements OrderPaymentHandler, OnModuleI
       return outcome("unknown activation payment");
     }
     const payment = await tx.vendorActivationPayment.findUniqueOrThrow({ where: { id: event.orderId } });
+    if (payment.processor !== provider || payment.countryCode !== accountKey) {
+      return outcome(ANOTHER_ACCOUNT);
+    }
     if (event.kind === "ORDER_CLOSED") {
       const closed = await tx.vendorActivationPayment.updateMany({
         where: { id: payment.id, processor: provider, countryCode: accountKey, providerReference: event.providerReference, status: "PENDING" },
@@ -132,7 +135,7 @@ export class ActivationPaymentsService implements OrderPaymentHandler, OnModuleI
       });
       return outcome(closed.count > 0 ? event.outcome.toLowerCase() : "nothing to close");
     }
-    const problem = this.mismatch(payment, provider, accountKey, event);
+    const problem = this.mismatch(payment, event);
     if (problem) {
       await this.reject(tx, payment, event.eventId, problem);
       return outcome(`rejected: ${problem}`, this.giveBack(accountKey, event));
@@ -222,8 +225,8 @@ export class ActivationPaymentsService implements OrderPaymentHandler, OnModuleI
     return { live: false, payment };
   }
 
-  private mismatch(payment: VendorActivationPayment, provider: string, accountKey: string, event: Extract<OrderPaymentEvent, { kind: "ORDER_PAID" }>): string | null {
-    if (payment.processor !== provider || payment.countryCode !== accountKey || payment.providerReference !== event.providerReference) {
+  private mismatch(payment: VendorActivationPayment, event: Extract<OrderPaymentEvent, { kind: "ORDER_PAID" }>): string | null {
+    if (payment.providerReference !== event.providerReference) {
       return "checkout does not match";
     }
     if (payment.currency !== event.currency || Number(payment.feeMinor) !== event.amountMinor) {
