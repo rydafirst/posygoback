@@ -7,13 +7,12 @@ import type { AppConfig } from "../../../config/config.schema";
 import { lockRow, PrismaService } from "../../../database/prisma.service";
 import type { Prisma } from "../../../generated/prisma/client";
 import { AuditService, SYSTEM_ACTOR } from "../../../infrastructure/audit/audit.service";
-import { AttemptLimiterService } from "../../../infrastructure/rate-limit/attempt-limiter.service";
+import { ATTEMPT_POLICIES, AttemptLimiterService } from "../../../infrastructure/rate-limit/attempt-limiter.service";
 import type { IdentitySessionView } from "../../../shared";
 import { type IdentityOutcome, type IdentityOutcomeListener, IdentityChecksService } from "../../identity/identity-checks.service";
 import { actorOf } from "../admin/admin-partners.service";
 import { PartnerAccessService, partnerIdOf } from "./partner-access.service";
 
-const IDENTITY_STARTS_PER_DAY = { name: "partner-identity-starts", limit: 5, windowSeconds: 24 * 60 * 60 };
 const VERIFYING = ["VERIFYING"] as const;
 const STARTABLE = ["NOT_STARTED", "SUBMITTED", "REJECTED"] as const;
 
@@ -41,8 +40,9 @@ export class PartnerIdentityService implements IdentityOutcomeListener, OnModule
 
   async start(principal: AuthPrincipal, meta: RequestMeta): Promise<IdentitySessionView> {
     const partnerId = partnerIdOf(principal);
-    await this.limiter.consume(IDENTITY_STARTS_PER_DAY, partnerId);
-    const session = await this.checks.start({ type: "PARTNER", id: partnerId, returnUrl: `${this.config.WEB_PUBLIC_URL}/admin/partnership?identity=returned` });
+    const session = await this.limiter.spend(ATTEMPT_POLICIES.partnerIdentityStarts, partnerId, () =>
+      this.checks.start({ type: "PARTNER", id: partnerId, returnUrl: `${this.config.WEB_PUBLIC_URL}/admin/partnership?identity=returned` }),
+    );
     const provider = this.checks.providerName;
     await this.access.mutate(principal, VERIFYING, "Identity checks happen before review.", async (tx, partner) => {
       const updated = await tx.partnerCheck.updateMany({

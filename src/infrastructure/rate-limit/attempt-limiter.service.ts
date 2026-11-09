@@ -8,9 +8,14 @@ export interface AttemptPolicy {
   name: string;
   limit: number;
   windowSeconds: number;
+  message?: string;
 }
 
+const IDENTITY_STARTS_MESSAGE = "You've started 5 ID checks today. Try again in 24 hours, or contact us if you're stuck.";
+
 export const ATTEMPT_POLICIES = {
+  vendorIdentityStarts: { name: "vendor-identity-starts", limit: 5, windowSeconds: 24 * 60 * 60, message: IDENTITY_STARTS_MESSAGE },
+  partnerIdentityStarts: { name: "partner-identity-starts", limit: 5, windowSeconds: 24 * 60 * 60, message: IDENTITY_STARTS_MESSAGE },
   loginPerAccountAndIp: { name: "login-account-ip", limit: 10, windowSeconds: 15 * 60 },
   verifyPerAccountAndIp: { name: "verify-account-ip", limit: 10, windowSeconds: 15 * 60 },
   resendPerAccount: { name: "resend-account", limit: 5, windowSeconds: 60 * 60 },
@@ -34,7 +39,24 @@ export class AttemptLimiterService {
     const key = this.key(policy, subject);
     const [[, count]] = (await this.redis.multi().incr(key).expire(key, policy.windowSeconds, "NX").exec()) as [[Error | null, number]];
     if (count > policy.limit) {
-      throw Errors.rateLimited();
+      throw Errors.rateLimited(policy.message);
+    }
+  }
+
+  async spend<Result>(policy: AttemptPolicy, subject: string, work: () => Promise<Result>): Promise<Result> {
+    await this.consume(policy, subject);
+    try {
+      return await work();
+    } catch (error) {
+      await this.release(policy, subject);
+      throw error;
+    }
+  }
+
+  private async release(policy: AttemptPolicy, subject: string): Promise<void> {
+    const key = this.key(policy, subject);
+    if ((await this.redis.decr(key)) <= 0) {
+      await this.redis.del(key);
     }
   }
 

@@ -25,7 +25,7 @@ export const Errors = {
   invalidCode: (message = "That code is not valid.") => new AppException(HttpStatus.BAD_REQUEST, ERROR_CODES.invalidCode, message),
   mfaEnrolmentRequired: () => new AppException(HttpStatus.FORBIDDEN, ERROR_CODES.mfaEnrolmentRequired, "Set up two-factor authentication to continue."),
   mfaAlreadyEnrolled: () => new AppException(HttpStatus.CONFLICT, ERROR_CODES.mfaAlreadyEnrolled, "Two-factor authentication is already set up."),
-  rateLimited: () => new AppException(HttpStatus.TOO_MANY_REQUESTS, ERROR_CODES.rateLimited, "Too many attempts. Wait a moment and try again."),
+  rateLimited: (message = "Too many attempts. Wait a moment and try again.") => new AppException(HttpStatus.TOO_MANY_REQUESTS, ERROR_CODES.rateLimited, message),
   countryUnavailable: () => new AppException(HttpStatus.BAD_REQUEST, ERROR_CODES.countryUnavailable, "That country is not open for new vendors yet."),
   countryExists: () => new AppException(HttpStatus.CONFLICT, ERROR_CODES.countryExists, "That country already exists."),
   invalidTransition: (message: string) => new AppException(HttpStatus.CONFLICT, ERROR_CODES.invalidTransition, message),

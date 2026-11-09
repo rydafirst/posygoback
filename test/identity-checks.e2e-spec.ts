@@ -3,7 +3,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import type { PartnerDetailView, VerificationView } from "../src/shared";
 import { canonicalJson, DiditIdentityProvider } from "../src/modules/identity/providers/didit-identity-provider";
 import { IDENTITY_CHECK_PROVIDER } from "../src/modules/identity/providers/identity-check.port";
-import { createStaff, flushRateLimits, resetDatabase, signUpAndVerify, startApp, type TestApp, uploadVerifiedFile, WEB_ORIGIN } from "./harness";
+import { createStaff, flushRateLimits, flushRequestThrottles, resetDatabase, signUpAndVerify, startApp, type TestApp, uploadVerifiedFile, WEB_ORIGIN } from "./harness";
 import { as, PartnerFlow, query } from "./partner-helpers";
 
 const SECRET = "didit-test-webhook-secret";
@@ -33,11 +33,15 @@ interface DiditSession {
 class FakeDidit {
   readonly sessions = new Map<string, DiditSession>();
   decisionReads = 0;
+  refuseSessions = false;
 
   readonly fetch: typeof fetch = (input, init) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
     if ((init?.headers as Record<string, string>)["x-api-key"] !== "didit-key") {
       return Promise.resolve(new Response("{}", { status: 403 }));
+    }
+    if (init?.method === "POST" && url.pathname === "/v3/session/" && this.refuseSessions) {
+      return Promise.resolve(Response.json({ detail: "Insufficient credits" }, { status: 400 }));
     }
     if (init?.method === "POST" && url.pathname === "/v3/session/") {
       const body = JSON.parse(init.body as string) as { vendor_data: string; callback: string; workflow_id: string };
@@ -256,6 +260,27 @@ describe("identity checks with Didit", () => {
       expect((await view(changed.token)).identityCheck!.status).toBe("APPROVED");
       await test.http().put("/v1/vendor/verification").set(as(changed.token)).send({ contactFullName: "Ifeoma Uche" }).expect(200);
       expect((await view(changed.token)).identityCheck).toBeNull();
+    });
+    it("doesn't count starts Didit refuses, and says when the daily limit is reached", async () => {
+      const seller = await vendor("limits@identity.test");
+      const start = async () => {
+        await flushRequestThrottles();
+        return test.http().post("/v1/vendor/verification/identity/session").set(as(seller.token));
+      };
+      didit.refuseSessions = true;
+      try {
+        for (let attempt = 0; attempt < 6; attempt += 1) {
+          expect((await start()).status).toBeGreaterThanOrEqual(500);
+        }
+      } finally {
+        didit.refuseSessions = false;
+      }
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        expect((await start()).status).toBe(200);
+      }
+      const limited = await start();
+      expect(limited.status).toBe(429);
+      expect(limited.body.message).toBe("You've started 5 ID checks today. Try again in 24 hours, or contact us if you're stuck.");
     });
   });
 

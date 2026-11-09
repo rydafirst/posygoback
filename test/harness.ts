@@ -133,6 +133,15 @@ export async function flushRateLimits(): Promise<void> {
   await redis.quit();
 }
 
+export async function flushRequestThrottles(): Promise<void> {
+  const redis = new Redis(loadConfig().REDIS_URL);
+  const keys = (await redis.keys("*")).filter((key) => !key.startsWith("attempts:"));
+  if (keys.length > 0) {
+    await redis.del(...keys);
+  }
+  await redis.quit();
+}
+
 export const PNG_BYTES = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64, 7)]);
 
 export async function uploadVerifiedFile(test: TestApp, accessToken: string, purpose = "KYC_DOCUMENT"): Promise<string> {
