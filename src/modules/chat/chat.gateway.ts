@@ -5,6 +5,7 @@ import { ZodError } from "zod";
 
 import type { AuthPrincipal } from "../../common/auth/auth-principal";
 import { AppException } from "../../common/http/app-exception";
+import { LiveUpdatesService } from "../../infrastructure/realtime/live-updates.service";
 import { AccessTokenService } from "../auth/tokens/access-token.service";
 import { SessionService } from "../auth/sessions/session.service";
 import { CHAT_EVENTS, CHAT_NAMESPACE, type ChatSendAck, chatSendSchema, chatThreadEventSchema } from "../../shared";
@@ -36,10 +37,12 @@ export class ChatGateway implements OnGatewayInit<Namespace> {
     private readonly sessions: SessionService,
     private readonly chat: ChatService,
     private readonly events: ChatEventsService,
+    private readonly live: LiveUpdatesService,
   ) {}
 
   afterInit(namespace: Namespace): void {
     this.events.attach(namespace);
+    this.live.attach(namespace);
     namespace.use((socket, next) => {
       this.authenticate(socket as ChatSocket)
         .then(() => next())

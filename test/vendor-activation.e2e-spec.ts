@@ -112,6 +112,9 @@ describe("vendor activation fee", () => {
     const changed = await setFee(superAdmin, 800).expect(200);
     expect(changed.body).toEqual({ feeMinor: 800, currency: "USD" });
     await setFee(superAdmin, -1).expect(400);
+    await setFee(superAdmin, 49).expect(400);
+    await setFee(superAdmin, 50).expect(200);
+    await setFee(superAdmin, 800).expect(200);
     expect((await http().get("/v1/admin/activation-fee").set(as(compliance)).expect(200)).body).toEqual({ feeMinor: 800, currency: "USD" });
 
     const audit = await query<{ before_state: { feeMinor: number }; after_state: { feeMinor: number; currency: string } }>(
@@ -121,6 +124,8 @@ describe("vendor activation fee", () => {
       [0, 1000, "USD"],
       [1000, 500, "USD"],
       [500, 800, "USD"],
+      [800, 50, "USD"],
+      [50, 800, "USD"],
     ]);
   });
 

@@ -1,7 +1,7 @@
 import type { AuthPrincipal } from "../../common/auth/auth-principal";
 import { Errors } from "../../common/http/app-exception";
 import type { Prisma } from "../../generated/prisma/client";
-import { type ChatSide, hasPermission } from "../../shared";
+import { type ChatSide, hasPermission, LiveRooms } from "../../shared";
 import { reviewerCountryScope } from "../onboarding/scope";
 
 export interface CustomerViewer {
@@ -46,10 +46,11 @@ export function otherSide(side: ChatSide): ChatSide {
 }
 
 export const ChatRooms = {
-  account: (accountId: string) => `account:${accountId}`,
+  account: LiveRooms.account,
   team: (countryCode: string | null) => (countryCode ? `team:${countryCode}` : "team"),
 };
 
 export function roomsFor(viewer: ChatViewer): string[] {
-  return viewer.side === "CUSTOMER" ? [ChatRooms.account(viewer.account.id)] : [ChatRooms.team(viewer.countryCode)];
+  const userRoom = LiveRooms.user(viewer.principal.userId);
+  return viewer.side === "CUSTOMER" ? [ChatRooms.account(viewer.account.id), userRoom] : [ChatRooms.team(viewer.countryCode), userRoom];
 }

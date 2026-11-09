@@ -4,6 +4,7 @@ import type { AuthPrincipal } from "../../common/auth/auth-principal";
 import { Errors } from "../../common/http/app-exception";
 import { type DatabaseClient, PrismaService } from "../../database/prisma.service";
 import type { Prisma } from "../../generated/prisma/client";
+import { LiveUpdatesService } from "../../infrastructure/realtime/live-updates.service";
 import type { NotificationFeedView } from "../../shared";
 import { PLATFORM_NAME } from "../../common/brand/brand";
 
@@ -24,14 +25,19 @@ function shorten(text: string, max: number): string {
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly live: LiveUpdatesService,
+  ) {}
 
   async forVendor(vendorId: string, notice: NoticeInput, client: DatabaseClient = this.prisma): Promise<void> {
     await client.notification.create({ data: { vendorId, title: shorten(notice.title, 160), body: shorten(notice.body, 400), href: notice.href ?? null } });
+    this.live.accountChanged({ vendorId }, { afterCommit: client !== this.prisma });
   }
 
   async forUser(userId: string, notice: NoticeInput, client: DatabaseClient = this.prisma): Promise<void> {
     await client.notification.create({ data: { userId, title: shorten(notice.title, 160), body: shorten(notice.body, 400), href: notice.href ?? null } });
+    this.live.accountChanged({ userIds: [userId] }, { afterCommit: client !== this.prisma });
   }
 
   async forUsers(userIds: readonly string[], notice: NoticeInput, client: DatabaseClient = this.prisma): Promise<void> {
@@ -40,6 +46,7 @@ export class NotificationsService {
     }
     const content = { title: shorten(notice.title, 160), body: shorten(notice.body, 400), href: notice.href ?? null };
     await client.notification.createMany({ data: userIds.map((userId) => ({ userId, ...content })) });
+    this.live.accountChanged({ userIds }, { afterCommit: client !== this.prisma });
   }
 
   async feed(principal: AuthPrincipal): Promise<NotificationFeedView> {

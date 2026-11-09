@@ -14,6 +14,7 @@ import { CryptoModule } from "./infrastructure/crypto/crypto.module";
 import { EmailModule } from "./infrastructure/email/email.module";
 import { ClientThrottlerGuard } from "./infrastructure/rate-limit/client-throttler.guard";
 import { RateLimitModule } from "./infrastructure/rate-limit/rate-limit.module";
+import { RealtimeModule } from "./infrastructure/realtime/realtime.module";
 import { RedisModule } from "./infrastructure/redis/redis.module";
 import { AuditAnchorModule } from "./modules/audit-anchor/audit-anchor.module";
 import { AccountsModule } from "./modules/accounts/accounts.module";
@@ -94,6 +95,7 @@ function maskSecrets(url: string | undefined): string | undefined {
     }),
     DatabaseModule,
     RedisModule,
+    RealtimeModule,
     CryptoModule,
     AuditModule,
     EmailModule,

@@ -129,7 +129,11 @@ export const countryConfigSchema = z.object({
   partners: partnerProgrammeSchema.prefault({}),
 });
 
-export const activationFeeSchema = z.object({ activationFeeMinor: amountMinor });
+export const SMALLEST_CARD_CHARGE_MINOR = 50;
+
+export const activationFeeSchema = z.object({
+  activationFeeMinor: amountMinor.refine((fee) => fee === 0 || fee >= SMALLEST_CARD_CHARGE_MINOR, "Use 0 for no fee, or at least US$0.50. Card payments can't be smaller."),
+});
 export type ActivationFeeInput = z.infer<typeof activationFeeSchema>;
 
 export interface ActivationFeeView {

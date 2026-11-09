@@ -2,7 +2,7 @@ import { SEED_COUNTRIES } from "../country/seed-countries";
 import { buildVerificationSchemas } from "./verification.schema";
 
 const gb = SEED_COUNTRIES.find((country) => country.code === "GB")!;
-const { draft, submission } = buildVerificationSchemas({ countryCode: "GB", kyc: gb.config.kyc, address: gb.config.address });
+const { draft, submission, step } = buildVerificationSchemas({ countryCode: "GB", kyc: gb.config.kyc, address: gb.config.address });
 
 const valid = {
   businessType: "LIMITED_COMPANY",
@@ -22,6 +22,19 @@ const valid = {
 };
 
 describe("verification schemas", () => {
+  it("checks the company number on the business step, before the later steps are filled", () => {
+    const business = { businessType: valid.businessType, legalBusinessName: valid.legalBusinessName, registrationCountryCode: "GB", registeredAddress: valid.registeredAddress };
+    expect(step(0).safeParse({ ...business, companyNumber: "12345678" }).success).toBe(true);
+    const wrong = step(0).safeParse({ ...business, companyNumber: "POSYGO" });
+    expect(wrong.error?.issues).toEqual([expect.objectContaining({ path: ["companyNumber"], message: "That doesn't look like a valid Companies House number" })]);
+  });
+
+  it("checks only the fields on each step", () => {
+    expect(step(1).safeParse({ contactFullName: valid.contactFullName, contactRole: valid.contactRole, contactPhone: valid.contactPhone }).success).toBe(true);
+    expect(step(2).safeParse({}).success).toBe(true);
+    expect(step(1).safeParse({ contactFullName: valid.contactFullName, contactRole: valid.contactRole }).error?.issues.map((issue) => issue.path)).toEqual([["contactPhone"]]);
+  });
+
   it("accepts a complete UK limited company", () => {
     expect(submission.safeParse(valid).success).toBe(true);
   });

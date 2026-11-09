@@ -70,10 +70,27 @@ function matches(pattern: string | undefined, value: string): boolean {
   return !pattern || new RegExp(pattern).test(value.replace(/\s/g, ""));
 }
 
-export function buildVerificationSchemas(market: VerificationMarket) {
-  const base = z.object(buildShape(market));
-  const draft = base.partial().extend({ registeredAddress: base.shape.registeredAddress.partial().optional(), documents: base.shape.documents.partial().optional() });
-  const submission = base.superRefine((value, context) => {
+type VerificationShape = ReturnType<typeof buildShape>;
+type VerificationField = keyof VerificationShape;
+
+export const VERIFICATION_STEP_FIELDS: ReadonlyArray<readonly VerificationField[]> = [
+  ["businessType", "legalBusinessName", "registrationCountryCode", "companyNumber", "taxNumber", "registeredAddress"],
+  ["contactFullName", "contactRole", "contactPhone"],
+  [],
+  ["documents"],
+  ["productsDescription", "monthlyUnits", "monthlyOrders", "hazards"],
+];
+
+interface MarketRuleValues {
+  registrationCountryCode?: string;
+  companyNumber?: string;
+  taxNumber?: string;
+  registeredAddress?: { postalCode: string; region?: string };
+  hazards?: string[];
+}
+
+function marketRules(market: VerificationMarket) {
+  return (value: MarketRuleValues, context: z.RefinementCtx) => {
     const domestic = value.registrationCountryCode === market.countryCode;
     const { companyNumber, taxNumber } = market.kyc;
     if (domestic && companyNumber.required && !value.companyNumber) {
@@ -85,17 +102,28 @@ export function buildVerificationSchemas(market: VerificationMarket) {
     if (domestic && taxNumber && value.taxNumber && !matches(taxNumber.pattern, value.taxNumber)) {
       context.addIssue({ code: "custom", path: ["taxNumber"], message: `That doesn't look like a valid ${taxNumber.label}` });
     }
-    if (domestic && !new RegExp(market.address.postalCodePattern).test(value.registeredAddress.postalCode)) {
+    if (domestic && value.registeredAddress && !new RegExp(market.address.postalCodePattern).test(value.registeredAddress.postalCode)) {
       context.addIssue({ code: "custom", path: ["registeredAddress", "postalCode"], message: `Enter a valid ${market.address.postalCodeLabel}` });
     }
-    if (domestic && market.address.regionRequired && !value.registeredAddress.region) {
+    if (domestic && value.registeredAddress && market.address.regionRequired && !value.registeredAddress.region) {
       context.addIssue({ code: "custom", path: ["registeredAddress", "region"], message: `Enter the ${market.address.regionLabel}` });
     }
-    if (value.hazards.includes("NONE") && value.hazards.length > 1) {
+    if (value.hazards?.includes("NONE") && value.hazards.length > 1) {
       context.addIssue({ code: "custom", path: ["hazards"], message: "None can't be combined with other hazards" });
     }
-  });
-  return { draft, submission };
+  };
+}
+
+export function buildVerificationSchemas(market: VerificationMarket) {
+  const base = z.object(buildShape(market));
+  const rules = marketRules(market);
+  const draft = base.partial().extend({ registeredAddress: base.shape.registeredAddress.partial().optional(), documents: base.shape.documents.partial().optional() });
+  const submission = base.superRefine(rules);
+  const step = (index: number) => {
+    const fields = VERIFICATION_STEP_FIELDS[index] ?? [];
+    return base.pick(Object.fromEntries(fields.map((field) => [field, true])) as Partial<Record<VerificationField, true>>).superRefine(rules);
+  };
+  return { draft, submission, step };
 }
 
 export type VerificationDraft = z.infer<ReturnType<typeof buildVerificationSchemas>["draft"]>;

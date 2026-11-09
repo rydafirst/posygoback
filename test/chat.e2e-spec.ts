@@ -3,7 +3,8 @@ import type { AddressInfo } from "node:net";
 
 import { io, type Socket } from "socket.io-client";
 
-import { CHAT_NAMESPACE, type ChatMessageView, type ChatPageView, type ChatSendAck, type ChatThreadView } from "../src/shared";
+import { NotificationsService } from "../src/modules/notifications/notifications.service";
+import { CHAT_NAMESPACE, LIVE_EVENTS, type ChatMessageView, type ChatPageView, type ChatSendAck, type ChatThreadView } from "../src/shared";
 import { createStaff, flushRateLimits, resetDatabase, signUpAndVerify, startApp, type TestApp } from "./harness";
 import { as, PartnerFlow, query } from "./partner-helpers";
 
@@ -168,5 +169,17 @@ describe("chat between sellers, partners and the team", () => {
     expect(ack).toMatchObject({ ok: true });
     const inbox = (await test.http().get("/v1/chat/threads").set(as(admin)).expect(200)).body as ChatThreadView[];
     expect(inbox[0]).toMatchObject({ account: { kind: "PARTNER" }, waitingSince: expect.any(String) });
+  });
+
+  it("tells a seller's open pages when something on their account changes", async () => {
+    const sellerSocket = await connect(seller);
+    const otherSocket = await connect(otherSeller);
+    const sellerHeard = received(sellerSocket, LIVE_EVENTS.accountChanged);
+    const otherHeard = received(otherSocket, LIVE_EVENTS.accountChanged);
+    const vendorId = (await test.http().get("/v1/auth/me").set(as(seller)).expect(200)).body.vendorId as string;
+    await test.app.get(NotificationsService).forVendor(vendorId, { title: "Your business is verified", body: "You can go live now." });
+    await settle();
+    expect(sellerHeard).toHaveLength(1);
+    expect(otherHeard).toHaveLength(0);
   });
 });
