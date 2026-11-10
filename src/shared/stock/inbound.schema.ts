@@ -46,6 +46,7 @@ export const inboundInputSchema = z
   .object({
     warehouseId: z.string().uuid().optional(),
     shippingMode: z.enum(SHIPPING_MODES),
+    intoExistingBoxes: z.boolean().default(false),
     expectedArrivalDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     carrier: z.string().trim().min(2).max(60).optional(),
     trackingNumber: z
@@ -96,6 +97,7 @@ export interface InboundEstimateView {
   firstShipment: boolean;
   stockingMinor: number;
   storageMinor: number;
+  boxesMinor: number;
   waivedMinor: number;
   totalMinor: number;
 }
@@ -158,6 +160,7 @@ export interface InboundSummaryView {
   countryCode: string;
   status: InboundStatus;
   shippingMode: ShippingMode;
+  intoExistingBoxes: boolean;
   expectedArrivalDate: string;
   totalUnits: number;
   totalBoxes: number;

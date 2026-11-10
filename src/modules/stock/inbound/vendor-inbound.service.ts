@@ -69,6 +69,7 @@ export class VendorInboundService {
     const vendor = await this.standing.assertCanTrade(principal);
     this.assertArrivalDate(input.expectedArrivalDate);
     const warehouse = await this.warehouses.receivingWarehouseFor(country.countryCode, input.warehouseId);
+    await this.assertExistingBoxes(country.vendorId, warehouse.id, input);
     await this.assertProducts(
       this.prisma,
       vendor.vendorId,
@@ -105,6 +106,7 @@ export class VendorInboundService {
     this.assertArrivalDate(input.expectedArrivalDate);
     const current = await this.owned(principal, inboundId);
     const warehouse = await this.warehouses.receivingWarehouseFor(current.countryCode, input.warehouseId);
+    await this.assertExistingBoxes(current.vendorId, warehouse.id, input);
     await this.prisma.$transaction(async (tx) => {
       const existing = await this.lockOwned(tx, vendor.vendorId, inboundId);
       if (existing.status !== "DRAFT") {
@@ -264,12 +266,19 @@ export class VendorInboundService {
   private columns(input: InboundInput) {
     return {
       shippingMode: input.shippingMode,
+      intoExistingBoxes: input.intoExistingBoxes,
       expectedArrivalDate: toDateOnly(input.expectedArrivalDate),
       carrier: input.carrier ?? null,
       trackingNumber: input.trackingNumber ?? null,
       notes: input.notes ?? null,
       declaredBoxCounts: input.boxCounts,
     };
+  }
+
+  private async assertExistingBoxes(vendorId: string, warehouseId: string, input: InboundInput): Promise<void> {
+    if (input.intoExistingBoxes && (await this.prisma.storageBox.count({ where: { vendorId, warehouseId, removedAt: null } })) === 0) {
+      throw Errors.validation({ intoExistingBoxes: ["You don't have boxes at this hub yet, so this shipment needs its own."] });
+    }
   }
 
   private lineRows(input: InboundInput) {

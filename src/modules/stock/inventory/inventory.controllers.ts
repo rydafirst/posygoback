@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Query } from "@nestjs/common";
-import { type PlaceLotInput, placeLotSchema, type RepackBoxesInput, repackBoxesSchema } from "../../../shared";
+import { type BoxCheckInput, boxCheckSchema, type PlaceLotInput, placeLotSchema, type RepackBoxesInput, repackBoxesSchema } from "../../../shared";
 import { z } from "zod";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
@@ -25,6 +25,12 @@ export class VendorInventoryController {
   @Get("boxes")
   storageBoxes(@SelectedCountry() country: SellerCountry) {
     return this.boxes.vendorBoxes(country);
+  }
+
+  @RequirePermission("vendor.stock.read")
+  @Get("boxes/photos/:fileId")
+  boxPhoto(@Param("fileId", uuid) fileId: string, @CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
+    return this.boxes.vendorPhoto(principal, fileId, meta);
   }
 
   @RequirePermission("vendor.stock.read")
@@ -76,6 +82,24 @@ export class WarehouseInventoryController {
     @Meta() meta: RequestMeta,
   ) {
     return this.boxes.repack(principal, warehouseId, input, meta);
+  }
+
+  @RequirePermission("inventory.place")
+  @Post("warehouses/:warehouseId/boxes/checks")
+  @HttpCode(HttpStatus.OK)
+  checkBoxes(
+    @Param("warehouseId", uuid) warehouseId: string,
+    @Body(new ZodValidationPipe(boxCheckSchema)) input: BoxCheckInput,
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Meta() meta: RequestMeta,
+  ) {
+    return this.boxes.check(principal, warehouseId, input, meta);
+  }
+
+  @RequirePermission("inventory.read")
+  @Get("warehouses/:warehouseId/boxes/photos/:fileId")
+  boxPhoto(@Param("warehouseId", uuid) warehouseId: string, @Param("fileId", uuid) fileId: string, @CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
+    return this.boxes.hubPhoto(principal, warehouseId, fileId, meta);
   }
 
   @RequirePermission("inventory.read")

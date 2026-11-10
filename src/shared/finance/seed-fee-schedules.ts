@@ -1,4 +1,4 @@
-import { DEFAULT_PARTNER_RATES, DEFAULT_REFERRAL_RATES, DEFAULT_SHOPPING_RATES, DEFAULT_STOREFRONT_RATES, type FeeSchedule } from "./fee-schedule";
+import { DEFAULT_BOX_SUPPLY, DEFAULT_PARTNER_RATES, DEFAULT_REFERRAL_RATES, DEFAULT_SHOPPING_RATES, DEFAULT_STOREFRONT_RATES, type FeeSchedule } from "./fee-schedule";
 
 const STANDARD: FeeSchedule = {
   onboarding: {
@@ -18,6 +18,7 @@ const STANDARD: FeeSchedule = {
   storefront: DEFAULT_STOREFRONT_RATES,
   referral: DEFAULT_REFERRAL_RATES,
   shopping: DEFAULT_SHOPPING_RATES,
+  boxSupply: DEFAULT_BOX_SUPPLY,
 };
 
 const SEEDED_COUNTRIES = ["GB", "US", "AU", "CA", "IE", "DE", "FR", "NL", "ES", "IT"] as const;

@@ -71,6 +71,8 @@ export class OrdersRepository {
     const request = row.cancellations[0];
     return {
       ...this.summary({ ...row, lines: row.lines, cancellations: pending ? [{ id: request!.id }] : [] }),
+      vendorId: row.vendorId,
+      warehouseId: row.warehouseId,
       recipient: revealRecipient ? this.recipient(row) : this.masked(row),
       holdReason: row.holdReason,
       lines: row.lines.map((line) => ({

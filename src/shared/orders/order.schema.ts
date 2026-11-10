@@ -215,6 +215,8 @@ export interface CancellationRequestView {
 }
 
 export interface OrderDetailView extends OrderSummaryView {
+  vendorId: string;
+  warehouseId: string;
   recipient: Recipient;
   holdReason: string | null;
   lines: OrderLineView[];

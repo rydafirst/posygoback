@@ -357,6 +357,7 @@ model Vendor {
   lots             StockLot[]
   storageBoxes     StorageBox[]
   boxRepacks       BoxRepack[]
+  boxChecks        BoxCheck[]
   movements        InventoryMovement[]
   custodyEvents    CustodyEvent[]
   wallets          Wallet[]
@@ -435,6 +436,7 @@ model User {
   adjustmentsDecided      WalletAdjustment[]           @relation("AdjustmentDecidedBy")
   partnerAdjustmentsRequested PartnerAdjustment[]      @relation("PartnerAdjustmentRequestedBy")
   boxRepacks              BoxRepack[]
+  boxChecks               BoxCheck[]
   partnerAdjustmentsDecided   PartnerAdjustment[]      @relation("PartnerAdjustmentDecidedBy")
   apiKeysCreated          ApiKey[]                     @relation("ApiKeyCreator")
   ordersCreated           Order[]                      @relation("OrderCreator")
@@ -722,6 +724,7 @@ model Warehouse {
   lots             StockLot[]
   storageBoxes     StorageBox[]
   boxRepacks       BoxRepack[]
+  boxChecks        BoxCheck[]
   movements        InventoryMovement[]
   custodyEvents    CustodyEvent[]
   orders           Order[]
@@ -840,6 +843,7 @@ model InboundShipment {
   arrivedAt           DateTime?      @map("arrived_at") @db.Timestamptz(6)
   receivedAt          DateTime?      @map("received_at") @db.Timestamptz(6)
   onboardingFeeMinor  BigInt?        @map("onboarding_fee_minor")
+  intoExistingBoxes   Boolean        @default(false) @map("into_existing_boxes")
   onboardingChargedAt DateTime?      @map("onboarding_charged_at") @db.Timestamptz(6)
   feeScheduleId       String?        @map("fee_schedule_id") @db.Uuid
   holdChargeMinor     BigInt?        @map("hold_charge_minor")
@@ -968,6 +972,26 @@ model StorageBox {
   @@index([vendorId, removedAt], map: "storage_boxes_vendor_idx")
   @@index([nextBillingDate], map: "storage_boxes_billing_idx")
   @@map("storage_boxes")
+}
+
+model BoxCheck {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendorId     String   @map("vendor_id") @db.Uuid
+  warehouseId  String   @map("warehouse_id") @db.Uuid
+  fullnessPct  Int      @map("fullness_pct") @db.SmallInt
+  photoFileIds String[] @map("photo_file_ids") @db.Uuid
+  note         String?  @db.VarChar(500)
+  orderId      String?  @map("order_id") @db.Uuid
+  createdBy    String   @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  vendor    Vendor    @relation(fields: [vendorId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "box_checks_vendor_fk")
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "box_checks_warehouse_fk")
+  order     Order?    @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "box_checks_order_fk")
+  creator   User      @relation(fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "box_checks_created_by_fk")
+
+  @@index([vendorId, warehouseId, createdAt], map: "box_checks_latest_idx")
+  @@map("box_checks")
 }
 
 model BoxRepack {
@@ -1451,6 +1475,7 @@ model Order {
   @@index([trackingNumber], map: "orders_tracking_number_idx")
   @@index([vendorId, source, createdAt], map: "orders_source_day_idx")
   @@map("orders")
+  boxChecks BoxCheck[]
 }
 
 model OrderLine {

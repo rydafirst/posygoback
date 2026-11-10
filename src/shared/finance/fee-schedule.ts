@@ -45,6 +45,12 @@ export type ShoppingRates = z.infer<typeof shoppingRatesSchema>;
 
 export const DEFAULT_SHOPPING_RATES: ShoppingRates = { commissionBps: 1_500, minimumFeeMinor: 500 };
 
+const SUPPLIED_BOX_TIERS = ["SMALL", "MEDIUM", "LARGE", "X_LARGE"] as const;
+export const boxSupplySchema = z.object(Object.fromEntries(SUPPLIED_BOX_TIERS.map((tier) => [tier, minor])) as Record<(typeof SUPPLIED_BOX_TIERS)[number], typeof minor>);
+export type BoxSupplyRates = z.infer<typeof boxSupplySchema>;
+
+export const DEFAULT_BOX_SUPPLY: BoxSupplyRates = { SMALL: 100, MEDIUM: 150, LARGE: 250, X_LARGE: 400 };
+
 export const feeScheduleSchema = z.object({
   onboarding: z.object(Object.fromEntries(STORAGE_TIERS.map((tier) => [tier, onboardingRateSchema])) as Record<StorageTier, typeof onboardingRateSchema>),
   monthlyStorage: z.object(Object.fromEntries(STORAGE_TIERS.map((tier) => [tier, minor.nullable()])) as Record<StorageTier, z.ZodNullable<typeof minor>>),
@@ -59,6 +65,7 @@ export const feeScheduleSchema = z.object({
   storefront: storefrontRatesSchema.default(DEFAULT_STOREFRONT_RATES),
   referral: referralRatesSchema.default(DEFAULT_REFERRAL_RATES),
   shopping: shoppingRatesSchema.default(DEFAULT_SHOPPING_RATES),
+  boxSupply: boxSupplySchema.default(DEFAULT_BOX_SUPPLY),
 });
 export type FeeSchedule = z.infer<typeof feeScheduleSchema>;
 
@@ -88,13 +95,18 @@ export function shoppingRates(schedule: { shopping?: unknown }): ShoppingRates {
   return parsed.success ? parsed.data : DEFAULT_SHOPPING_RATES;
 }
 
+export function boxSupplyRates(schedule: { boxSupply?: unknown }): BoxSupplyRates {
+  const parsed = boxSupplySchema.safeParse(schedule.boxSupply ?? DEFAULT_BOX_SUPPLY);
+  return parsed.success ? parsed.data : DEFAULT_BOX_SUPPLY;
+}
+
 export function shoppingCommission(rates: ShoppingRates, goodsMinor: number): number {
   return goodsMinor === 0 ? 0 : Math.max(rates.minimumFeeMinor, Math.round((goodsMinor * rates.commissionBps) / 10_000));
 }
 
 export function vendorFeeSchedule(schedule: FeeSchedule): VendorFeeSchedule {
   const { onboarding, monthlyStorage, fulfilment, returnsHandlingMinor, shippingMarkupBps, firstShipmentWaivesStocking, storefront } = schedule;
-  return { onboarding, monthlyStorage, fulfilment, returnsHandlingMinor, shippingMarkupBps, firstShipmentWaivesStocking, storefront, referral: referralRates(schedule) };
+  return { onboarding, monthlyStorage, fulfilment, returnsHandlingMinor, shippingMarkupBps, firstShipmentWaivesStocking, storefront, referral: referralRates(schedule), boxSupply: boxSupplyRates(schedule) };
 }
 
 export interface PublicPriceListView {
@@ -138,6 +150,7 @@ export class FeeQuoteError extends Error {
 export interface OnboardingQuote {
   stockingMinor: number;
   storageMinor: number;
+  boxesMinor: number;
   waivedMinor: number;
   totalMinor: number;
 }
@@ -145,6 +158,8 @@ export interface OnboardingQuote {
 export function onboardingFee(schedule: FeeSchedule, boxes: BoxCounts, mode: ShippingMode, firstShipment: boolean): OnboardingQuote {
   let stockingMinor = 0;
   let storageMinor = 0;
+  let boxesMinor = 0;
+  const supply = boxSupplyRates(schedule);
   for (const tier of STORAGE_TIERS) {
     const count = boxes[tier] ?? 0;
     if (count === 0) {
@@ -164,9 +179,10 @@ export function onboardingFee(schedule: FeeSchedule, boxes: BoxCounts, mode: Shi
     }
     stockingMinor += rate.stockingMinor * count;
     storageMinor += mode === "PALLET" ? 0 : rate.firstMonthStorageMinor * count;
+    boxesMinor += mode === "POSYGO_BOXES" ? supply[tier] * count : 0;
   }
   const waivedMinor = firstShipment && schedule.firstShipmentWaivesStocking ? stockingMinor : 0;
-  return { stockingMinor, storageMinor, waivedMinor, totalMinor: stockingMinor + storageMinor - waivedMinor };
+  return { stockingMinor, storageMinor, boxesMinor, waivedMinor, totalMinor: stockingMinor + storageMinor + boxesMinor - waivedMinor };
 }
 
 export function fulfilmentFee(schedule: Pick<FeeSchedule, "fulfilment">, units: number): number {

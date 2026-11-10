@@ -8,6 +8,28 @@ export type BoxCloseReason = (typeof BOX_CLOSE_REASONS)[number];
 
 export const REPACK_HINT_SHARE = 0.5;
 
+export const BOX_FULLNESS = [10, 25, 50, 75, 100] as const;
+export type BoxFullness = (typeof BOX_FULLNESS)[number];
+
+export interface BoxCheckView {
+  fullnessPct: BoxFullness;
+  photoFileIds: string[];
+  note: string | null;
+  checkedAt: string;
+  ordersSince: number;
+}
+
+export const boxCheckSchema = z.object({
+  vendorId: z.string().uuid(),
+  fullnessPct: z.union(BOX_FULLNESS.map((value) => z.literal(value)) as [z.ZodLiteral<10>, z.ZodLiteral<25>, z.ZodLiteral<50>, z.ZodLiteral<75>, z.ZodLiteral<100>], {
+    message: "Choose how full the boxes are",
+  }),
+  photoFileIds: z.array(z.string().uuid()).min(1, "Add a photo of what's left in the boxes").max(6),
+  note: z.string().trim().max(500).optional(),
+  orderId: z.string().uuid().optional(),
+});
+export type BoxCheckInput = z.infer<typeof boxCheckSchema>;
+
 export interface BoxGroupView {
   tier: StorageTier;
   count: number;
@@ -22,6 +44,7 @@ export interface HubBoxesView {
   monthlyMinor: number;
   nextChargeOn: string | null;
   unitsStored: number;
+  latestCheck: BoxCheckView | null;
 }
 
 export interface VendorBoxesView {
@@ -38,6 +61,7 @@ export interface RepackCandidateView {
   unitsStored: number;
   unitsAtArrival: number;
   worthRepacking: boolean;
+  latestCheck: BoxCheckView | null;
 }
 
 export interface HubRepackListView {

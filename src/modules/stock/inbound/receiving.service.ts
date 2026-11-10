@@ -45,9 +45,6 @@ export class ReceivingService {
   ) {}
 
   async receive(principal: AuthPrincipal, inboundId: string, input: ReceiveInboundInput, meta: RequestMeta): Promise<ReceivingOutcome> {
-    if (totalBoxes(input.boxCounts) === 0) {
-      throw Errors.validation({ boxCounts: ["Count at least one box"] });
-    }
     await this.assertEvidence(principal, input);
     return this.prisma.$transaction(async (tx) => {
       const inbound = (await lockRow(tx, "inboundShipments", inboundId)) ? await tx.inboundShipment.findUnique({ where: { id: inboundId } }) : null;
@@ -58,6 +55,7 @@ export class ReceivingService {
       if (!canApplyInboundAction("COMPLETE", inbound.status)) {
         throw Errors.invalidTransition("Check the shipment in before receiving it.");
       }
+      await this.assertBoxesCounted(tx, inbound, input.boxCounts);
       const lines = await tx.inboundLine.findMany({ where: { inboundId: inbound.id } });
       const counted = this.matchLines(lines, input.lines);
       const receivedAt = new Date();
@@ -97,6 +95,16 @@ export class ReceivingService {
       );
       return { inbound: updated, matched };
     });
+  }
+
+  private async assertBoxesCounted(tx: Prisma.TransactionClient, inbound: InboundShipment, counts: BoxCounts): Promise<void> {
+    if (totalBoxes(counts) > 0) {
+      return;
+    }
+    const hasBoxes = inbound.intoExistingBoxes && (await tx.storageBox.count({ where: { vendorId: inbound.vendorId, warehouseId: inbound.warehouseId, removedAt: null } })) > 0;
+    if (!hasBoxes) {
+      throw Errors.validation({ boxCounts: ["Count at least one box"] });
+    }
   }
 
   private async assertWithinDeclared(tx: Prisma.TransactionClient, inbound: InboundShipment, lines: InboundLine[], counted: Map<string, CountedLine>, boxCounts: BoxCounts): Promise<void> {

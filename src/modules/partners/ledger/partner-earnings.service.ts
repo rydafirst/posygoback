@@ -65,7 +65,8 @@ export class PartnerEarningsService {
     const boxes = STORAGE_TIERS.reduce((total, tier) => total + (counted[tier] ?? 0), 0);
     await this.credit(tx, partner, rates, {
       type: "RECEIVING",
-      grossMinor: partnerShare(quote.stockingMinor, rates.receivingShareBps, partner.founding, rates) + partnerShare(quote.storageMinor, rates.storageShareBps, partner.founding, rates),
+      grossMinor:
+        partnerShare(quote.stockingMinor, rates.receivingShareBps, partner.founding, rates) + partnerShare(quote.storageMinor, rates.storageShareBps, partner.founding, rates) + quote.boxesMinor,
       description: `Received ${inbound.reference}: ${boxes} ${boxes === 1 ? "box" : "boxes"}`,
       idempotencyKey: `inbound:${inbound.id}`,
       reference: { type: "inbound_shipment", id: inbound.id },
@@ -108,12 +109,12 @@ export class PartnerEarningsService {
     }
   }
 
-  private listPrice(schedule: FeeSchedule, boxes: BoxCounts, mode: ShippingMode): { stockingMinor: number; storageMinor: number } {
+  private listPrice(schedule: FeeSchedule, boxes: BoxCounts, mode: ShippingMode): { stockingMinor: number; storageMinor: number; boxesMinor: number } {
     try {
       return onboardingFee(schedule, boxes, mode, false);
     } catch (error) {
       if (error instanceof FeeQuoteError) {
-        return { stockingMinor: 0, storageMinor: 0 };
+        return { stockingMinor: 0, storageMinor: 0, boxesMinor: 0 };
       }
       throw error;
     }

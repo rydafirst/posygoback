@@ -18,8 +18,10 @@ describe("storage boxes from arrival to empty", () => {
   const vendorBoxes = async () => (await http().get("/v1/vendor/inventory/boxes").set(as(owner)).expect(200)).body as VendorBoxesView;
   const hubBoxes = async () => (await http().get(`/v1/warehouse/warehouses/${warehouseId}/boxes`).set(as(operator)).expect(200)).body as HubRepackListView;
 
-  async function sendAndReceive(shippingMode: string, declared: Record<string, number>, received: Record<string, number>, units: number): Promise<void> {
-    const inbound = (await http().post("/v1/vendor/inbound").set(as(owner)).send({ shippingMode, expectedArrivalDate: inDays(3), boxCounts: declared, lines: [{ productId, quantity: units }] }).expect(201)).body;
+  async function sendAndReceive(shippingMode: string, declared: Record<string, number>, received: Record<string, number>, units: number, intoExistingBoxes = false): Promise<void> {
+    const inbound = (
+      await http().post("/v1/vendor/inbound").set(as(owner)).send({ shippingMode, intoExistingBoxes, expectedArrivalDate: inDays(3), boxCounts: declared, lines: [{ productId, quantity: units }] }).expect(201)
+    ).body;
     await http().post(`/v1/vendor/inbound/${inbound.id}/actions`).set(as(owner)).send({ action: "SUBMIT" }).expect(200);
     await http().post(`/v1/warehouse/inbound/${inbound.id}/actions`).set(as(operator)).send({ action: "CHECK_IN" }).expect(200);
     const detail = (await http().get(`/v1/warehouse/inbound/${inbound.id}`).set(as(operator)).expect(200)).body;
@@ -59,7 +61,7 @@ describe("storage boxes from arrival to empty", () => {
   it("boxes up small packets in Posygo boxes, and refunds boxes that weren't needed", async () => {
     const before = await balance();
     await sendAndReceive("POSYGO_BOXES", { SMALL: 2 }, { SMALL: 1 }, 40);
-    expect(before - (await balance())).toBe(900);
+    expect(before - (await balance())).toBe(900 + 100);
     expect(await vendorBoxes()).toMatchObject({ currency: "GBP", monthlyMinor: 900, hubs: [{ boxes: [{ tier: "SMALL", count: 1, supplied: 1, monthlyMinor: 900 }], unitsStored: 40 }] });
   });
 
@@ -75,6 +77,32 @@ describe("storage boxes from arrival to empty", () => {
     expect((await vendorBoxes()).monthlyMinor).toBe(1400);
     const [notice] = await query<{ body: string }>("SELECT body FROM notifications WHERE vendor_id = $1 ORDER BY created_at DESC LIMIT 1", [vendorId]);
     expect(notice!.body).toContain("drops from £32.00 to £14.00");
+  });
+
+  it("shows the seller a photo of what's left after the hub checks the boxes", async () => {
+    const photo = await uploadVerifiedFile(test, operator, "EVIDENCE_PHOTO");
+    const check = (fullnessPct: number) => http().post(`/v1/warehouse/warehouses/${warehouseId}/boxes/checks`).set(as(operator)).send({ vendorId, fullnessPct, photoFileIds: [photo] });
+    await check(60).expect(400);
+    await check(50).expect(200);
+    const hub = (await vendorBoxes()).hubs[0]!;
+    expect(hub.latestCheck).toMatchObject({ fullnessPct: 50, photoFileIds: [photo], ordersSince: 0 });
+    await http().get(`/v1/vendor/inventory/boxes/photos/${photo}`).set(as(owner)).expect(200);
+    const stranger = (await signUpAndVerify(test, "stranger@shop.example")).accessToken;
+    await http().get(`/v1/vendor/inventory/boxes/photos/${photo}`).set(as(stranger)).expect(404);
+  });
+
+  it("puts a new shipment into the seller's existing boxes and refunds the spare box when it fits", async () => {
+    const newcomer = (await signUpAndVerify(test, "newcomer@shop.example")).accessToken;
+    await makeVendorTrade((await http().get("/v1/auth/me").set(as(newcomer)).expect(200)).body.vendorId as string);
+    await http()
+      .post("/v1/vendor/inbound")
+      .set(as(newcomer))
+      .send({ shippingMode: "LOOSE", intoExistingBoxes: true, expectedArrivalDate: inDays(3), boxCounts: { SMALL: 1 }, lines: [{ productId, quantity: 1 }] })
+      .expect(400);
+    const before = await balance();
+    await sendAndReceive("LOOSE", { SMALL: 1 }, {}, 5, true);
+    expect(await balance()).toBe(before);
+    expect((await vendorBoxes()).hubs[0]).toMatchObject({ boxes: [{ tier: "MEDIUM", count: 1 }], unitsStored: 55 });
   });
 
   it("stops charging once the seller has nothing left at the hub", async () => {

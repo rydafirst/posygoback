@@ -116,6 +116,7 @@ export class InboundRepository {
       countryCode: row.countryCode,
       status: row.status,
       shippingMode: row.shippingMode,
+      intoExistingBoxes: row.intoExistingBoxes,
       expectedArrivalDate: fromDateOnly(row.expectedArrivalDate),
       totalUnits: row.lines.reduce((total, line) => total + line.declaredQuantity, 0),
       totalBoxes: totalBoxes(row.declaredBoxCounts as BoxCounts),

@@ -7,7 +7,10 @@ import { lockRow, PrismaService } from "../../../database/prisma.service";
 import type { Prisma, StorageBox } from "../../../generated/prisma/client";
 import { AuditService } from "../../../infrastructure/audit/audit.service";
 import {
+  type BoxCheckInput,
+  type BoxCheckView,
   type BoxCounts,
+  type BoxFullness,
   type BoxGroupView,
   type HubBoxesView,
   type HubRepackListView,
@@ -81,6 +84,7 @@ export class StorageBoxesService {
         monthlyMinor: monthlyCost(countsOf(boxes), schedule.monthlyStorage),
         nextChargeOn: earliest(boxes.map((box) => box.nextBillingDate))?.toISOString().slice(0, 10) ?? null,
         unitsStored: units,
+        latestCheck: await this.latestCheck(country.vendorId, warehouseId),
       });
     }
     return { currency, hubs, monthlyMinor: hubs.reduce((total, hub) => total + hub.monthlyMinor, 0) };
@@ -111,6 +115,7 @@ export class StorageBoxesService {
         unitsStored: units,
         unitsAtArrival,
         worthRepacking: boxes.length > 1 && units <= unitsAtArrival * REPACK_HINT_SHARE,
+        latestCheck: await this.latestCheck(vendorId, warehouseId),
       });
     }
     vendors.sort((a, b) => Number(b.worthRepacking) - Number(a.worthRepacking) || a.businessName.localeCompare(b.businessName));
@@ -163,6 +168,64 @@ export class StorageBoxesService {
       href: "/inventory",
     });
     return this.hubBoxes(principal, warehouseId);
+  }
+
+  async check(principal: AuthPrincipal, warehouseId: string, input: BoxCheckInput, meta: RequestMeta): Promise<HubRepackListView> {
+    const warehouse = await this.warehouses.inScope(principal, warehouseId);
+    const statuses = await this.files.uploadedBy(principal.userId, input.photoFileIds, "EVIDENCE_PHOTO");
+    if (input.photoFileIds.some((id) => statuses.get(id) !== "VERIFIED")) {
+      throw Errors.validation({ photoFileIds: ["Some photos are missing or still uploading. Add them again."] });
+    }
+    if ((await this.prisma.storageBox.count({ where: { vendorId: input.vendorId, warehouseId, removedAt: null } })) === 0) {
+      throw Errors.invalidTransition("This seller has no boxes stored here.");
+    }
+    if (input.orderId && (await this.prisma.order.count({ where: { id: input.orderId, vendorId: input.vendorId, warehouseId } })) === 0) {
+      throw Errors.notFound();
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.boxCheck.create({
+        data: { vendorId: input.vendorId, warehouseId, fullnessPct: input.fullnessPct, photoFileIds: input.photoFileIds, note: input.note ?? null, orderId: input.orderId ?? null, createdBy: principal.userId },
+      });
+      await this.audit.record(
+        {
+          actor: { userId: principal.userId, role: principal.role },
+          action: "storage.box_checked",
+          resourceType: "warehouse",
+          resourceId: warehouseId,
+          vendorId: input.vendorId,
+          countryCode: warehouse.countryCode,
+          after: { fullnessPct: input.fullnessPct, photos: input.photoFileIds.length, orderId: input.orderId ?? null },
+          meta,
+        },
+        tx,
+      );
+    });
+    return this.hubBoxes(principal, warehouseId);
+  }
+
+  async vendorPhoto(principal: AuthPrincipal, fileId: string, meta: RequestMeta) {
+    const owned = await this.prisma.boxCheck.count({ where: { vendorId: principal.vendorId ?? "", photoFileIds: { has: fileId } } });
+    if (owned === 0) {
+      throw Errors.notFound();
+    }
+    return this.files.linkedDownloadUrl(fileId, "EVIDENCE_PHOTO", principal, meta);
+  }
+
+  async hubPhoto(principal: AuthPrincipal, warehouseId: string, fileId: string, meta: RequestMeta) {
+    await this.warehouses.inScope(principal, warehouseId);
+    if ((await this.prisma.boxCheck.count({ where: { warehouseId, photoFileIds: { has: fileId } } })) === 0) {
+      throw Errors.notFound();
+    }
+    return this.files.linkedDownloadUrl(fileId, "EVIDENCE_PHOTO", principal, meta);
+  }
+
+  private async latestCheck(vendorId: string, warehouseId: string): Promise<BoxCheckView | null> {
+    const check = await this.prisma.boxCheck.findFirst({ where: { vendorId, warehouseId }, orderBy: { createdAt: "desc" } });
+    if (!check) {
+      return null;
+    }
+    const ordersSince = await this.prisma.order.count({ where: { vendorId, warehouseId, createdAt: { gt: check.createdAt }, status: { not: "CANCELLED" } } });
+    return { fullnessPct: check.fullnessPct as BoxFullness, photoFileIds: check.photoFileIds, note: check.note, checkedAt: check.createdAt.toISOString(), ordersSince };
   }
 
   private async replaceBoxes(tx: Prisma.TransactionClient, boxes: readonly StorageBox[], counts: BoxCounts): Promise<void> {

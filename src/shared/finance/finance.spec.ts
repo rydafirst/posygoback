@@ -11,12 +11,13 @@ describe("fees", () => {
   });
 
   it("charges stocking and first month for loose boxes, waiving stocking on a first shipment", () => {
-    expect(onboardingFee(schedule, { SMALL: 2, LARGE: 1 }, "LOOSE", false)).toEqual({ stockingMinor: 6400, storageMinor: 3600, waivedMinor: 0, totalMinor: 10000 });
-    expect(onboardingFee(schedule, { SMALL: 2 }, "LOOSE", true)).toEqual({ stockingMinor: 2400, storageMinor: 1800, waivedMinor: 2400, totalMinor: 1800 });
+    expect(onboardingFee(schedule, { SMALL: 2, LARGE: 1 }, "LOOSE", false)).toEqual({ stockingMinor: 6400, storageMinor: 3600, boxesMinor: 0, waivedMinor: 0, totalMinor: 10000 });
+    expect(onboardingFee(schedule, { SMALL: 2 }, "LOOSE", true)).toEqual({ stockingMinor: 2400, storageMinor: 1800, boxesMinor: 0, waivedMinor: 2400, totalMinor: 1800 });
+    expect(onboardingFee(schedule, { SMALL: 2 }, "POSYGO_BOXES", true)).toEqual({ stockingMinor: 2400, storageMinor: 1800, boxesMinor: 200, waivedMinor: 2400, totalMinor: 2000 });
   });
 
   it("charges pallets their monthly rate and boxes on a pallet stocking only", () => {
-    expect(onboardingFee(schedule, { PALLET: 1, MEDIUM: 8 }, "PALLET", false)).toEqual({ stockingMinor: 17600, storageMinor: 4500, waivedMinor: 0, totalMinor: 22100 });
+    expect(onboardingFee(schedule, { PALLET: 1, MEDIUM: 8 }, "PALLET", false)).toEqual({ stockingMinor: 17600, storageMinor: 4500, boxesMinor: 0, waivedMinor: 0, totalMinor: 22100 });
     expect(() => onboardingFee(schedule, { PALLET: 1 }, "LOOSE", false)).toThrow(FeeQuoteError);
     expect(() => onboardingFee({ ...schedule, monthlyStorage: { ...schedule.monthlyStorage, PALLET: null } }, { PALLET: 1 }, "PALLET", false)).toThrow(/by quote/);
   });
