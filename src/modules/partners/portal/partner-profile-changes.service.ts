@@ -8,6 +8,7 @@ import { AuditService } from "../../../infrastructure/audit/audit.service";
 import type { PartnerDetailView, PartnerProfileInput, PartnerStatus, ProfileChangeDecisionInput } from "../../../shared";
 import { StaffAlertsService } from "../../notifications/staff-alerts.service";
 import { actorOf, AdminPartnersService } from "../admin/admin-partners.service";
+import { hubName } from "../hub-name";
 import { PartnerEmails } from "../partner-emails";
 import { PartnerNotifierService } from "../partner-notifier.service";
 import type { StoredProfile } from "../partners.repository";
@@ -15,6 +16,10 @@ import { PartnerAccessService } from "./partner-access.service";
 
 const CHANGEABLE: readonly PartnerStatus[] = ["ACTIVE", "SUSPENDED"];
 const ACCOUNT_PAGE = "/admin/partnership/account";
+
+function addressChanged(current: StoredProfile | null, proposed: PartnerProfileInput): boolean {
+  return (["addressLines", "city", "postalCode"] as const).some((field) => JSON.stringify(current?.[field]) !== JSON.stringify(proposed[field]));
+}
 
 function sameProfile(current: StoredProfile | null, proposed: PartnerProfileInput): boolean {
   return (Object.keys(proposed) as Array<keyof PartnerProfileInput>).every((field) => JSON.stringify(current?.[field]) === JSON.stringify(proposed[field]));
@@ -72,6 +77,12 @@ export class PartnerProfileChangesService {
         where: { id: partnerId },
         data: { profileChange: Prisma.DbNull, profileChangeAt: null, ...(input.approve ? { profile: { ...proposed, heardFrom: previous?.heardFrom }, legalName: proposed.fullName } : {}) },
       });
+      if (input.approve && addressChanged(previous, proposed)) {
+        await tx.warehouse.updateMany({
+          where: { partnerId },
+          data: { name: hubName(proposed.city), addressLines: proposed.addressLines, city: proposed.city, postalCode: proposed.postalCode },
+        });
+      }
       await this.record(tx, actorOf(principal), partner, input.approve ? "partner.profile_change_approved" : "partner.profile_change_declined", { before: previous, proposed, note: input.note }, meta);
     });
     await this.notifier.notify(partnerId, (to, webUrl) => PartnerEmails.profileChangeDecided(to, input.approve, input.note, webUrl), ACCOUNT_PAGE);

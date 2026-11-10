@@ -37,6 +37,7 @@ import { PartnersModule } from "./modules/partners/partners.module";
 import { StockModule } from "./modules/stock/stock.module";
 import { SupportModule } from "./modules/support/support.module";
 import { ChatModule } from "./modules/chat/chat.module";
+import { OutreachModule } from "./modules/outreach/outreach.module";
 import { RemindersModule } from "./modules/reminders/reminders.module";
 import { TaxModule } from "./modules/tax/tax.module";
 import { AssistantModule } from "./modules/assistant/assistant.module";
@@ -107,6 +108,7 @@ function maskSecrets(url: string | undefined): string | undefined {
     SupportModule,
     ChatModule,
     TaxModule,
+    OutreachModule,
     RemindersModule,
     AssistantModule,
     ReturnsModule,

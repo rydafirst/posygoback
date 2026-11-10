@@ -461,7 +461,7 @@ describe("partner hubs at work", () => {
     it("sends a change of details for review, and only applies it once approved", async () => {
       const { fullName, phone, city, addressLines, postalCode, spaceDescription } = application("lead-a@partner.test", "Ada Obi");
       const current = { fullName, phone, city, addressLines, postalCode, spaceDescription };
-      const moved = { ...current, addressLines: ["4 New Road"], postalCode: "M2 2BB" };
+      const moved = { ...current, city: "Salford", addressLines: ["4 New Road"], postalCode: "M5 2BB" };
       await test.http().post("/v1/partner/profile/change").set(as(a.token)).send(current).expect(400);
       const requested = await test.http().post("/v1/partner/profile/change").set(as(a.token)).send(moved).expect(201);
       expect(requested.body).toMatchObject({ profile: { addressLines: ["12 Rose Street"] }, profileChange: { profile: { addressLines: ["4 New Road"] }, requestedAt: expect.any(String) } });
@@ -470,7 +470,9 @@ describe("partner hubs at work", () => {
 
       await test.http().post("/v1/partner/profile/change").set(as(a.token)).send(moved).expect(201);
       const decided = await test.http().post(`/v1/admin/partners/${a.partnerId}/profile-change`).set(as(complianceA)).send({ approve: true, note: "New proof of address checked." }).expect(200);
-      expect(decided.body).toMatchObject({ profile: { addressLines: ["4 New Road"], postalCode: "M2 2BB" }, profileChange: null });
+      expect(decided.body).toMatchObject({ profile: { addressLines: ["4 New Road"], postalCode: "M5 2BB" }, profileChange: null });
+      const [hub] = await query<{ name: string; city: string; postal_code: string; address_lines: string[] }>("SELECT name, city, postal_code, address_lines FROM warehouses WHERE partner_id = $1", [a.partnerId]);
+      expect(hub).toEqual({ name: "Salford hub", city: "Salford", postal_code: "M5 2BB", address_lines: ["4 New Road"] });
       expect(test.email.lastTo("lead-a@partner.test")?.subject).toBe("Your new details are saved");
       expect((await flow.overview(a.token)).heardFrom).toBe("COMMUNITY_GROUP");
     });

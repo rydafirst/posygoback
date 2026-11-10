@@ -26,6 +26,7 @@ import { reviewerCountryScope } from "../../onboarding/scope";
 import { StaffService } from "../../staff/staff.service";
 import { PartnerEmails } from "../partner-emails";
 import { PartnerNotifierService } from "../partner-notifier.service";
+import { hubName } from "../hub-name";
 import { PartnerReadinessService } from "../partner-readiness.service";
 import { PartnersRepository, type StoredProfile, toPartnerSummary } from "../partners.repository";
 import { StockCountFactoryService } from "../trust/stock-count-factory.service";
@@ -250,7 +251,7 @@ export class AdminPartnersService {
       data: {
         countryCode: partner.countryCode,
         code: `HUB-${partner.reference.slice(-6)}`,
-        name: `${profile.city} hub`.slice(0, 80),
+        name: hubName(profile.city),
         addressLines: profile.addressLines,
         city: profile.city,
         postalCode: profile.postalCode,
