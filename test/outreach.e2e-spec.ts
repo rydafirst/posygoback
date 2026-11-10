@@ -40,11 +40,18 @@ describe("partner outreach", () => {
         contacts: [
           { business: "Lagos Link Cargo", email: "desk@lagoslink.test", country: "Canada", kind: "CARGO_AGENT", website: "" },
           { business: "No Email Prep", country: "Germany", city: "Berlin", kind: "PREP_CENTRE" },
-          { business: "North Prep again", email: "hello@northprep.test", country: "Canada", kind: "PREP_CENTRE" },
+          { business: "North Prep again", email: "Hello@NorthPrep.test", country: "Canada", kind: "PREP_CENTRE" },
         ],
       })
       .expect(201);
     expect(imported.body).toEqual({ added: 2, duplicates: ["North Prep again"] });
+    const again = await test
+      .http()
+      .post("/v1/admin/outreach/contacts/import")
+      .set(as(superAdmin))
+      .send({ contacts: [{ business: "no email prep ", country: "Germany", kind: "PREP_CENTRE" }, { business: "North Prep", country: "Canada", kind: "PREP_CENTRE" }] })
+      .expect(201);
+    expect(again.body).toEqual({ added: 0, duplicates: ["no email prep", "North Prep"] });
     const list = (await contacts()).body as OutreachContactView[];
     expect(list.map((contact) => contact.business).sort()).toEqual(["Lagos Link Cargo", "No Email Prep", "North Prep"]);
     expect(list.every((contact) => contact.status === "NOT_CONTACTED")).toBe(true);

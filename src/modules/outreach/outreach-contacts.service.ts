@@ -44,6 +44,11 @@ function nullable<T extends object>(input: T): { [K in keyof T]: T[K] | null } {
   return Object.fromEntries(Object.entries(input).map(([key, value]) => [key, value ?? null])) as { [K in keyof T]: T[K] | null };
 }
 
+function contactKeys(contact: { business: string; country: string; email?: string | null }): string[] {
+  const named = `business:${contact.business.trim().toLowerCase()}|${contact.country.trim().toLowerCase()}`;
+  return contact.email ? [named, `email:${contact.email.trim().toLowerCase()}`] : [named];
+}
+
 @Injectable()
 export class OutreachContactsService {
   constructor(
@@ -97,20 +102,16 @@ export class OutreachContactsService {
   }
 
   async import(principal: AuthPrincipal, input: ImportOutreachInput, meta: RequestMeta): Promise<OutreachImportResultView> {
-    const emails = input.contacts.flatMap((contact) => (contact.email ? [contact.email] : []));
-    const taken = new Set(
-      (await this.prisma.outreachContact.findMany({ where: { email: { in: emails, mode: "insensitive" } }, select: { email: true } })).map((row) => row.email!.toLowerCase()),
-    );
+    const existing = await this.prisma.outreachContact.findMany({ select: { business: true, country: true, email: true } });
+    const taken = new Set(existing.flatMap(contactKeys));
     const duplicates: string[] = [];
     const fresh = input.contacts.filter((contact) => {
-      if (!contact.email) {
-        return true;
-      }
-      if (taken.has(contact.email)) {
+      const keys = contactKeys(contact);
+      if (keys.some((key) => taken.has(key))) {
         duplicates.push(contact.business);
         return false;
       }
-      taken.add(contact.email);
+      keys.forEach((key) => taken.add(key));
       return true;
     });
     if (fresh.length > 0) {
