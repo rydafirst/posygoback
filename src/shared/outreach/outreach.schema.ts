@@ -30,7 +30,13 @@ export const outreachContactSchema = z.object({
     .optional()
     .or(z.literal("").transform(() => undefined)),
   phone: optionalText(40),
-  website: z.string().trim().url().max(300).optional().or(z.literal("").transform(() => undefined)),
+  website: z
+    .string()
+    .trim()
+    .url()
+    .max(300)
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
   country: z.string().trim().min(2).max(60),
   city: optionalText(80),
   kind: z.enum(OUTREACH_KINDS),
@@ -56,11 +62,7 @@ export const sendOutreachSchema = z.object({
 });
 export type SendOutreachInput = z.infer<typeof sendOutreachSchema>;
 
-export const outreachListSchema = z.object({
-  status: z.enum(OUTREACH_STATUSES).optional(),
-  country: z.string().trim().max(60).optional(),
-  q: z.string().trim().max(120).optional(),
-});
+export const outreachListSchema = z.object({ status: z.enum(OUTREACH_STATUSES).optional(), country: z.string().trim().max(60).optional(), q: z.string().trim().max(120).optional() });
 export type OutreachListQuery = z.infer<typeof outreachListSchema>;
 
 export interface OutreachContactView {

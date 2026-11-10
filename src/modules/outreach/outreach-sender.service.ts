@@ -51,15 +51,19 @@ export class OutreachSenderService {
       await this.prisma.outreachMessage.create({ data: { contactId: contact.id, subject, body, sentBy: principal.userId, ...outcome } });
       if (outcome.status === "SENT") {
         sent += 1;
-        await this.prisma.outreachContact.update({
-          where: { id: contact.id },
-          data: { lastMessagedAt: new Date(), ...(contact.status === "NOT_CONTACTED" ? { status: "MESSAGED" } : {}) },
-        });
+        await this.prisma.outreachContact.update({ where: { id: contact.id }, data: { lastMessagedAt: new Date(), ...(contact.status === "NOT_CONTACTED" ? { status: "MESSAGED" } : {}) } });
       } else {
         failed += 1;
       }
     }
-    await this.audit.record({ actor: { userId: principal.userId, role: principal.role }, action: "outreach.sent", resourceType: "outreach_contact", resourceId: null, after: { sent, failed, skipped: skipped.length }, meta });
+    await this.audit.record({
+      actor: { userId: principal.userId, role: principal.role },
+      action: "outreach.sent",
+      resourceType: "outreach_contact",
+      resourceId: null,
+      after: { sent, failed, skipped: skipped.length },
+      meta,
+    });
     return { sent, failed, skipped, sentToday: sentToday + sent };
   }
 

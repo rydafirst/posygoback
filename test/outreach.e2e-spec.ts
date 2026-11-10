@@ -29,7 +29,12 @@ describe("partner outreach", () => {
 
   it("adds contacts, refuses a repeated email and imports a list without duplicates", async () => {
     await test.http().post("/v1/admin/outreach/contacts").set(as(superAdmin)).send(PREP).expect(201);
-    const repeat = await test.http().post("/v1/admin/outreach/contacts").set(as(superAdmin)).send({ ...PREP, business: "Copy", email: "HELLO@northprep.test" }).expect(400);
+    const repeat = await test
+      .http()
+      .post("/v1/admin/outreach/contacts")
+      .set(as(superAdmin))
+      .send({ ...PREP, business: "Copy", email: "HELLO@northprep.test" })
+      .expect(400);
     expect(repeat.body.fieldErrors.email[0]).toContain("North Prep");
 
     const imported = await test
@@ -49,7 +54,12 @@ describe("partner outreach", () => {
       .http()
       .post("/v1/admin/outreach/contacts/import")
       .set(as(superAdmin))
-      .send({ contacts: [{ business: "no email prep ", country: "Germany", kind: "PREP_CENTRE" }, { business: "North Prep", country: "Canada", kind: "PREP_CENTRE" }] })
+      .send({
+        contacts: [
+          { business: "no email prep ", country: "Germany", kind: "PREP_CENTRE" },
+          { business: "North Prep", country: "Canada", kind: "PREP_CENTRE" },
+        ],
+      })
       .expect(201);
     expect(again.body).toEqual({ added: 0, duplicates: ["no email prep", "North Prep"] });
     const list = (await contacts()).body as OutreachContactView[];
@@ -86,10 +96,25 @@ describe("partner outreach", () => {
     const list = (await contacts()).body as OutreachContactView[];
     const prep = list.find((contact) => contact.business === "North Prep")!;
     const url = new URL(test.email.lastTo("hello@northprep.test")!.optOut!.url);
-    await test.http().post("/v1/public/outreach/stop").send({ c: prep.id, t: "0".repeat(64) }).expect(404);
-    await test.http().post("/v1/public/outreach/stop").send({ c: url.searchParams.get("c"), t: url.searchParams.get("t") }).expect(204);
+    await test
+      .http()
+      .post("/v1/public/outreach/stop")
+      .send({ c: prep.id, t: "0".repeat(64) })
+      .expect(404);
+    await test
+      .http()
+      .post("/v1/public/outreach/stop")
+      .send({ c: url.searchParams.get("c"), t: url.searchParams.get("t") })
+      .expect(204);
 
-    const result = (await test.http().post("/v1/admin/outreach/send").set(as(superAdmin)).send({ contactIds: [prep.id], subject: "Following up", body: "Just following up on my last email to you." }).expect(200)).body as OutreachSendResultView;
+    const result = (
+      await test
+        .http()
+        .post("/v1/admin/outreach/send")
+        .set(as(superAdmin))
+        .send({ contactIds: [prep.id], subject: "Following up", body: "Just following up on my last email to you." })
+        .expect(200)
+    ).body as OutreachSendResultView;
     expect(result).toMatchObject({ sent: 0, skipped: [expect.objectContaining({ reason: "Asked not to be emailed" })] });
     await test.http().patch(`/v1/admin/outreach/contacts/${prep.id}`).set(as(superAdmin)).send({ status: "MESSAGED" }).expect(409);
   });

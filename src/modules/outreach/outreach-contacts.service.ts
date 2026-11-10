@@ -5,15 +5,7 @@ import { Errors } from "../../common/http/app-exception";
 import type { Prisma } from "../../generated/prisma/client";
 import { PrismaService } from "../../database/prisma.service";
 import { AuditService } from "../../infrastructure/audit/audit.service";
-import type {
-  ImportOutreachInput,
-  OutreachContactDetailView,
-  OutreachContactInput,
-  OutreachContactView,
-  OutreachImportResultView,
-  OutreachListQuery,
-  UpdateOutreachContactInput,
-} from "../../shared";
+import type { ImportOutreachInput, OutreachContactDetailView, OutreachContactInput, OutreachContactView, OutreachImportResultView, OutreachListQuery, UpdateOutreachContactInput } from "../../shared";
 
 const LIST_LIMIT = 500;
 
@@ -73,10 +65,7 @@ export class OutreachContactsService {
   }
 
   async detail(id: string): Promise<OutreachContactDetailView> {
-    const row = await this.prisma.outreachContact.findUnique({
-      where: { id },
-      include: { ...withCount, messages: { orderBy: { sentAt: "desc" }, include: { sender: { select: { email: true } } } } },
-    });
+    const row = await this.prisma.outreachContact.findUnique({ where: { id }, include: { ...withCount, messages: { orderBy: { sentAt: "desc" }, include: { sender: { select: { email: true } } } } } });
     if (!row) {
       throw Errors.notFound("That contact doesn't exist.");
     }
@@ -96,8 +85,18 @@ export class OutreachContactsService {
 
   async create(principal: AuthPrincipal, input: OutreachContactInput, meta: RequestMeta): Promise<OutreachContactView> {
     await this.assertEmailFree(input.email);
-    const row = await this.prisma.outreachContact.create({ data: { ...nullable(input), kind: input.kind, business: input.business, country: input.country, createdBy: principal.userId }, include: withCount });
-    await this.audit.record({ actor: { userId: principal.userId, role: principal.role }, action: "outreach.contact_added", resourceType: "outreach_contact", resourceId: row.id, after: { business: row.business, country: row.country }, meta });
+    const row = await this.prisma.outreachContact.create({
+      data: { ...nullable(input), kind: input.kind, business: input.business, country: input.country, createdBy: principal.userId },
+      include: withCount,
+    });
+    await this.audit.record({
+      actor: { userId: principal.userId, role: principal.role },
+      action: "outreach.contact_added",
+      resourceType: "outreach_contact",
+      resourceId: row.id,
+      after: { business: row.business, country: row.country },
+      meta,
+    });
     return toView(row);
   }
 
@@ -115,9 +114,18 @@ export class OutreachContactsService {
       return true;
     });
     if (fresh.length > 0) {
-      await this.prisma.outreachContact.createMany({ data: fresh.map((contact) => ({ ...nullable(contact), kind: contact.kind, business: contact.business, country: contact.country, createdBy: principal.userId })) });
+      await this.prisma.outreachContact.createMany({
+        data: fresh.map((contact) => ({ ...nullable(contact), kind: contact.kind, business: contact.business, country: contact.country, createdBy: principal.userId })),
+      });
     }
-    await this.audit.record({ actor: { userId: principal.userId, role: principal.role }, action: "outreach.contacts_imported", resourceType: "outreach_contact", resourceId: null, after: { added: fresh.length, duplicates: duplicates.length }, meta });
+    await this.audit.record({
+      actor: { userId: principal.userId, role: principal.role },
+      action: "outreach.contacts_imported",
+      resourceType: "outreach_contact",
+      resourceId: null,
+      after: { added: fresh.length, duplicates: duplicates.length },
+      meta,
+    });
     return { added: fresh.length, duplicates };
   }
 
@@ -133,7 +141,14 @@ export class OutreachContactsService {
       await this.assertEmailFree(input.email);
     }
     const row = await this.prisma.outreachContact.update({ where: { id }, data: Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)), include: withCount });
-    await this.audit.record({ actor: { userId: principal.userId, role: principal.role }, action: "outreach.contact_updated", resourceType: "outreach_contact", resourceId: id, after: { status: row.status }, meta });
+    await this.audit.record({
+      actor: { userId: principal.userId, role: principal.role },
+      action: "outreach.contact_updated",
+      resourceType: "outreach_contact",
+      resourceId: id,
+      after: { status: row.status },
+      meta,
+    });
     return toView(row);
   }
 

@@ -60,7 +60,12 @@ export class AdminOutreachController {
   }
 
   @Patch("contacts/:id")
-  update(@Param("id", uuid) id: string, @Body(new ZodValidationPipe(updateOutreachContactSchema)) input: UpdateOutreachContactInput, @CurrentPrincipal() principal: AuthPrincipal, @Meta() meta: RequestMeta) {
+  update(
+    @Param("id", uuid) id: string,
+    @Body(new ZodValidationPipe(updateOutreachContactSchema)) input: UpdateOutreachContactInput,
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Meta() meta: RequestMeta,
+  ) {
     return this.contacts.update(principal, id, input, meta);
   }
 
