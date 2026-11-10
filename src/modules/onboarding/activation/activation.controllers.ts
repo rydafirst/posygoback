@@ -53,3 +53,4 @@ export class AdminActivationFeesController {
     return this.fees.set(input, principal, meta);
   }
 }
+
