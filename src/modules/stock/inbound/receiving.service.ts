@@ -11,6 +11,7 @@ import { PartnerEarningsService } from "../../partners/ledger/partner-earnings.s
 import { PartnerCapacityService } from "../../partners/operations/partner-capacity.service";
 import { addDays, BILLING_CYCLE_DAYS, startOfUtcDay } from "../../finance/jobs/storage-billing.service";
 import { InventoryLedgerService } from "../inventory/inventory-ledger.service";
+import { InboundChargesService } from "./inbound-charges.service";
 import { WarehouseAccessService } from "../warehouses/warehouse-access.service";
 import type { InboundRow } from "./inbound.repository";
 import { lotCode } from "./references";
@@ -39,6 +40,7 @@ export class ReceivingService {
     private readonly ledger: InventoryLedgerService,
     private readonly earnings: PartnerEarningsService,
     private readonly capacity: PartnerCapacityService,
+    private readonly charges: InboundChargesService,
     private readonly audit: AuditService,
   ) {}
 
@@ -72,6 +74,7 @@ export class ReceivingService {
         await this.createLots(tx, principal, inbound, line, tally, receivedAt, input.photoFileIds);
       }
       await this.createBoxes(tx, inbound, input.boxCounts, receivedAt);
+      await this.charges.settleReceived(tx, principal, inbound, input.boxCounts);
       const status = matched ? "RECEIVED" : "DISCREPANCY";
       const updated = await tx.inboundShipment.update({
         where: { id: inbound.id },
@@ -181,6 +184,7 @@ export class ReceivingService {
         inboundId: inbound.id,
         tier,
         receivedAt,
+        supplied: inbound.shippingMode === "POSYGO_BOXES",
         nextBillingDate: addDays(startOfUtcDay(receivedAt), BILLING_CYCLE_DAYS),
       })),
     );

@@ -24,6 +24,7 @@ export * from "./stock/units";
 export * from "./stock/catalogue.schema";
 export * from "./stock/inbound.schema";
 export * from "./stock/inventory.schema";
+export * from "./stock/storage-boxes.schema";
 export * from "./stock/receiving-hubs";
 export * from "./tax/tax.schema";
 export * from "./staff/staff.schema";

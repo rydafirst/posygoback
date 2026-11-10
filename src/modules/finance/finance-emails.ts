@@ -1,7 +1,8 @@
 import type { EmailMessage } from "../../infrastructure/email/email.port";
-import { EMAIL_SIGN_OFF } from "../../common/brand/brand";
+import { EMAIL_SIGN_OFF, PLATFORM_NAME } from "../../common/brand/brand";
 
 const walletPage = (webUrl: string) => `${webUrl}/wallet`;
+const earningsPage = (webUrl: string) => `${webUrl}/admin/partnership/earnings`;
 
 export type ReversalCause = "refunded" | "disputed";
 
@@ -68,5 +69,19 @@ export const FinanceEmails = {
     subject: `${amount} taken from your wallet`,
     text: `We've taken ${amount} from your wallet.\n\nReason: ${reason}\n\nYour balance is now ${balance}. Reply to this email if you have questions.${EMAIL_SIGN_OFF}`,
     action: { label: "View your wallet", url: walletPage(webUrl) },
+  }),
+  earningsCredited: (to: string, amount: string, reason: string, webUrl: string): EmailMessage => ({
+    to,
+    kind: "finance.partner_earnings_credited",
+    subject: `${amount} added to your earnings`,
+    text: `We've added ${amount} to your ${PLATFORM_NAME} earnings.\n\nReason: ${reason}${EMAIL_SIGN_OFF}`,
+    action: { label: "View your earnings", url: earningsPage(webUrl) },
+  }),
+  earningsDebited: (to: string, amount: string, reason: string, webUrl: string): EmailMessage => ({
+    to,
+    kind: "finance.partner_earnings_debited",
+    subject: `${amount} taken from your earnings`,
+    text: `We've taken ${amount} from your ${PLATFORM_NAME} earnings.\n\nReason: ${reason}\n\nReply to this email if you have questions.${EMAIL_SIGN_OFF}`,
+    action: { label: "View your earnings", url: earningsPage(webUrl) },
   }),
 };

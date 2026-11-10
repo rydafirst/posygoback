@@ -59,6 +59,26 @@ export class InboundChargesService {
     );
   }
 
+  async settleReceived(tx: Prisma.TransactionClient, principal: AuthPrincipal, existing: InboundRow, received: BoxCounts): Promise<void> {
+    if (!existing.onboardingChargedAt || existing.onboardingFeeMinor === null || !existing.feeScheduleId) {
+      return;
+    }
+    const schedule = await tx.feeSchedule.findUniqueOrThrow({ where: { id: existing.feeScheduleId }, select: { schedule: true } });
+    const firstShipment = await this.isFirstShipment(tx, existing.vendorId, existing.id);
+    const overpaidMinor = Number(existing.onboardingFeeMinor) - this.owed(schedule.schedule as unknown as FeeSchedule, received, existing.shippingMode, firstShipment, Number(existing.onboardingFeeMinor));
+    if (overpaidMinor <= 0) {
+      return;
+    }
+    await this.ledger.post(tx, await this.walletId(tx, existing), {
+      type: "REVERSAL",
+      amountMinor: overpaidMinor,
+      description: `Refund for boxes on ${existing.reference} that didn't arrive`,
+      idempotencyKey: `onboarding-settle:${existing.id}`,
+      reference: { type: "inbound_shipment", id: existing.id },
+      actorId: principal.userId,
+    });
+  }
+
   async payHold(tx: Prisma.TransactionClient, principal: AuthPrincipal, existing: InboundRow, postings: PostingResult[]): Promise<Prisma.InboundShipmentUpdateInput> {
     if (existing.holdChargeMinor === null || existing.holdChargeMinor <= 0n || existing.holdPaidAt || !existing.holdPlacedAt) {
       throw Errors.invalidTransition("There's nothing to pay on this hold.");
@@ -74,6 +94,17 @@ export class InboundChargesService {
       }),
     );
     return { status: existing.statusBeforeHold ?? "ARRIVED", statusBeforeHold: null, holdPaidAt: new Date(), statusReason: null };
+  }
+
+  private owed(schedule: FeeSchedule, received: BoxCounts, mode: ShippingMode, firstShipment: boolean, charged: number): number {
+    try {
+      return onboardingFee(schedule, received, mode, firstShipment).totalMinor;
+    } catch (error) {
+      if (error instanceof FeeQuoteError) {
+        return charged;
+      }
+      throw error;
+    }
   }
 
   private quote(schedule: FeeSchedule, boxes: BoxCounts, mode: ShippingMode, firstShipment: boolean) {

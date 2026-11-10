@@ -18,6 +18,7 @@ import {
   seedStock,
   signUpAndVerify,
   startApp,
+  storeUnits,
   type TestApp,
   testSignature,
   uploadVerifiedFile,
@@ -230,6 +231,7 @@ describe("email trail: accounts and money", () => {
         "INSERT INTO inbound_shipments (reference, vendor_id, warehouse_id, country_code, status, shipping_mode, expected_arrival_date, declared_box_counts, created_by) VALUES ('IN-GB-SKINT1', $1, $2, 'GB', 'RECEIVED', 'LOOSE', current_date, '{}', $3) RETURNING id",
         [vendorId, warehouseId, user!.id],
       );
+      await storeUnits(vendorId, warehouseId, inbound!.id);
       await query("INSERT INTO storage_boxes (vendor_id, warehouse_id, inbound_id, tier, received_at, next_billing_date) VALUES ($1, $2, $3, 'SMALL', now(), '2026-01-01')", [
         vendorId,
         warehouseId,

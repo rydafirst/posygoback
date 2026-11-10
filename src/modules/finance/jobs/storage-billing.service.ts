@@ -8,6 +8,7 @@ import { PrismaService } from "../../../database/prisma.service";
 import { AuditService, SYSTEM_ACTOR } from "../../../infrastructure/audit/audit.service";
 import { ERROR_CODES, Money } from "../../../shared";
 import { PartnerEarningsService } from "../../partners/ledger/partner-earnings.service";
+import { closeEmptyBoxes } from "../../stock/storage/close-empty-boxes";
 import { FeeSchedulesService } from "../fees/fee-schedules.service";
 import { FinanceEmails } from "../finance-emails";
 import { WalletAlertsService } from "../wallets/wallet-alerts.service";
@@ -71,7 +72,12 @@ export class StorageBillingService {
 
   private async billVendor({ vendorId, countryCode, currency }: BillableAccount, today: Date): Promise<number> {
     const { schedule } = await this.fees.active(countryCode);
-    const boxes = await this.prisma.storageBox.findMany({ where: { vendorId, removedAt: null, nextBillingDate: { lte: today }, warehouse: { countryCode } } });
+    const due = { vendorId, removedAt: null, nextBillingDate: { lte: today }, warehouse: { countryCode } };
+    const hubs = await this.prisma.storageBox.findMany({ where: due, distinct: ["warehouseId"], select: { warehouseId: true } });
+    for (const { warehouseId } of hubs) {
+      await closeEmptyBoxes(this.prisma, vendorId, warehouseId);
+    }
+    const boxes = await this.prisma.storageBox.findMany({ where: due });
     const billable = boxes.filter((box) => schedule.monthlyStorage[box.tier] !== null);
     const amountMinor = billable.reduce((total, box) => total + (schedule.monthlyStorage[box.tier] ?? 0), 0);
     if (billable.length === 0 || amountMinor === 0) {

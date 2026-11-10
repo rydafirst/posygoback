@@ -270,3 +270,20 @@ const SIGNATURE_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAY
 export function testSignature(name = "Test Signer", method: "DRAWN" | "TYPED" = "TYPED") {
   return { method, name, image: SIGNATURE_PNG, consent: true as const };
 }
+
+export async function storeUnits(vendorId: string, warehouseId: string, inboundId: string, units = 5): Promise<void> {
+  const pool = new Pool({ connectionString: loadConfig().DATABASE_URL });
+  try {
+    const suffix = Math.random().toString(36).slice(2, 8).toUpperCase();
+    const product = await pool.query<{ id: string }>(
+      "INSERT INTO products (vendor_id, code, name, country_of_origin, declared_value_minor, currency, weight_grams, storage_tier) VALUES ($1, $2, 'Stored item', 'GB', 1000, 'GBP', 100, 'SMALL') RETURNING id",
+      [vendorId, `stored-${suffix.toLowerCase()}`],
+    );
+    await pool.query(
+      "INSERT INTO stock_lots (code, vendor_id, product_id, warehouse_id, inbound_id, condition, storage_tier, quantity_available, received_at) VALUES ($1, $2, $3, $4, $5, 'SELLABLE', 'SMALL', $6, now())",
+      [`LOT-${suffix}`, vendorId, product.rows[0]!.id, warehouseId, inboundId, units],
+    );
+  } finally {
+    await pool.end();
+  }
+}

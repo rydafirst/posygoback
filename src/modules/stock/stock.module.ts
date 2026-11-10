@@ -15,6 +15,7 @@ import { ReceivingHubsService } from "./inbound/receiving-hubs.service";
 import { VendorInboundService } from "./inbound/vendor-inbound.service";
 import { WarehouseInboundService } from "./inbound/warehouse-inbound.service";
 import { VendorInventoryController, WarehouseInventoryController } from "./inventory/inventory.controllers";
+import { StorageBoxesService } from "./storage/storage-boxes.service";
 import { InventoryLedgerService } from "./inventory/inventory-ledger.service";
 import { InventoryService } from "./inventory/inventory.service";
 import { WarehouseAccessService } from "./warehouses/warehouse-access.service";
@@ -25,6 +26,7 @@ import { WarehousesService } from "./warehouses/warehouses.service";
   imports: [PartnerOperationsModule, FilesModule, OnboardingModule, FinanceModule],
   controllers: [WarehousesController, CatalogueController, VendorInboundController, WarehouseInboundController, VendorInventoryController, WarehouseInventoryController],
   providers: [
+    StorageBoxesService,
     WarehouseAccessService,
     WarehousesService,
     CatalogueService,

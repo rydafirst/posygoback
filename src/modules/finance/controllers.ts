@@ -53,6 +53,7 @@ const walletFilters = new ZodValidationPipe(
   }),
 );
 const adjustmentFilter = new ZodValidationPipe(z.enum(ADJUSTMENT_STATUSES).optional());
+const optionalUuid = new ZodValidationPipe(z.string().uuid().optional());
 
 @Controller({ path: "vendor/wallet", version: "1" })
 export class VendorWalletController {
@@ -188,8 +189,20 @@ export class AdminFinanceController {
 
   @RequirePermission("finance.read")
   @Get("adjustments")
-  adjustmentsList(@Query("status", adjustmentFilter) status?: AdjustmentStatus) {
-    return this.adjustments.list(status);
+  adjustmentsList(@Query("status", adjustmentFilter) status?: AdjustmentStatus, @Query("partnerId", optionalUuid) partnerId?: string) {
+    return this.adjustments.list(status, partnerId ? { kind: "PARTNER", id: partnerId } : undefined);
+  }
+
+  @RequirePermission("finance.adjust")
+  @Throttle(THROTTLE.auth)
+  @Post("partners/:id/adjustments")
+  requestPartnerAdjustment(
+    @Param("id", uuid) id: string,
+    @Body(new ZodValidationPipe(requestAdjustmentSchema)) input: RequestAdjustmentInput,
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Meta() meta: RequestMeta,
+  ) {
+    return this.adjustments.requestForPartner(principal, id, input, meta);
   }
 
   @RequirePermission("finance.adjust")

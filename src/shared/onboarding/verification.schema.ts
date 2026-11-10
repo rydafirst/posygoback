@@ -120,8 +120,11 @@ export function buildVerificationSchemas(market: VerificationMarket) {
   const draft = base.partial().extend({ registeredAddress: base.shape.registeredAddress.partial().optional(), documents: base.shape.documents.partial().optional() });
   const submission = base.superRefine(rules);
   const step = (index: number) => {
-    const fields = VERIFICATION_STEP_FIELDS[index] ?? [];
-    return base.pick(Object.fromEntries(fields.map((field) => [field, true])) as Partial<Record<VerificationField, true>>).superRefine(rules);
+    const mask: Partial<Record<VerificationField, true>> = {};
+    for (const field of VERIFICATION_STEP_FIELDS[index] ?? []) {
+      mask[field] = true;
+    }
+    return base.pick(mask).superRefine(rules);
   };
   return { draft, submission, step };
 }

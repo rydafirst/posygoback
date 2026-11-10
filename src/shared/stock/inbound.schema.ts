@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { STORAGE_TIERS, type StorageTier } from "./catalogue.schema";
 
-export const SHIPPING_MODES = ["LOOSE", "PALLET"] as const;
+export const SHIPPING_MODES = ["LOOSE", "POSYGO_BOXES", "PALLET"] as const;
 export type ShippingMode = (typeof SHIPPING_MODES)[number];
 
 export const INBOUND_STATUSES = ["DRAFT", "SUBMITTED", "ARRIVED", "ON_HOLD", "RECEIVED", "DISCREPANCY", "REJECTED", "RETURN_REQUESTED", "CANCELLED"] as const;
@@ -69,7 +69,7 @@ export const inboundInputSchema = z
     if (inbound.shippingMode === "PALLET" && pallets === 0) {
       context.addIssue({ code: "custom", path: ["boxCounts"], message: "Add the number of pallets" });
     }
-    if (inbound.shippingMode === "LOOSE" && pallets > 0) {
+    if (inbound.shippingMode !== "PALLET" && pallets > 0) {
       context.addIssue({ code: "custom", path: ["boxCounts"], message: "Choose pallet shipping to send pallets" });
     }
   });

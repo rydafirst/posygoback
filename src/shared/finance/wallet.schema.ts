@@ -104,9 +104,14 @@ export interface TopUpQuote {
   currency: string;
 }
 
+export const ADJUSTMENT_ACCOUNT_KINDS = ["VENDOR", "PARTNER"] as const;
+export type AdjustmentAccountKind = (typeof ADJUSTMENT_ACCOUNT_KINDS)[number];
+
 export interface AdjustmentView {
   id: string;
-  walletId: string;
+  accountKind: AdjustmentAccountKind;
+  accountId: string;
+  walletId: string | null;
   businessName: string;
   currency: string;
   direction: AdjustmentDirection;

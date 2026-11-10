@@ -42,6 +42,7 @@ const LOCKABLE_TABLES = {
   wallets: "wallets",
   feeSchedules: "fee_schedules",
   walletAdjustments: "wallet_adjustments",
+  partnerAdjustments: "partner_adjustments",
   topUps: "top_ups",
   orders: "orders",
   apiKeys: "api_keys",

@@ -7,7 +7,7 @@ import { StorageBillingService } from "../src/modules/finance/jobs/storage-billi
 import { PaymentAccountsService } from "../src/modules/finance/payments/payment-accounts.service";
 import { StripeProcessor } from "../src/modules/finance/payments/stripe.processor";
 import { SEED_FEE_SCHEDULES } from "../src/shared";
-import { createStaff, flushRateLimits, fundWallet, resetDatabase, signUpAndVerify, startApp, type TestApp } from "./harness";
+import { createStaff, flushRateLimits, fundWallet, resetDatabase, signUpAndVerify, startApp, storeUnits, type TestApp } from "./harness";
 
 const as = (token: string) => ({ Authorization: `Bearer ${token}` });
 const WEBHOOK_SECRET = "whsec_gfnTestOnly";
@@ -256,6 +256,7 @@ describe("money", () => {
         "INSERT INTO inbound_shipments (reference, vendor_id, warehouse_id, country_code, status, shipping_mode, expected_arrival_date, declared_box_counts, created_by) VALUES ($1, $2, $3, 'GB', 'RECEIVED', 'LOOSE', current_date, '{}', $4) RETURNING id",
         [`IN-GB-${Math.random().toString(36).slice(2, 8).toUpperCase()}`, vendorId, warehouse!.id, user!.id],
       );
+      await storeUnits(vendorId, warehouse!.id, inbound!.id);
       for (let index = 0; index < count; index += 1) {
         await query("INSERT INTO storage_boxes (vendor_id, warehouse_id, inbound_id, tier, received_at, next_billing_date) VALUES ($1, $2, $3, 'SMALL', now(), $4)", [
           vendorId,
