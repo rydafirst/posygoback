@@ -111,7 +111,7 @@ function usesSection(profile: LegalProfile): string {
     const lines = PURPOSES.map(({ use, basis }) => `- ${use} Legal basis: ${basis}`).join("\n");
     return `## 7. How we use personal data and our legal bases
 
-7.1 Under ${profile.dataProtection}, we must have a legal basis for each way we use personal data. The legal bases we rely on are performing a contract, complying with a legal obligation, our legitimate interests and, for the biometric comparison, your explicit consent.
+7.1 Under ${profile.dataProtection}, we must have a legal basis for each way we use personal data. The legal bases we rely on are performing a contract, complying with a legal obligation, our legitimate interests and, for the biometric comparison and our advertising cookie, your consent.
 
 7.2 We use personal data for these purposes, on the legal bases shown:
 ${lines}
@@ -120,7 +120,7 @@ ${lines}
 
 7.4 If you do not give us information we need to enter into a contract with you or to meet a legal obligation, we may not be able to open your account or provide our services.
 
-7.5 We do not use personal data for advertising, and we do not sell it.`;
+7.5 We do not sell personal data. The only advertising use is the Meta Pixel on our public pages, which runs only if you agree to it, as section 14 explains.`;
   }
 
   const lines = PURPOSES.map(({ use }) => `- ${use}`).join("\n");
@@ -135,7 +135,7 @@ ${lines}
 
 7.4 If you do not give us information we need to provide our services or to meet a legal obligation, we may not be able to open your account or provide those services.
 
-7.5 We do not use personal data for advertising, and we do not sell it.`;
+7.5 We do not sell personal data. The only advertising use is the Meta Pixel on our public pages, which runs only if you agree to it, as section 14 explains.`;
 }
 
 function transferSafeguards(profile: LegalProfile): string {
@@ -211,7 +211,7 @@ export function privacyPolicyBody(profile: LegalProfile): string {
 
 ## 3. The personal data we collect
 
-3.1 Website visitors. If you only browse our public pages, we collect very little. We use the strictly necessary cookies and browser storage described in section 14. If you use the public tracking page, we use the tracking number you enter to show you the delivery status. Our hosting providers process technical data, such as your IP address, to deliver pages to you and protect the Platform from abuse.
+3.1 Website visitors. If you only browse our public pages, we collect very little. We use the strictly necessary cookies and browser storage described in section 14 and, only if you agree, the advertising cookie described there. If you use the public tracking page, we use the tracking number you enter to show you the delivery status. Our hosting providers process technical data, such as your IP address, to deliver pages to you and protect the Platform from abuse.
 
 3.2 Sellers and their team members. We collect:
 - sign-up details: business name, email address and password, and the countries you choose to store stock in;
@@ -289,7 +289,7 @@ ${usesSection(profile)}
 
 ## 9. Who we share personal data with
 
-9.1 We do not sell personal data, and we do not share it with anyone for advertising.
+9.1 We do not sell personal data. If you agree to our advertising cookie, Meta receives information about your visit to our public pages, as section 14 explains. We share nothing else for advertising.
 
 9.2 We use these service providers to run the Platform. They process personal data on our behalf, under contracts that require them to protect it:
 - Didit, to carry out identity checks;
@@ -370,11 +370,11 @@ ${complaintClause(profile)}
 
 ## 14. Cookies and local storage
 
-14.1 We use only strictly necessary cookies. They keep you signed in during a session and support the sign-in process. Without them, the Platform cannot work.
+14.1 Apart from the advertising cookie in 14.3, we use only strictly necessary cookies. They keep you signed in during a session and support the sign-in process. Without them, the Platform cannot work.
 
 14.2 We also use your browser's local storage to remember preferences, such as whether the sidebar is open, the country you have selected and your voice setting, and to keep drafts of the public partner application. This information is kept in your browser.
 
-14.3 We do not use advertising cookies or third-party tracking.
+14.3 On our public pages, we ask before we use the Meta Pixel, a cookie and script from Meta Platforms Ireland Limited. If you agree, it tells us and Meta which of our ads brought you to our website and whether you then created an account or contacted us on WhatsApp. Meta may combine this with information it already holds about you, under its own privacy policy. If you decline, we do not load it, and we never load it on pages you see after signing in. To change your choice, clear our website's data in your browser and choose again.
 
 14.4 You can clear or block cookies and local storage in your browser settings, but parts of the Platform, including signing in, will then not work.
 

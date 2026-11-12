@@ -5,7 +5,7 @@ import type { Role } from "../access/roles";
 import type { PartnerStatus } from "../partners/partner-lifecycle";
 import { MAX_VENDOR_COUNTRIES } from "../vendors/vendor-countries";
 
-export const PASSWORD_MIN_LENGTH = 12;
+export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;
 export const VERIFICATION_CODE_LENGTH = 8;
 

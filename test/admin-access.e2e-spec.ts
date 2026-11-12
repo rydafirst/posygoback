@@ -3,7 +3,7 @@ import { Pool } from "pg";
 
 import { COMPANY } from "../src/common/brand/brand";
 import { loadConfig } from "../src/config/config.schema";
-import { PARTNER_AGREEMENT_VERSION, STANDARD_AGREEMENT_VERSION } from "../src/database/agreements/standard-agreements";
+import { PARTNER_AGREEMENT_VERSION, PRIVACY_VERSION, STANDARD_AGREEMENT_VERSION } from "../src/database/agreements/standard-agreements";
 import { codeFrom, flushRateLimits, resetDatabase, signUpAndVerify, startApp, SUPER_ADMIN, type TestApp } from "./harness";
 
 const GERMANY = {
@@ -117,9 +117,15 @@ describe("privileged access", () => {
     const created = await test.http().post("/v1/admin/countries").set(auth).send(GERMANY).expect(201);
     expect(created.body.status).toBe("PROSPECTIVE");
     await test.http().post("/v1/admin/countries").set(auth).send(GERMANY).expect(409);
-    for (const kind of ["VENDOR_AGREEMENT", "PARTNER_AGREEMENT", "TERMS", "PRIVACY"]) {
+    const versions: Record<string, string> = {
+      VENDOR_AGREEMENT: STANDARD_AGREEMENT_VERSION,
+      PARTNER_AGREEMENT: PARTNER_AGREEMENT_VERSION,
+      TERMS: STANDARD_AGREEMENT_VERSION,
+      PRIVACY: PRIVACY_VERSION,
+    };
+    for (const [kind, version] of Object.entries(versions)) {
       const agreement = (await test.http().get(`/v1/legal/DE/${kind}`).expect(200)).body as { title: string; version: string; body: string };
-      expect(agreement.version).toBe(kind === "PARTNER_AGREEMENT" ? PARTNER_AGREEMENT_VERSION : STANDARD_AGREEMENT_VERSION);
+      expect(agreement.version).toBe(version);
       expect(agreement.body).toContain("Germany");
       expect(agreement.body).toContain(`company number ${COMPANY.number}`);
     }
