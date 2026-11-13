@@ -37,6 +37,7 @@ export interface PayoutGateway {
   setupLink(accountId: string, returnUrl: string): Promise<string>;
   fetchAccount(accountId: string): Promise<PayoutAccountSnapshot>;
   transfer(request: { accountId: string; amountMinor: number; currency: string; idempotencyKey: string }): Promise<string>;
+  closeAccount(accountId: string): Promise<void>;
   parseWebhook(rawBody: Buffer, signature: string): string | null;
 }
 

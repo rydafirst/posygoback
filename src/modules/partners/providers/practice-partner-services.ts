@@ -22,6 +22,10 @@ export class PracticePayoutGateway implements PayoutGateway {
     return Promise.resolve(`practice_tr_${createHash("sha256").update(request.idempotencyKey).digest("hex").slice(0, 24)}`);
   }
 
+  closeAccount(): Promise<void> {
+    return Promise.resolve();
+  }
+
   parseWebhook(): string | null {
     return null;
   }

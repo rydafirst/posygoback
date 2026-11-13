@@ -5,7 +5,7 @@ import type { DeliverySpeed, StorefrontOrderStatus, StorefrontStatus, Storefront
 
 export interface VendorPayoutAccountView {
   provider: string;
-  status: "ONBOARDING" | "ACTIVE" | "RESTRICTED";
+  status: "ONBOARDING" | "ACTIVE" | "RESTRICTED" | "CLOSED";
   bankSummary: string | null;
 }
 

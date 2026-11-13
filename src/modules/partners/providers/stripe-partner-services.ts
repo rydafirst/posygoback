@@ -74,6 +74,16 @@ export class StripeConnectGateway implements PayoutGateway {
     }
   }
 
+  async closeAccount(accountId: string): Promise<void> {
+    try {
+      await this.stripe.accounts.del(accountId);
+    } catch (error) {
+      if (!(error instanceof Stripe.errors.StripeInvalidRequestError && error.code === "resource_missing")) {
+        throw error;
+      }
+    }
+  }
+
   parseWebhook(rawBody: Buffer, signature: string): string | null {
     const event = verifiedEvent(this.stripe, rawBody, signature, this.webhookSecret);
     return event.type === "account.updated" ? event.data.object.id : null;

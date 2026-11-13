@@ -26,3 +26,30 @@ describe("StripeConnectGateway.setupLink", () => {
     expect(onboarding).not.toHaveBeenCalled();
   });
 });
+
+describe("StripeConnectGateway.closeAccount", () => {
+  const gatewayWithDelete = (result: () => Promise<unknown>) => {
+    const gateway = new StripeConnectGateway("sk_test_unit", "whsec_unit");
+    const stripe = (gateway as unknown as { stripe: Stripe }).stripe;
+    const remove = jest.spyOn(stripe.accounts, "del").mockImplementation(result as never);
+    return { gateway, stripe, remove };
+  };
+
+  it("deletes the connected account", async () => {
+    const { gateway, remove } = gatewayWithDelete(() => Promise.resolve({ id: "acct_1", deleted: true }));
+    await gateway.closeAccount("acct_1");
+    expect(remove).toHaveBeenCalledWith("acct_1");
+  });
+
+  it("treats an account Stripe no longer has as already closed", async () => {
+    const { gateway, stripe } = gatewayWithDelete(() => Promise.resolve());
+    const missing = new (stripe.errors.StripeInvalidRequestError as unknown as new (raw: object) => Error)({ message: "No such account", code: "resource_missing" });
+    jest.spyOn(stripe.accounts, "del").mockRejectedValue(missing);
+    await expect(gateway.closeAccount("acct_gone")).resolves.toBeUndefined();
+  });
+
+  it("reports any other failure so the account is tried again later", async () => {
+    const { gateway } = gatewayWithDelete(() => Promise.reject(new Error("Balance is not zero")));
+    await expect(gateway.closeAccount("acct_1")).rejects.toThrow("Balance is not zero");
+  });
+});

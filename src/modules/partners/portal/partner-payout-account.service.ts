@@ -1,20 +1,25 @@
-import { Inject, Injectable, type OnApplicationBootstrap } from "@nestjs/common";
+import { Inject, Injectable, Logger, type OnApplicationBootstrap } from "@nestjs/common";
 
 import type { AuthPrincipal, RequestMeta } from "../../../common/auth/auth-principal";
 import { APP_CONFIG } from "../../../config/config.module";
 import type { AppConfig } from "../../../config/config.schema";
 import { lockRow, PrismaService } from "../../../database/prisma.service";
 import { AuditService, SYSTEM_ACTOR } from "../../../infrastructure/audit/audit.service";
-import { wasApproved } from "../../../shared";
+import { CLOSED_PARTNER_STATUSES, wasApproved } from "../../../shared";
 import { actorOf } from "../admin/admin-partners.service";
+import { PartnerLedgerService } from "../ledger/partner-ledger.service";
 import { PartnerEmails } from "../partner-emails";
 import { PartnerNotifierService } from "../partner-notifier.service";
 import { ConnectAccountEvents } from "../providers/connect-account-events";
 import { FRESH_PAYOUT_ACCOUNT, PAYOUT_GATEWAY, type PayoutGateway } from "../providers/partner-services.port";
 import { OPEN_PARTNER_STATUSES, PartnerAccessService, partnerIdOf } from "./partner-access.service";
 
+const PAYOUTS_IN_FLIGHT = ["PENDING_APPROVAL", "PROCESSING"] as const;
+
 @Injectable()
 export class PartnerPayoutAccountService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(PartnerPayoutAccountService.name);
+
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(PAYOUT_GATEWAY) private readonly gateway: PayoutGateway,
@@ -22,11 +27,12 @@ export class PartnerPayoutAccountService implements OnApplicationBootstrap {
     private readonly access: PartnerAccessService,
     private readonly notifier: PartnerNotifierService,
     private readonly accountEvents: ConnectAccountEvents,
+    private readonly ledger: PartnerLedgerService,
     private readonly audit: AuditService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
-    await this.prisma.partnerPayoutAccount.updateMany({ where: { mode: { not: this.gateway.mode }, status: { not: "ONBOARDING" } }, data: { status: "ONBOARDING" } });
+    await this.prisma.partnerPayoutAccount.updateMany({ where: { mode: { not: this.gateway.mode }, status: { notIn: ["ONBOARDING", "CLOSED"] } }, data: { status: "ONBOARDING" } });
   }
 
   async startSetup(principal: AuthPrincipal, meta: RequestMeta): Promise<{ url: string }> {
@@ -74,11 +80,49 @@ export class PartnerPayoutAccountService implements OnApplicationBootstrap {
     }
   }
 
+  async closeSettled(): Promise<number> {
+    const accounts = await this.prisma.partnerPayoutAccount.findMany({
+      where: { mode: this.gateway.mode, status: { not: "CLOSED" }, partner: { status: { in: [...CLOSED_PARTNER_STATUSES] } } },
+      select: { partnerId: true, providerAccountId: true },
+    });
+    let closed = 0;
+    for (const account of accounts) {
+      if (await this.isSettled(account.partnerId)) {
+        closed += (await this.close(account.partnerId, account.providerAccountId)) ? 1 : 0;
+      }
+    }
+    return closed;
+  }
+
+  private async isSettled(partnerId: string): Promise<boolean> {
+    const { availableMinor, heldMinor } = await this.ledger.balances(this.prisma, partnerId);
+    const inFlight = await this.prisma.partnerPayout.count({ where: { partnerId, status: { in: [...PAYOUTS_IN_FLIGHT] } } });
+    return availableMinor <= 0 && heldMinor === 0 && inFlight === 0;
+  }
+
+  private async close(partnerId: string, providerAccountId: string): Promise<boolean> {
+    try {
+      await this.gateway.closeAccount(providerAccountId);
+    } catch (error) {
+      this.logger.error(`Could not close the payout account of partner ${partnerId}: ${String(error)}`);
+      return false;
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.partnerPayoutAccount.update({ where: { partnerId }, data: { status: "CLOSED" } });
+      await this.audit.record({ actor: SYSTEM_ACTOR, action: "partner.payout_account_closed", resourceType: "fulfilment_partner", resourceId: partnerId }, tx);
+    });
+    return true;
+  }
+
   async sync(providerAccountId: string): Promise<void> {
+    const open = await this.prisma.partnerPayoutAccount.findUnique({ where: { provider_providerAccountId: { provider: this.gateway.provider, providerAccountId } }, select: { status: true } });
+    if (open?.status === "CLOSED") {
+      return;
+    }
     const snapshot = await this.gateway.fetchAccount(providerAccountId);
     const changed = await this.prisma.$transaction(async (tx) => {
       const account = await tx.partnerPayoutAccount.findUnique({ where: { provider_providerAccountId: { provider: this.gateway.provider, providerAccountId } } });
-      if (!account) {
+      if (!account || account.status === "CLOSED") {
         return null;
       }
       await lockRow(tx, "fulfilmentPartners", account.partnerId);

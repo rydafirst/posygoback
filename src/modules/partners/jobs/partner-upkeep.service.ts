@@ -12,6 +12,7 @@ import { TrustService } from "../trust/trust.service";
 import { PartnerLedgerService } from "../ledger/partner-ledger.service";
 import { PartnerEmails } from "../partner-emails";
 import { PartnerNotifierService } from "../partner-notifier.service";
+import { PartnerPayoutAccountService } from "../portal/partner-payout-account.service";
 
 export interface UpkeepSummary {
   holdbacksReleased: number;
@@ -22,6 +23,7 @@ export interface UpkeepSummary {
   tiersRaised: number;
   proofsPurged: number;
   payoutsRetried: number;
+  payoutAccountsClosed: number;
 }
 
 interface DueHoldback {
@@ -45,6 +47,7 @@ export class PartnerUpkeepService {
     private readonly trust: TrustService,
     private readonly finance: PartnerFinanceService,
     private readonly files: FilesService,
+    private readonly payoutAccounts: PartnerPayoutAccountService,
     private readonly audit: AuditService,
   ) {}
 
@@ -55,7 +58,8 @@ export class PartnerUpkeepService {
     const tiersRaised = await this.raiseTiers();
     const proofsPurged = await this.purgeProofs(today);
     const payoutsRetried = await this.retryPayouts();
-    return { holdbacksReleased, ...insurance, countsMissed, tiersRaised, proofsPurged, payoutsRetried };
+    const payoutAccountsClosed = await this.payoutAccounts.closeSettled();
+    return { holdbacksReleased, ...insurance, countsMissed, tiersRaised, proofsPurged, payoutsRetried, payoutAccountsClosed };
   }
 
   async raiseTiers(): Promise<number> {

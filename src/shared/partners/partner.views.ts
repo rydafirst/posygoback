@@ -57,7 +57,7 @@ export interface SecurityView {
 
 export interface PayoutAccountView {
   provider: string;
-  status: "ONBOARDING" | "ACTIVE" | "RESTRICTED";
+  status: "ONBOARDING" | "ACTIVE" | "RESTRICTED" | "CLOSED";
   bankSummary: string | null;
   detailsChangedAt: string | null;
 }

@@ -1671,6 +1671,7 @@ enum PayoutAccountStatus {
   ONBOARDING
   ACTIVE
   RESTRICTED
+  CLOSED
 
   @@map("payout_account_status")
 }
