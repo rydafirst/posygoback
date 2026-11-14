@@ -129,4 +129,45 @@ describe("partner outreach", () => {
     await test.http().delete(`/v1/admin/outreach/contacts/${cargo.id}`).set(as(superAdmin)).expect(204);
     await test.http().get(`/v1/admin/outreach/contacts/${cargo.id}`).set(as(superAdmin)).expect(404);
   });
+
+  it("sends a brand the designed email, filled in for them, with WhatsApp and an opt-out", async () => {
+    const brand = await test
+      .http()
+      .post("/v1/admin/outreach/contacts")
+      .set(as(superAdmin))
+      .send({ business: "Ade & Co <Lagos>", contactName: "Ade", email: "hi@adeco.test", country: "Nigeria", city: "Lagos", kind: "BRAND" })
+      .expect(201);
+    const templates = await test.http().get("/v1/admin/outreach/templates").set(as(superAdmin)).expect(200);
+    const pitch = (templates.body as Array<{ id: string; subject: string; body: string; design?: string }>).find((template) => template.id === "brand")!;
+    expect(pitch.design).toBe("brand-pitch");
+
+    await test
+      .http()
+      .post("/v1/admin/outreach/send")
+      .set(as(superAdmin))
+      .send({ contactIds: [brand.body.id], subject: pitch.subject, body: pitch.body, design: pitch.design })
+      .expect(200);
+
+    const email = test.email.lastTo("hi@adeco.test")!;
+    expect(email.subject).toBe("Faster delivery for Ade & Co <Lagos>'s customers abroad");
+    expect(email.text).toContain("Hi Ade,");
+    expect(email.html).toContain("Hi Ade,");
+    expect(email.html).toContain("Ade &amp; Co &lt;Lagos&gt;");
+    expect(email.html).not.toContain("<Lagos>");
+    expect(email.html).toContain("https://wa.me/447350162342");
+    expect(email.html).toContain("/email/brand/today.gif");
+    expect(email.html).toContain(email.optOut!.url.replace(/&/g, "&amp;"));
+  });
+
+  it("keeps the standard layout when no design is chosen", async () => {
+    const list = (await contacts()).body as OutreachContactView[];
+    const brand = list.find((contact) => contact.email === "hi@adeco.test")!;
+    await test
+      .http()
+      .post("/v1/admin/outreach/send")
+      .set(as(superAdmin))
+      .send({ contactIds: [brand.id], subject: "Quick question", body: "Hi {name}, just checking you saw my last email." })
+      .expect(200);
+    expect(test.email.lastTo("hi@adeco.test")!.html).toBeUndefined();
+  });
 });

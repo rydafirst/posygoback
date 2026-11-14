@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const OUTREACH_KINDS = ["PREP_CENTRE", "CARGO_AGENT", "COURIER", "INDIVIDUAL", "OTHER"] as const;
+export const OUTREACH_KINDS = ["PREP_CENTRE", "CARGO_AGENT", "COURIER", "INDIVIDUAL", "BRAND", "OTHER"] as const;
 export type OutreachKind = (typeof OUTREACH_KINDS)[number];
 
 export const OUTREACH_STATUSES = ["NOT_CONTACTED", "MESSAGED", "REPLIED", "CALL_BOOKED", "ONBOARDED", "DECLINED", "UNSUBSCRIBED"] as const;
@@ -9,6 +9,9 @@ export type OutreachStatus = (typeof OUTREACH_STATUSES)[number];
 export const OUTREACH_LIMITS = { perSend: 50, perDay: 150 } as const;
 
 export const OUTREACH_FIELDS = ["{business}", "{name}", "{city}", "{country}"] as const;
+
+export const OUTREACH_DESIGNS = ["brand-pitch"] as const;
+export type OutreachDesign = (typeof OUTREACH_DESIGNS)[number];
 
 const optionalText = (max: number) =>
   z
@@ -59,6 +62,7 @@ export const sendOutreachSchema = z.object({
     .refine((ids) => new Set(ids).size === ids.length, "Each contact can only be picked once"),
   subject: z.string().trim().min(3).max(150),
   body: z.string().trim().min(20).max(5000),
+  design: z.enum(OUTREACH_DESIGNS).optional(),
 });
 export type SendOutreachInput = z.infer<typeof sendOutreachSchema>;
 
@@ -120,6 +124,7 @@ export interface OutreachTemplate {
   title: string;
   subject: string;
   body: string;
+  design?: OutreachDesign;
 }
 
 type Fillable = Pick<OutreachContactView, "business" | "contactName" | "city" | "country">;
@@ -133,6 +138,28 @@ export function fillOutreach(template: string, contact: Fillable): string {
 }
 
 export const OUTREACH_TEMPLATES: readonly OutreachTemplate[] = [
+  {
+    id: "brand",
+    title: "Brand selling abroad (designed email)",
+    subject: "Faster delivery for {business}'s customers abroad",
+    design: "brand-pitch",
+    body: `Hi {name},
+
+I'm Tolu, founder of Posygo. I noticed {business} ships to customers in the UK and beyond from Lagos. Here's a faster, cheaper way to get your orders to them.
+
+Today, every order travels alone from Lagos. Your customer waits one to two weeks, and is often asked to pay import duties at her own door. Many don't order again, not because of your product, but because of the delivery.
+
+With Posygo:
+1. You send your stock to our hub in the UK once, in bulk.
+2. When a customer orders, our hub picks, checks and packs it the same day.
+3. Your customer gets it in 2-3 days, with no duties at the door.
+
+Can I show you how it would work for {business}? Send me a message on WhatsApp and I'll walk you through it: https://wa.me/447350162342. Or simply reply to this email.
+
+Best regards,
+Tolulope Olonibua
+Founder, Posygo Ltd`,
+  },
   {
     id: "prep-centre",
     title: "Prep centre or 3PL",

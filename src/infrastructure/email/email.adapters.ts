@@ -75,7 +75,7 @@ export class ResendTransport implements EmailTransport {
       to: [message.to],
       subject: message.subject,
       text: plainText(message),
-      html: renderHtml(message, this.settings.siteUrl),
+      html: message.html ?? renderHtml(message, this.settings.siteUrl),
       ...(this.settings.replyTo ? { reply_to: this.settings.replyTo } : {}),
       ...(message.optOut ? { headers: { "List-Unsubscribe": `<${message.optOut.url}>` } } : {}),
       ...(message.kind ? { tags: [{ name: "kind", value: tag(message.kind) }] } : {}),

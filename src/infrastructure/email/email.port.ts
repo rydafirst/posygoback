@@ -31,6 +31,7 @@ export interface EmailMessage {
   details?: EmailDetails;
   signature?: EmailSignature;
   optOut?: EmailOptOut;
+  html?: string;
 }
 
 export interface EmailSender {

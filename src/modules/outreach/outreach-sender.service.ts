@@ -2,13 +2,23 @@ import { Inject, Injectable } from "@nestjs/common";
 
 import type { AuthPrincipal, RequestMeta } from "../../common/auth/auth-principal";
 import { Errors } from "../../common/http/app-exception";
+import { APP_CONFIG } from "../../config/config.module";
+import type { AppConfig } from "../../config/config.schema";
 import { PrismaService } from "../../database/prisma.service";
 import { AuditService } from "../../infrastructure/audit/audit.service";
 import { EMAIL_TRANSPORT, type EmailTransport } from "../../infrastructure/email/email.port";
-import { fillOutreach, OUTREACH_LIMITS, type OutreachSendResultView, type OutreachSkip, type SendOutreachInput } from "../../shared";
+import { fillOutreach, OUTREACH_LIMITS, type OutreachDesign, type OutreachSendResultView, type OutreachSkip, type SendOutreachInput } from "../../shared";
+import { renderBrandPitch } from "./brand-pitch-email";
 import { OutreachOptOutsService } from "./outreach-opt-outs.service";
 
 export const OUTREACH_PACING_MS = Symbol("OUTREACH_PACING_MS");
+
+interface Recipient {
+  id: string;
+  email: string | null;
+  business: string;
+  contactName: string | null;
+}
 
 function startOfDay(now: Date): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -22,6 +32,7 @@ export class OutreachSenderService {
     private readonly optOuts: OutreachOptOutsService,
     @Inject(EMAIL_TRANSPORT) private readonly transport: EmailTransport,
     @Inject(OUTREACH_PACING_MS) private readonly pacingMs: number,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   async send(principal: AuthPrincipal, input: SendOutreachInput, meta: RequestMeta): Promise<OutreachSendResultView> {
@@ -47,7 +58,7 @@ export class OutreachSenderService {
       }
       const subject = fillOutreach(input.subject, contact);
       const body = fillOutreach(input.body, contact);
-      const outcome = await this.deliver(contact.id, contact.email!, subject, body);
+      const outcome = await this.deliver(contact, subject, body, input.design);
       await this.prisma.outreachMessage.create({ data: { contactId: contact.id, subject, body, sentBy: principal.userId, ...outcome } });
       if (outcome.status === "SENT") {
         sent += 1;
@@ -67,14 +78,25 @@ export class OutreachSenderService {
     return { sent, failed, skipped, sentToday: sentToday + sent };
   }
 
-  private async deliver(contactId: string, to: string, subject: string, text: string): Promise<{ status: "SENT" | "FAILED"; providerId: string | null; error: string | null }> {
+  private designed(design: OutreachDesign | undefined, contact: Recipient, stopUrl: string): string | undefined {
+    return design === "brand-pitch" ? renderBrandPitch({ business: contact.business, name: contact.contactName, stopUrl, siteUrl: this.config.WEB_PUBLIC_URL }) : undefined;
+  }
+
+  private async deliver(
+    contact: Recipient,
+    subject: string,
+    text: string,
+    design: OutreachDesign | undefined,
+  ): Promise<{ status: "SENT" | "FAILED"; providerId: string | null; error: string | null }> {
+    const stopUrl = this.optOuts.stopUrl(contact.id);
     try {
       const receipt = await this.transport.deliver({
-        to,
+        to: contact.email!,
         subject,
         text,
         kind: "outreach",
-        optOut: { question: "Not interested?", label: "Don't email me again", url: this.optOuts.stopUrl(contactId) },
+        optOut: { question: "Not interested?", label: "Don't email me again", url: stopUrl },
+        html: this.designed(design, contact, stopUrl),
       });
       return { status: "SENT", providerId: receipt.providerId?.slice(0, 100) ?? null, error: null };
     } catch (error) {

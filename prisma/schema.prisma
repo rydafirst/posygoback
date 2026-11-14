@@ -3129,6 +3129,7 @@ enum OutreachKind {
   CARGO_AGENT
   COURIER
   INDIVIDUAL
+  BRAND
   OTHER
 }
 

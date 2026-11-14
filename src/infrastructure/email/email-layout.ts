@@ -100,6 +100,10 @@ function splitAtAction(text: string, message: EmailMessage): [lead: string, rest
   return end < 0 ? [text, ""] : [text.slice(0, end), text.slice(end)];
 }
 
+function reason(message: EmailMessage): string {
+  return message.kind === "outreach" ? `You're getting this because we think ${PLATFORM_NAME} could help your business.` : `You're getting this because you have a ${PLATFORM_NAME} account.`;
+}
+
 export function renderHtml(message: EmailMessage, siteUrl: string): string {
   const site = siteUrl.replace(/\/$/, "");
   const [lead, rest] = splitAtAction(withoutSignOff(message.text), message);
@@ -110,7 +114,7 @@ export function renderHtml(message: EmailMessage, siteUrl: string): string {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;font-family:${FONT}">
 <tr><td style="padding:0 0 20px;border-bottom:1px solid ${LINE}"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="padding-right:10px;vertical-align:middle"><img src="${escape(site)}/brand/email-mark.png" width="28" height="28" alt="" style="display:block;border:0"></td><td style="vertical-align:middle;font-size:20px;line-height:28px;font-weight:700;letter-spacing:-0.5px;color:${INK}">${PLATFORM_NAME}</td></tr></table></td></tr>
 <tr><td style="padding:36px 0 8px">${eyebrow(message.eyebrow)}<h1 style="margin:0 0 20px;font-size:26px;line-height:32px;font-weight:600;letter-spacing:-0.4px;color:${INK}">${escape(message.heading ?? message.subject)}</h1>${body}${signature(message.signature)}${optOut(message.optOut)}</td></tr>
-<tr><td style="padding:24px 0 0;border-top:1px solid ${LINE};font-size:12px;line-height:18px;color:${FAINT}">${PLATFORM_NAME} · <a href="${escape(site)}" style="color:${FAINT}">${escape(site.replace(/^https?:\/\//, ""))}</a><br>You're getting this because you have a ${PLATFORM_NAME} account.<br>${escape(COMPANY_FOOTER)}</td></tr>
+<tr><td style="padding:24px 0 0;border-top:1px solid ${LINE};font-size:12px;line-height:18px;color:${FAINT}">${PLATFORM_NAME} · <a href="${escape(site)}" style="color:${FAINT}">${escape(site.replace(/^https?:\/\//, ""))}</a><br>${escape(reason(message))}<br>${escape(COMPANY_FOOTER)}</td></tr>
 </table></td></tr></table></body></html>`;
 }
 
