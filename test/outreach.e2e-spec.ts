@@ -155,7 +155,10 @@ describe("partner outreach", () => {
     expect(email.html).toContain("Ade &amp; Co &lt;Lagos&gt;");
     expect(email.html).not.toContain("<Lagos>");
     expect(email.html).toContain("https://wa.me/447350162342");
-    expect(email.html).toContain("/email/brand/today.gif");
+    expect(email.html).toContain('src="cid:today"');
+    expect(email.html).not.toContain("/email/brand/today.gif");
+    expect(email.inlineImages).toContainEqual({ contentId: "today", filename: "today.gif", url: expect.stringMatching(/\/email\/brand\/today\.gif$/) });
+    expect(email.inlineImages!.map((image) => image.contentId)).toEqual(["logo", "today", "ship", "pack", "deliver"]);
     expect(email.html).toContain(email.optOut!.url.replace(/&/g, "&amp;"));
   });
 
@@ -169,5 +172,6 @@ describe("partner outreach", () => {
       .send({ contactIds: [brand.id], subject: "Quick question", body: "Hi {name}, just checking you saw my last email." })
       .expect(200);
     expect(test.email.lastTo("hi@adeco.test")!.html).toBeUndefined();
+    expect(test.email.lastTo("hi@adeco.test")!.inlineImages).toBeUndefined();
   });
 });

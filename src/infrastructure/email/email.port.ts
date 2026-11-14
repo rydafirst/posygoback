@@ -19,6 +19,12 @@ export interface EmailSignature {
   title: string;
 }
 
+export interface EmailInlineImage {
+  contentId: string;
+  filename: string;
+  url: string;
+}
+
 export interface EmailMessage {
   to: string;
   subject: string;
@@ -32,6 +38,7 @@ export interface EmailMessage {
   signature?: EmailSignature;
   optOut?: EmailOptOut;
   html?: string;
+  inlineImages?: readonly EmailInlineImage[];
 }
 
 export interface EmailSender {

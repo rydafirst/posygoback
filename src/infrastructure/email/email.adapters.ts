@@ -1,7 +1,7 @@
 import { Logger } from "@nestjs/common";
 
 import { plainText, renderHtml } from "./email-layout";
-import type { DeliveryReceipt, EmailMessage, EmailTransport } from "./email.port";
+import type { DeliveryReceipt, EmailInlineImage, EmailMessage, EmailTransport } from "./email.port";
 
 const RESEND_URL = "https://api.resend.com/emails";
 const RETRY_DELAYS_MS = [500, 1500];
@@ -45,6 +45,10 @@ export interface ResendSettings {
   siteUrl: string;
 }
 
+function attachment(image: EmailInlineImage) {
+  return { path: image.url, filename: image.filename, content_id: image.contentId };
+}
+
 function tag(kind: string): string {
   return kind.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 256);
 }
@@ -78,6 +82,7 @@ export class ResendTransport implements EmailTransport {
       html: message.html ?? renderHtml(message, this.settings.siteUrl),
       ...(this.settings.replyTo ? { reply_to: this.settings.replyTo } : {}),
       ...(message.optOut ? { headers: { "List-Unsubscribe": `<${message.optOut.url}>` } } : {}),
+      ...(message.inlineImages?.length ? { attachments: message.inlineImages.map(attachment) } : {}),
       ...(message.kind ? { tags: [{ name: "kind", value: tag(message.kind) }] } : {}),
     };
     let response: Response;

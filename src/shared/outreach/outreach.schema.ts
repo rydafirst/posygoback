@@ -145,12 +145,12 @@ export const OUTREACH_TEMPLATES: readonly OutreachTemplate[] = [
     design: "brand-pitch",
     body: `Hi {name},
 
-I'm Tolu, founder of Posygo. I noticed {business} ships to customers in the UK and beyond from Lagos. Here's a faster, cheaper way to get your orders to them.
+I'm Tolu, founder of Posygo. I noticed {business} ships from Lagos to customers abroad, in places like the UK. Here's a faster, cheaper way to get your orders to them.
 
 Today, every order travels alone from Lagos. Your customer waits one to two weeks, and is often asked to pay import duties at her own door. Many don't order again, not because of your product, but because of the delivery.
 
 With Posygo:
-1. You send your stock to our hub in the UK once, in bulk.
+1. You send your stock once, in bulk, to our hub in your customers' country, like the UK.
 2. When a customer orders, our hub picks, checks and packs it the same day.
 3. Your customer gets it in 2-3 days, with no duties at the door.
 

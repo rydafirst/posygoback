@@ -6,7 +6,7 @@ import { APP_CONFIG } from "../../config/config.module";
 import type { AppConfig } from "../../config/config.schema";
 import { PrismaService } from "../../database/prisma.service";
 import { AuditService } from "../../infrastructure/audit/audit.service";
-import { EMAIL_TRANSPORT, type EmailTransport } from "../../infrastructure/email/email.port";
+import { EMAIL_TRANSPORT, type EmailMessage, type EmailTransport } from "../../infrastructure/email/email.port";
 import { fillOutreach, OUTREACH_LIMITS, type OutreachDesign, type OutreachSendResultView, type OutreachSkip, type SendOutreachInput } from "../../shared";
 import { renderBrandPitch } from "./brand-pitch-email";
 import { OutreachOptOutsService } from "./outreach-opt-outs.service";
@@ -78,8 +78,12 @@ export class OutreachSenderService {
     return { sent, failed, skipped, sentToday: sentToday + sent };
   }
 
-  private designed(design: OutreachDesign | undefined, contact: Recipient, stopUrl: string): string | undefined {
-    return design === "brand-pitch" ? renderBrandPitch({ business: contact.business, name: contact.contactName, stopUrl, siteUrl: this.config.WEB_PUBLIC_URL }) : undefined;
+  private designed(design: OutreachDesign | undefined, contact: Recipient, stopUrl: string): Pick<EmailMessage, "html" | "inlineImages"> {
+    if (design !== "brand-pitch") {
+      return {};
+    }
+    const email = renderBrandPitch({ business: contact.business, name: contact.contactName, stopUrl, siteUrl: this.config.WEB_PUBLIC_URL });
+    return { html: email.html, inlineImages: email.images };
   }
 
   private async deliver(
@@ -96,7 +100,7 @@ export class OutreachSenderService {
         text,
         kind: "outreach",
         optOut: { question: "Not interested?", label: "Don't email me again", url: stopUrl },
-        html: this.designed(design, contact, stopUrl),
+        ...this.designed(design, contact, stopUrl),
       });
       return { status: "SENT", providerId: receipt.providerId?.slice(0, 100) ?? null, error: null };
     } catch (error) {

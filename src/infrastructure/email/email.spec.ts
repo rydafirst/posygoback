@@ -78,6 +78,19 @@ describe("email", () => {
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body).toMatchObject({ from: "Posygo <hello@posygo.com>", to: ["ada@example.test"], reply_to: "help@posygo.com", tags: [{ name: "kind", value: "auth_password_reset" }] });
     expect(body.html).toEqual(expect.stringContaining("Choose a new password"));
+    expect(body).not.toHaveProperty("attachments");
+  });
+
+  it("attaches inline pictures so they show without the reader allowing images", async () => {
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: "re_789" }) });
+    global.fetch = fetchMock;
+    await new ResendTransport(SETTINGS).deliver({
+      ...MESSAGE,
+      html: '<img src="cid:logo">',
+      inlineImages: [{ contentId: "logo", filename: "logo.png", url: "https://posygo.com/email/brand/logo.png" }],
+    });
+    const body = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string) as Record<string, unknown>;
+    expect(body.attachments).toEqual([{ path: "https://posygo.com/email/brand/logo.png", filename: "logo.png", content_id: "logo" }]);
   });
 
   it("tries again after a temporary failure, but not after the email was refused", async () => {
