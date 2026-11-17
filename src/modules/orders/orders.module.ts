@@ -22,6 +22,9 @@ import { StockAllocationService } from "./core/stock-allocation.service";
 import { ApiKeyGuard } from "./integration/api-key.guard";
 import { ApiKeysService } from "./integration/api-keys.service";
 import { IntegrationOrdersService } from "./integration/integration-orders.service";
+import { StoreConnectionsService } from "./integration/store-connections.service";
+import { StoreWebhooksController, VendorStoreConnectionsController } from "./integration/store-connections.controllers";
+import { StoreWebhooksService } from "./integration/store-webhooks.service";
 import { IntegrationOrdersController, PackagingController, TrackingController, VendorApiKeysController, VendorOrdersController, WarehouseOrdersController } from "./orders.controllers";
 import { PackagingService } from "./packaging/packaging.service";
 import { OrderImportService } from "./vendor/order-import.service";
@@ -32,7 +35,16 @@ import { OrderScansService } from "./warehouse/order-scans.service";
 
 @Module({
   imports: [PartnerOperationsModule, FinanceModule, OnboardingModule, FilesModule],
-  controllers: [VendorOrdersController, VendorApiKeysController, WarehouseOrdersController, PackagingController, IntegrationOrdersController, TrackingController],
+  controllers: [
+    VendorOrdersController,
+    VendorApiKeysController,
+    VendorStoreConnectionsController,
+    WarehouseOrdersController,
+    PackagingController,
+    IntegrationOrdersController,
+    StoreWebhooksController,
+    TrackingController,
+  ],
   providers: [
     ShippingEstimateService,
     InventoryLedgerService,
@@ -58,6 +70,8 @@ import { OrderScansService } from "./warehouse/order-scans.service";
     ApiKeysService,
     ApiKeyGuard,
     IntegrationOrdersService,
+    StoreConnectionsService,
+    StoreWebhooksService,
   ],
   exports: [CarrierAccountsService, OrderCreationService, WarehouseChooserService, OrdersRepository],
 })

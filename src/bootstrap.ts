@@ -1,7 +1,7 @@
 import { type INestApplication, VersioningType } from "@nestjs/common";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import cookieParser from "cookie-parser";
-import { json } from "express";
+import { json, raw } from "express";
 import helmet from "helmet";
 
 import type { AppConfig } from "./config/config.schema";
@@ -12,6 +12,7 @@ export function configureApp(app: INestApplication, config: AppConfig): void {
   express.set("trust proxy", config.TRUST_PROXY_HOPS);
   express.disable("x-powered-by");
   app.use("/v1/vendor/orders/imports", json({ limit: "300kb" }));
+  app.use("/v1/integration/stores", raw({ type: () => true, limit: "1mb" }));
   express.useBodyParser("json", { limit: "100kb" });
 
   app.enableCors({

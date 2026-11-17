@@ -4,7 +4,7 @@ import type { OrderAction, OrderStatus, PublicTrackingStatus, TrackingStatus } f
 import { DELIVERY_PREFERENCES, type DeliveryPreference, type RateTag } from "./delivery-preference";
 import { orderRecipientSchema, type Recipient } from "./recipient";
 
-export const ORDER_SOURCES = ["PORTAL", "CSV", "API", "STOREFRONT"] as const;
+export const ORDER_SOURCES = ["PORTAL", "CSV", "API", "STOREFRONT", "SHOPIFY", "WOOCOMMERCE"] as const;
 export type OrderSource = (typeof ORDER_SOURCES)[number];
 
 export const externalReferenceSchema = z

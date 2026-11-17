@@ -43,7 +43,14 @@ interface PreparedProduct {
   countryOfOrigin: string;
 }
 
-const SOURCE_LABEL: Record<OrderSource, string> = { PORTAL: "the portal", CSV: "a spreadsheet import", API: "the API", STOREFRONT: "the storefront" };
+const SOURCE_LABEL: Record<OrderSource, string> = {
+  PORTAL: "the portal",
+  CSV: "a spreadsheet import",
+  API: "the API",
+  STOREFRONT: "the storefront",
+  SHOPIFY: "your Shopify shop",
+  WOOCOMMERCE: "your WooCommerce shop",
+};
 
 @Injectable()
 export class OrderCreationService {

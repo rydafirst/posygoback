@@ -365,6 +365,7 @@ model Vendor {
   topUps           TopUp[]
   orders           Order[]
   apiKeys          ApiKey[]
+  storeConnections StoreConnection[]
   orderImports     OrderImportBatch[]
 
   custodyClaims    CustodyClaim[]
@@ -441,6 +442,7 @@ model User {
   outreachMessagesSent    OutreachMessage[]
   partnerAdjustmentsDecided   PartnerAdjustment[]      @relation("PartnerAdjustmentDecidedBy")
   apiKeysCreated          ApiKey[]                     @relation("ApiKeyCreator")
+  storeConnectionsCreated StoreConnection[]            @relation("StoreConnectionCreator")
   ordersCreated           Order[]                      @relation("OrderCreator")
   ordersPacked            Order[]                      @relation("OrderPacker")
   labelsBought            Order[]                      @relation("OrderLabelBuyer")
@@ -1315,6 +1317,8 @@ enum OrderSource {
   CSV
   API
   STOREFRONT
+  SHOPIFY
+  WOOCOMMERCE
 
   @@map("order_source")
 }
@@ -3190,4 +3194,55 @@ model OutreachMessage {
   @@index([contactId, sentAt], map: "outreach_messages_contact_idx")
   @@index([sentAt], map: "outreach_messages_sent_idx")
   @@map("outreach_messages")
+}
+
+enum StorePlatform {
+  SHOPIFY
+  WOOCOMMERCE
+
+  @@map("store_platform")
+}
+
+enum StoreDeliveryOutcome {
+  CREATED
+  DUPLICATE
+  SKIPPED
+  FAILED
+
+  @@map("store_delivery_outcome")
+}
+
+model StoreConnection {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendorId        String        @map("vendor_id") @db.Uuid
+  platform        StorePlatform
+  name            String        @db.VarChar(60)
+  token           String        @unique(map: "store_connections_token_unique") @db.VarChar(48)
+  secretEncrypted String?       @map("secret_encrypted")
+  createdBy       String        @map("created_by") @db.Uuid
+  lastReceivedAt  DateTime?     @map("last_received_at") @db.Timestamptz(6)
+  revokedAt       DateTime?     @map("revoked_at") @db.Timestamptz(6)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  vendor     Vendor          @relation(fields: [vendorId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  creator    User            @relation("StoreConnectionCreator", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  deliveries StoreDelivery[]
+
+  @@index([vendorId, revokedAt], map: "store_connections_vendor_idx")
+  @@map("store_connections")
+}
+
+model StoreDelivery {
+  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  connectionId      String               @map("connection_id") @db.Uuid
+  externalReference String?              @map("external_reference") @db.VarChar(64)
+  outcome           StoreDeliveryOutcome
+  message           String               @db.VarChar(300)
+  orderReference    String?              @map("order_reference") @db.VarChar(32)
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  connection StoreConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([connectionId, createdAt(sort: Desc)], map: "store_deliveries_connection_idx")
+  @@map("store_deliveries")
 }
