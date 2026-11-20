@@ -25,9 +25,9 @@ export const DEFAULT_PARTNER_RATES: PartnerRates = {
   storageShareBps: 7000,
   fulfilmentShareBps: 7000,
   foundingBonusBps: 500,
-  foundingPlaces: 5,
+  foundingPlaces: 1,
   holdbackBps: 2000,
-  holdbackDays: 60,
+  holdbackDays: 30,
 };
 
 export const storefrontRatesSchema = z.object({ setupFeeMinor: minor, commissionBps: z.number().int().min(0).max(3_000), minimumHoldHours: z.number().int().min(0).max(720) });

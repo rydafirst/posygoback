@@ -170,7 +170,7 @@ I'm Tolu, founder of Posygo (posygo.com). We help online sellers, many of them i
 
 I'm looking for one fulfilment partner in {city} to receive, store and post orders for our sellers. It's the work {business} already does: count the boxes when they arrive, keep them on the shelf, and pack and post each order through our app.
 
-You keep 70% of the storage, receiving and packing fees on every box and order you handle, and the first five partners in each country get an extra 5%. There's no deposit and no cost to join.
+You keep 70% of the storage, receiving and packing fees on every box and order you handle, and the first partner in each country gets an extra 5%. There's no deposit and no cost to join.
 
 Would you be open to a 15-minute call this week?
 
@@ -188,7 +188,7 @@ I'm Tolu, founder of Posygo (posygo.com). {business} already ships between Niger
 
 Nigerian sellers use Posygo to keep their stock in {country} and post orders to customers there, instead of shipping each order from Lagos. I need a partner in {city} to receive their boxes, store them, and pack and post orders through our app.
 
-You keep 70% of the storage, receiving and packing fees, with an extra 5% for the first five partners in each country. There's no deposit and no cost to join, and the sellers who send stock abroad may well use your cargo service to get it there.
+You keep 70% of the storage, receiving and packing fees, with an extra 5% for the first partner in each country. There's no deposit and no cost to join, and the sellers who send stock abroad may well use your cargo service to get it there.
 
 Could we talk for 15 minutes this week?
 
