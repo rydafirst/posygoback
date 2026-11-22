@@ -8,6 +8,13 @@ mutation CreateService($name: String!, $callbackUrl: URL!) {
   }
 }`;
 
+export const FULFILMENT_SERVICES = `
+query Services {
+  shop {
+    fulfillmentServices { id callbackUrl location { id } }
+  }
+}`;
+
 export const DELETE_FULFILMENT_SERVICE = `
 mutation DeleteService($id: ID!) {
   fulfillmentServiceDelete(id: $id) {

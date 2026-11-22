@@ -10,9 +10,11 @@ import type { IntegrationAccountView, ShopifyConnectInput, ShopifyShopView } fro
 import { type ApiClient, ApiKeysService } from "../orders/integration/api-keys.service";
 import { IntegrationCatalogService } from "../orders/integration/integration-catalog.service";
 import { ShopifyAdminClient, ShopifyApiError, type ShopifyUserError, userErrorMessage } from "./shopify-admin.client";
-import { CREATE_FULFILMENT_SERVICE, DELETE_FULFILMENT_SERVICE } from "./shopify-queries";
+import { CREATE_FULFILMENT_SERVICE, DELETE_FULFILMENT_SERVICE, FULFILMENT_SERVICES } from "./shopify-queries";
 
 export const SHOPIFY_SERVICE_NAME = "Posygo";
+const SERVICE_NAMES = [SHOPIFY_SERVICE_NAME, "Posygo Fulfilment", "Posygo Hub"];
+const NAME_TAKEN = /already been taken/i;
 const RECENT_REQUESTS = 10;
 
 export interface LinkedShop {
@@ -23,6 +25,10 @@ export interface LinkedShop {
 
 interface CreatedService {
   fulfillmentServiceCreate: { fulfillmentService: { id: string; location: { id: string; name: string } | null } | null; userErrors: ShopifyUserError[] };
+}
+
+interface ExistingServices {
+  shop: { fulfillmentServices: Array<{ id: string; callbackUrl: string | null; location: { id: string } | null }> };
 }
 
 interface DeletedService {
@@ -74,7 +80,7 @@ export class ShopifyShopsService {
     }
     const shop = await this.installed(shopDomain);
     const accessToken = this.accessToken(shop);
-    const service = shop.fulfillmentServiceId && shop.locationId ? { id: shop.fulfillmentServiceId, locationId: shop.locationId } : await this.createService(shop.shopDomain, accessToken);
+    const service = shop.fulfillmentServiceId && shop.locationId ? { id: shop.fulfillmentServiceId, locationId: shop.locationId } : await this.ensureService(shop.shopDomain, accessToken);
     await this.prisma.shopifyShop.update({
       where: { id: shop.id },
       data: { vendorId: client.vendorId, apiKeyId: client.apiKeyId, country: input.country, fulfillmentServiceId: service.id, locationId: service.locationId },
@@ -151,17 +157,25 @@ export class ShopifyShopsService {
     return shop;
   }
 
-  private async createService(shopDomain: string, accessToken: string): Promise<{ id: string; locationId: string }> {
-    const result = await this.call<CreatedService>(shopDomain, accessToken, CREATE_FULFILMENT_SERVICE, {
-      name: SHOPIFY_SERVICE_NAME,
-      callbackUrl: `${this.config.API_PUBLIC_URL.replace(/\/$/, "")}/v1/shopify/fulfilment`,
-    });
-    const created = result.fulfillmentServiceCreate;
-    const problem = userErrorMessage(created.userErrors);
-    if (problem || !created.fulfillmentService?.location) {
-      throw Errors.invalidTransition(`Shopify couldn't add the Posygo location: ${problem ?? "no location was created"}`);
+  private async ensureService(shopDomain: string, accessToken: string): Promise<{ id: string; locationId: string }> {
+    const callbackUrl = `${this.config.API_PUBLIC_URL.replace(/\/$/, "")}/v1/shopify/fulfilment`;
+    const existing = await this.call<ExistingServices>(shopDomain, accessToken, FULFILMENT_SERVICES, {});
+    const ours = existing.shop.fulfillmentServices.find((service) => service.callbackUrl === callbackUrl && service.location);
+    if (ours?.location) {
+      return { id: ours.id, locationId: ours.location.id };
     }
-    return { id: created.fulfillmentService.id, locationId: created.fulfillmentService.location.id };
+    let problem = "no location was created";
+    for (const name of SERVICE_NAMES) {
+      const created = (await this.call<CreatedService>(shopDomain, accessToken, CREATE_FULFILMENT_SERVICE, { name, callbackUrl })).fulfillmentServiceCreate;
+      if (created.fulfillmentService?.location) {
+        return { id: created.fulfillmentService.id, locationId: created.fulfillmentService.location.id };
+      }
+      problem = userErrorMessage(created.userErrors) ?? problem;
+      if (!NAME_TAKEN.test(problem)) {
+        break;
+      }
+    }
+    throw Errors.invalidTransition(`Shopify couldn't add the Posygo location: ${problem}`);
   }
 
   private async exchange(shopDomain: string, sessionToken: string) {
