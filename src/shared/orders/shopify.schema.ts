@@ -20,6 +20,11 @@ export interface ShopifyRequestView {
   createdAt: string;
 }
 
+export interface ShopifyWaitingOrderView {
+  orderName: string;
+  orderId: string;
+}
+
 export interface ShopifyShopView {
   shopDomain: string;
   connected: boolean;
@@ -27,4 +32,5 @@ export interface ShopifyShopView {
   country: string | null;
   locationName: string | null;
   recent: ShopifyRequestView[];
+  waiting: ShopifyWaitingOrderView[];
 }

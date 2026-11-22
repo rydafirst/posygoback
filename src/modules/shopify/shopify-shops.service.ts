@@ -6,15 +6,16 @@ import type { AppConfig } from "../../config/config.schema";
 import { PrismaService } from "../../database/prisma.service";
 import type { ShopifyShop } from "../../generated/prisma/client";
 import { FieldEncryptionService } from "../../infrastructure/crypto/field-encryption.service";
-import type { IntegrationAccountView, ShopifyConnectInput, ShopifyShopView } from "../../shared";
+import type { IntegrationAccountView, ShopifyConnectInput, ShopifyShopView, ShopifyWaitingOrderView } from "../../shared";
 import { type ApiClient, ApiKeysService } from "../orders/integration/api-keys.service";
 import { IntegrationCatalogService } from "../orders/integration/integration-catalog.service";
 import { ShopifyAdminClient, ShopifyApiError, type ShopifyUserError, userErrorMessage } from "./shopify-admin.client";
-import { CREATE_FULFILMENT_SERVICE, DELETE_FULFILMENT_SERVICE, FULFILMENT_SERVICES } from "./shopify-queries";
+import { CREATE_FULFILMENT_SERVICE, DELETE_FULFILMENT_SERVICE, FULFILMENT_SERVICES, UNSUBMITTED_FULFILMENT_ORDERS } from "./shopify-queries";
 
 export const SHOPIFY_SERVICE_NAME = "Posygo";
 const SERVICE_NAMES = [SHOPIFY_SERVICE_NAME, "Posygo Fulfilment", "Posygo Hub"];
 const NAME_TAKEN = /already been taken/i;
+const REQUIRED_SCOPES = ["write_fulfillments", "write_assigned_fulfillment_orders", "read_locations"];
 const RECENT_REQUESTS = 10;
 
 export interface LinkedShop {
@@ -31,8 +32,17 @@ interface ExistingServices {
   shop: { fulfillmentServices: Array<{ id: string; callbackUrl: string | null; location: { id: string } | null }> };
 }
 
+interface UnsubmittedOrders {
+  assignedFulfillmentOrders: { nodes: Array<{ orderId: string; orderName: string; status: string }> };
+}
+
 interface DeletedService {
   fulfillmentServiceDelete: { userErrors: ShopifyUserError[] };
+}
+
+function hasScopes(granted: string): boolean {
+  const scopes = new Set(granted.split(",").map((scope) => scope.trim()));
+  return REQUIRED_SCOPES.every((scope) => scopes.has(scope));
 }
 
 export function tokenContext(shopDomain: string): string {
@@ -52,7 +62,7 @@ export class ShopifyShopsService {
 
   async open(shopDomain: string, sessionToken: string): Promise<ShopifyShopView> {
     const existing = await this.prisma.shopifyShop.findUnique({ where: { shopDomain } });
-    if (!existing?.accessTokenEncrypted || existing.uninstalledAt) {
+    if (!existing?.accessTokenEncrypted || existing.uninstalledAt || !hasScopes(existing.scopes)) {
       const token = await this.exchange(shopDomain, sessionToken);
       await this.prisma.shopifyShop.upsert({
         where: { shopDomain },
@@ -125,9 +135,10 @@ export class ShopifyShopsService {
         requests: { orderBy: { createdAt: "desc" }, take: RECENT_REQUESTS, include: { order: { select: { reference: true } } } },
       },
     });
+    const connected = Boolean(shop.vendorId && shop.apiKey && !shop.apiKey.revokedAt && shop.locationId);
     return {
       shopDomain,
-      connected: Boolean(shop.vendorId && shop.apiKey && !shop.apiKey.revokedAt && shop.locationId),
+      connected,
       businessName: shop.vendor?.businessName ?? null,
       country: shop.country,
       locationName: shop.locationId ? SHOPIFY_SERVICE_NAME : null,
@@ -138,7 +149,21 @@ export class ShopifyShopsService {
         orderReference: request.order?.reference ?? null,
         createdAt: request.createdAt.toISOString(),
       })),
+      waiting: connected ? await this.waiting(shop) : [],
     };
+  }
+
+  private async waiting(shop: ShopifyShop): Promise<ShopifyWaitingOrderView[]> {
+    try {
+      const data = await this.shopify.graphql<UnsubmittedOrders>(shop.shopDomain, this.accessToken(shop), UNSUBMITTED_FULFILMENT_ORDERS, { locationIds: [shop.locationId] });
+      const orders = new Map<string, ShopifyWaitingOrderView>();
+      for (const node of data.assignedFulfillmentOrders.nodes.filter((order) => order.status === "OPEN")) {
+        orders.set(node.orderId, { orderName: node.orderName, orderId: node.orderId.split("/").pop() ?? "" });
+      }
+      return [...orders.values()];
+    } catch {
+      return [];
+    }
   }
 
   private async authenticate(apiKey: string): Promise<ApiClient> {

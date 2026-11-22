@@ -35,6 +35,13 @@ query Assigned($status: FulfillmentOrderAssignmentStatus!, $locationIds: [ID!]) 
   }
 }`;
 
+export const UNSUBMITTED_FULFILMENT_ORDERS = `
+query Waiting($locationIds: [ID!]) {
+  assignedFulfillmentOrders(first: 25, assignmentStatus: FULFILLMENT_UNSUBMITTED, locationIds: $locationIds) {
+    nodes { orderId orderName status }
+  }
+}`;
+
 export const ACCEPT_FULFILMENT_REQUEST = `
 mutation Accept($id: ID!, $message: String) {
   fulfillmentOrderAcceptFulfillmentRequest(id: $id, message: $message) {
