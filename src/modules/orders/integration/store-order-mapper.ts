@@ -50,7 +50,7 @@ interface WooOrder {
   line_items?: Array<{ sku?: string; quantity?: number; name?: string }>;
 }
 
-interface Draft {
+export interface StoreOrderDraft {
   externalReference: string;
   name: string;
   company?: string;
@@ -87,7 +87,7 @@ function fromShopify(order: ShopifyOrder): MappedStoreOrder {
   if (!address) {
     return { kind: "skip", externalReference: reference, reason: "No delivery address, so there's nothing to send." };
   }
-  return build({
+  return buildStoreOrder({
     externalReference: reference,
     name: address.name || [address.first_name, address.last_name].filter(Boolean).join(" "),
     company: address.company ?? undefined,
@@ -116,7 +116,7 @@ function fromWoo(order: WooOrder): MappedStoreOrder {
   if (!address?.address_1) {
     return { kind: "skip", externalReference: reference, reason: "No delivery address, so there's nothing to send." };
   }
-  return build({
+  return buildStoreOrder({
     externalReference: reference,
     name: [address.first_name, address.last_name].filter(Boolean).join(" "),
     company: address.company || undefined,
@@ -132,7 +132,7 @@ function fromWoo(order: WooOrder): MappedStoreOrder {
   });
 }
 
-function build(draft: Draft): MappedStoreOrder {
+export function buildStoreOrder(draft: StoreOrderDraft): MappedStoreOrder {
   const missing = draft.lines.find((line) => !line.sku?.trim());
   if (missing) {
     return { kind: "skip", externalReference: draft.externalReference, reason: `"${missing.title}" has no SKU. Set its SKU to the Posygo product code.` };

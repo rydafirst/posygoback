@@ -25,6 +25,8 @@ import { IntegrationOrdersService } from "./integration/integration-orders.servi
 import { StoreConnectionsService } from "./integration/store-connections.service";
 import { StoreWebhooksController, VendorStoreConnectionsController } from "./integration/store-connections.controllers";
 import { StoreWebhooksService } from "./integration/store-webhooks.service";
+import { IntegrationCatalogController } from "./integration/integration-catalog.controller";
+import { IntegrationCatalogService } from "./integration/integration-catalog.service";
 import { IntegrationOrdersController, PackagingController, TrackingController, VendorApiKeysController, VendorOrdersController, WarehouseOrdersController } from "./orders.controllers";
 import { PackagingService } from "./packaging/packaging.service";
 import { OrderImportService } from "./vendor/order-import.service";
@@ -42,6 +44,7 @@ import { OrderScansService } from "./warehouse/order-scans.service";
     WarehouseOrdersController,
     PackagingController,
     IntegrationOrdersController,
+    IntegrationCatalogController,
     StoreWebhooksController,
     TrackingController,
   ],
@@ -70,9 +73,10 @@ import { OrderScansService } from "./warehouse/order-scans.service";
     ApiKeysService,
     ApiKeyGuard,
     IntegrationOrdersService,
+    IntegrationCatalogService,
     StoreConnectionsService,
     StoreWebhooksService,
   ],
-  exports: [CarrierAccountsService, OrderCreationService, WarehouseChooserService, OrdersRepository],
+  exports: [CarrierAccountsService, OrderCreationService, WarehouseChooserService, OrdersRepository, ApiKeysService, IntegrationOrdersService, IntegrationCatalogService, OrderCancellationService],
 })
 export class OrdersModule {}

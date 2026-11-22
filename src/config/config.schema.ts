@@ -186,6 +186,13 @@ export const configSchema = z
     DIDIT_WORKFLOW_ID: z.union([z.literal(""), z.string().trim().uuid("Use the workflow ID from the Didit console")]).default(""),
     DIDIT_WEBHOOK_SECRET: z.string().trim().default(""),
     DIDIT_API_URL: z.string().trim().url().default("https://verification.didit.me"),
+    SHOPIFY_API_KEY: z.string().trim().default(""),
+    SHOPIFY_API_SECRET: z.string().trim().default(""),
+    SHOPIFY_API_VERSION: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-(01|04|07|10)$/, "Use a Shopify API version such as 2026-10")
+      .default("2026-10"),
     JOBS_ENABLED: z
       .enum(["true", "false"])
       .default("true")

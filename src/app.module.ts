@@ -33,6 +33,7 @@ import { OnboardingModule } from "./modules/onboarding/onboarding.module";
 import { FinanceModule } from "./modules/finance/finance.module";
 import { StaffModule } from "./modules/staff/staff.module";
 import { OrdersModule } from "./modules/orders/orders.module";
+import { ShopifyModule } from "./modules/shopify/shopify.module";
 import { PartnersModule } from "./modules/partners/partners.module";
 import { StockModule } from "./modules/stock/stock.module";
 import { SupportModule } from "./modules/support/support.module";
@@ -124,6 +125,7 @@ function maskSecrets(url: string | undefined): string | undefined {
     FinanceModule,
     StockModule,
     OrdersModule,
+    ShopifyModule,
     PartnersModule,
     VendorsModule,
     ScheduleModule.forRoot(),

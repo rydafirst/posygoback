@@ -49,3 +49,18 @@ export interface IntegrationOrderView {
   trackingUrl: string | null;
   createdAt: string;
 }
+
+export interface IntegrationAccountView {
+  businessName: string;
+  countries: string[];
+}
+
+export interface IntegrationStockItemView {
+  productCode: string;
+  available: number;
+}
+
+export interface IntegrationStockView {
+  country: string;
+  items: IntegrationStockItemView[];
+}

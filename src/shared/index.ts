@@ -37,6 +37,7 @@ export * from "./orders/recipient";
 export * from "./orders/order.schema";
 export * from "./orders/order-csv";
 export * from "./orders/integration.schema";
+export * from "./orders/shopify.schema";
 export * from "./orders/store-connection.schema";
 export * from "./orders/vendor-return.schema";
 export * from "./notifications/notification.views";
