@@ -19,7 +19,7 @@ export function configureApp(app: INestApplication, config: AppConfig): void {
     origin: [new URL(config.WEB_PUBLIC_URL).origin],
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-    allowedHeaders: ["Authorization", "Content-Type", "X-Correlation-Id", "Idempotency-Key"],
+    allowedHeaders: ["Authorization", "Content-Type", "X-Correlation-Id", "Idempotency-Key", "X-Shopify-Retry-Invalid-Session-Request"],
     exposedHeaders: ["X-Correlation-Id", "Retry-After"],
     maxAge: 600,
   });
